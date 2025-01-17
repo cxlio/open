@@ -22,22 +22,38 @@ type PickObservable<T> = {
 export type Operator<T, T2 = T> = (observable: Observable<T>) => Observable<T2>;
 
 export interface Observer<T> {
+	/**
+	 * The `next` property allows the observer to react to each value emitted by the Observable.
+	 *
+	 * - It is an optional method of the `Observer` interface that will be executed whenever the Observable calls the `next` function to emit a new value.
+	 * - The argument `val` represents the value emitted, and the observer can use this to perform side effects or other operations in response to the new data.
+	 * - Providing this method enables the `Observer` to handle incoming data from the Observable's execution pipeline.
+	 */
 	next?: NextFunction<T>;
+
+	/**
+	 * The `error` property within the `Observer` interface is an optional method
+	 * that handles errors from the Observable's execution.
+	 *
+	 * - If the Observable encounters an error during its lifecycle, this method is invoked.
+	 * - The `err` parameter contains details about the encountered error, which can be used for logging
+	 *   or ensuring a graceful failure handling mechanism.
+	 * - Providing an error handler here allows Observers to manage exceptions locally
+	 *   without propagating them further up the execution chain.
+	 */
 	error?: ErrorFunction;
 
 	/**
 	 * The `complete` property within the `Observer` interface is an optional method
 	 * that signals the successful completion of the Observable's emission sequence.
+	 *
 	 * - If provided, it will be invoked when the Observable has finished emitting all values without an error.
 	 * - This is particularly useful for cleaning up resources or triggering follow-up logic.
 	 */
 	complete?: CompleteFunction;
 
 	/**
-	 * The `signal` property is an optional Observable that provides a mechanism for external cancellation or notifications.
-	 * - This can be used to signal state changes, such as aborting an ongoing operation or notifying
-	 *   subscribers of changes outside the Observable's standard lifecycle.
-	 * - It works well in scenarios where external control over the Observable process is required.
+	 * The `signal` property is an optional Observable that provides a mechanism for external cancellation.
 	 */
 	signal?: Observable<void>;
 }
@@ -154,6 +170,10 @@ export function pipe(...operators: Operator<unknown>[]): Operator<unknown> {
 export class Observable<T, P = 'none'> {
 	constructor(protected __subscribe: SubscribeFunction<T>) {}
 
+	/**
+	 * The `then` method allows an Observable to act like a Promise.
+	 * It converts the Observable's emissions into a Promise that resolves on completion.
+	 */
 	then<E, R>(
 		resolve: (val: P extends 'emit1' ? T : T | undefined) => R,
 		reject?: (e: E) => R,
@@ -209,7 +229,7 @@ export class Observable<T, P = 'none'> {
  */
 export class Subject<T, ErrorT = unknown> extends Observable<T> {
 	protected observers = new Set<Subscriber<T>>();
-	protected _signal?: CancelSignal;
+	signal = cancel();
 
 	protected onSubscribe(subscriber: Subscriber<T>): void {
 		if (this.closed) subscriber.complete();
@@ -222,25 +242,33 @@ export class Subject<T, ErrorT = unknown> extends Observable<T> {
 	}
 
 	closed = false;
-	get signal() {
-		return (this._signal ??= cancel());
-	}
 
 	constructor() {
 		super((subscriber: Subscriber<T>) => this.onSubscribe(subscriber));
 	}
 
+	/**
+	 * Emits a new value to all active subscribers if the Subject is not in a closed state.
+	 * - Iterates over the list of current subscribers and calls their `next` method with the provided value.
+	 * - Inactive or closed subscribers are skipped.
+	 * - This ensures only active subscribers receive new emissions.
+	 */
 	next(a: T): void {
 		if (!this.closed)
 			for (const s of Array.from(this.observers))
 				if (!s.closed) s.next(a);
 	}
+
+	/*
+	 * This method emits an error notification to all active subscribers and sets the Subject's
+	 * closed state to `true`, preventing any further emissions.
+	 */
 	error(e: ErrorT): void {
 		if (!this.closed) {
 			this.closed = true;
 			let shouldThrow = false,
 				lastError;
-			for (const s of this.observers)
+			for (const s of Array.from(this.observers))
 				try {
 					s.error(e);
 				} catch (e) {
@@ -251,6 +279,11 @@ export class Subject<T, ErrorT = unknown> extends Observable<T> {
 			if (shouldThrow) throw lastError;
 		}
 	}
+
+	/*
+	 * `complete` method sends a final completion notification to all active subscribers
+	 * and marks the Subject as closed.
+	 */
 	complete(): void {
 		if (!this.closed) {
 			this.closed = true;
@@ -260,6 +293,14 @@ export class Subject<T, ErrorT = unknown> extends Observable<T> {
 	}
 }
 
+/**
+ * `CancelSignal` is a specialized `Observable` that signals cancellation to its subscribers.
+ *
+ * - Subscribers are notified when the signal is triggered via the `next` method.
+ * - Once triggered, it completes all current and future subscribers immediately.
+ * - Subscriptions to this signal will only emit once if the signal is already closed.
+ *
+ */
 export class CancelSignal extends Observable<void> {
 	closed = false;
 	protected observers = new Set<Subscriber<void>>();
@@ -646,29 +687,8 @@ export function timer(delay: number) {
 /**
  * Emits a value from the source Observable only after a particular time span has passed without another source emission.
  */
-export function debounceTime<T>(time = 0, useTimer = timer) {
-	return operator<T>(subscriber => {
-		let completed = false;
-		let signal: CancelSignal | undefined;
-		return {
-			next(val: T) {
-				signal?.next();
-				signal = cancel();
-				useTimer(time).subscribe({
-					next() {
-						subscriber.next(val);
-						if (completed) subscriber.complete();
-					},
-					signal,
-				});
-			},
-			complete() {
-				completed = true;
-				if (!signal) subscriber.complete();
-			},
-			unsubscribe: () => signal?.next(),
-		};
-	});
+export function debounceTime<T>(time: number, useTimer = timer): Operator<T> {
+	return switchMap(val => useTimer(time).map(() => val));
 }
 
 /**
@@ -722,11 +742,10 @@ export function switchMap<T, T2>(project: (val: T) => Observable<T2>) {
 export function mergeMap<T, T2>(project: (val: T) => Observable<T2>) {
 	return (source: Observable<T>) =>
 		observable<T2>(subscriber => {
-			const signal = cancel();
+			const signal = subscriber.signal;
 			let count = 0;
 			let completed = 0;
 			let sourceCompleted = false;
-			subscriber.signal.subscribe(signal);
 
 			source.subscribe({
 				next: (val: T) => {
@@ -893,6 +912,9 @@ export function distinctUntilChanged<T>(): Operator<T, T> {
 	});
 }
 
+/*
+ * The `share` operator enables multiple subscribers to share a single subscription to the provided Observable.
+ */
 export function share<T>(): Operator<T, T> {
 	return (source: Observable<T>) => {
 		let subject: Reference<T>;
@@ -960,7 +982,6 @@ export function merge<R extends Observable<unknown>[]>(
 
 	return new Observable(subs => {
 		let refCount = observables.length;
-		const signal = cancel();
 		for (const o of observables)
 			if (!subs.closed)
 				o.subscribe({
@@ -969,9 +990,8 @@ export function merge<R extends Observable<unknown>[]>(
 					complete() {
 						if (refCount-- === 1) subs.complete();
 					},
-					signal,
+					signal: subs.signal,
 				});
-		subs.signal.subscribe(() => signal.next());
 	}) as MergeResult<R>;
 }
 
@@ -1170,7 +1190,6 @@ export interface Observable<T> {
 		reduceFn: (acc: T2, val: T, i: number) => T2,
 		seed: T2,
 	): Observable<T2>;
-	select<K extends keyof T>(key: K): Observable<T[K]>;
 	share(): Observable<T>;
 	switchMap<T2>(project: (val: T) => Observable<T2>): Observable<T2>;
 	take(howMany: number): Observable<T>;

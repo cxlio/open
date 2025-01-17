@@ -1,10 +1,6 @@
 import { spec } from '@cxl/spec';
 import tgz, { untarStream, untar } from './index.js';
 
-/*function encode(content: string) {
-	const encoder = new TextEncoder();
-	return encoder.encode(content);
-}*/
 const decode = (buffer: Uint8Array) => new TextDecoder().decode(buffer);
 
 export default spec('tgz', it => {

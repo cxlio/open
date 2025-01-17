@@ -1,0 +1,28 @@
+const js = require('@eslint/js');
+const ts = require('typescript-eslint');
+
+module.exports = ts.config([
+	js.configs.recommended,
+	ts.configs.recommended,
+	{
+		files: ['**/*.ts'],
+		languageOptions: {
+			ecmaVersion: 2022,
+			sourceType: 'module',
+		},
+		rules: {
+			'no-mixed-spaces-and-tabs': 'off',
+			'no-prototype-builtins': 'off',
+			'no-dupe-class-members': 'off',
+			'sort-imports': 'off',
+			'@typescript-eslint/no-var-requires': 'off',
+			'@typescript-eslint/no-useless-constructor': 'error',
+			'@typescript-eslint/no-explicit-any': 2,
+			'@typescript-eslint/no-unused-vars': 'off',
+			'@typescript-eslint/explicit-function-return-type': 'off',
+			'@typescript-eslint/no-this-alias': 'off',
+			'@typescript-eslint/no-use-before-define': 'off',
+			'@typescript-eslint/no-empty-interface': 'off',
+		},
+	},
+]);

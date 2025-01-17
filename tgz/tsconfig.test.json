@@ -1,0 +1,10 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"outDir": "../dist/tgz",
+		"typeRoots": ["../node_modules/@types"],
+		"types": ["node"]
+	},
+	"files": ["test.ts"],
+	"references": [{ "path": "." }]
+}

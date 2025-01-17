@@ -1,0 +1,18 @@
+{
+	"private": true,
+	"name": "@cxl/",
+	"version": "0.0.0",
+	"homepage": "https://github.com/cxlio/open",
+	"devDependencies": {
+		"@cxl/build": "*",
+		"@cxl/spec": "*",
+		"@cxl/tester": "*",
+		"@types/node": "^20.17.12",
+		"typescript-eslint": "^8.20.0"
+	},
+	"bugs": "https://github.com/cxlio/open/issues",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cxlio/open.git"
+	}
+}

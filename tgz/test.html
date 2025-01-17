@@ -1,0 +1,28 @@
+<!doctype html>
+<title>@cxl/tgz Test Suite</title>
+<script type="importmap">
+	{
+		"imports": {
+			"@cxl/spec": "../../node_modules/@cxl/spec/mjs/index.js",
+			"@cxl/rx": "../../node_modules/@cxl/rx/mjs/index.js"
+		}
+	}
+</script>
+<script
+	type="module"
+	src="../../node_modules/@cxl/tester/require-browser.js"
+></script>
+<script type="module">
+	require.replace = function (path) {
+		return path.replace(
+			/^@cxl\/(.+)/,
+			(str, p1) =>
+				`../../node_modules/@cxl/${
+					str.endsWith('.js') ? p1 : p1 + '/index.js'
+				}`,
+		);
+	};
+	const browserRunner = require('@cxl/tester/browser-runner.js').default;
+	import suite from './test.js';
+	browserRunner.run([suite], '../../tgz/spec');
+</script>

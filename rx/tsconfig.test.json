@@ -1,0 +1,12 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"outDir": "../dist/rx"
+	},
+	"references": [
+		{
+			"path": "tsconfig.json"
+		}
+	],
+	"include": ["test.ts", "test/*.ts"]
+}

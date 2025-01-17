@@ -1,0 +1,17 @@
+{
+	"core": {
+		"filesExclude": ["./docs"]
+	},
+	"watch": {
+		"rules": {
+			"rx": {
+				"files": ["rx/**/*"],
+				"tasks": "cd rx && npm run build"
+			},
+			"tgz": {
+				"files": ["tgz/**/*"],
+				"tasks": "cd tgz && npm run build"
+			}
+		}
+	}
+}

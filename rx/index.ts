@@ -10,9 +10,7 @@ type NextFunction<T> = (val: T) => void;
 type ErrorFunction = (err: ObservableError) => void;
 type CompleteFunction = () => void;
 type UnsubscribeFunction = () => void;
-type SubscribeFunction<T> = (
-	subscription: Subscriber<T>,
-) => UnsubscribeFunction | void;
+type SubscribeFunction<T> = (subscription: Subscriber<T>) => void;
 type Merge<T> = T extends Observable<infer U> ? U : never;
 type ObservableT<T> = T extends Observable<infer U> ? U : never;
 type PickObservable<T> = {
@@ -60,7 +58,6 @@ export function Subscriber<T>(
 	subscribe?: SubscribeFunction<T>,
 ) {
 	let closed = false;
-	let onUnsubscribe: UnsubscribeFunction | void = undefined;
 
 	const result = {
 		error,
@@ -107,16 +104,11 @@ export function Subscriber<T>(
 		if (!closed) {
 			closed = true;
 			result.signal.next();
-			//abortSubs?.unsubscribe();
-			onUnsubscribe?.();
 		}
 	}
 
 	try {
-		if (subscribe) {
-			onUnsubscribe = subscribe(result);
-			if (closed && onUnsubscribe) onUnsubscribe();
-		}
+		subscribe?.(result);
 	} catch (e) {
 		error(e);
 	}
@@ -219,14 +211,14 @@ export class Subject<T, ErrorT = unknown> extends Observable<T> {
 	protected observers = new Set<Subscriber<T>>();
 	protected _signal?: CancelSignal;
 
-	protected onSubscribe(subscriber: Subscriber<T>): UnsubscribeFunction {
-		if (this.closed) {
-			subscriber.complete();
-			return () => undefined;
+	protected onSubscribe(subscriber: Subscriber<T>): void {
+		if (this.closed) subscriber.complete();
+		else {
+			this.observers.add(subscriber);
+			subscriber.signal.subscribe(() =>
+				this.observers.delete(subscriber),
+			);
 		}
-
-		this.observers.add(subscriber);
-		return () => this.observers.delete(subscriber);
 	}
 
 	closed = false;
@@ -235,7 +227,7 @@ export class Subject<T, ErrorT = unknown> extends Observable<T> {
 	}
 
 	constructor() {
-		super((subscription: Subscriber<T>) => this.onSubscribe(subscription));
+		super((subscriber: Subscriber<T>) => this.onSubscribe(subscriber));
 	}
 
 	next(a: T): void {
@@ -268,10 +260,29 @@ export class Subject<T, ErrorT = unknown> extends Observable<T> {
 	}
 }
 
-export class CancelSignal extends Subject<void> {
-	next() {
-		super.next();
-		this.complete();
+export class CancelSignal extends Observable<void> {
+	closed = false;
+	protected observers = new Set<Subscriber<void>>();
+
+	constructor() {
+		super((subscriber: Subscriber<void>) => {
+			if (this.closed) {
+				subscriber.next();
+				subscriber.complete();
+			} else this.observers.add(subscriber);
+		});
+	}
+
+	next(): void {
+		if (!this.closed) {
+			this.closed = true;
+			for (const s of Array.from(this.observers))
+				if (!s.closed) {
+					s.next();
+					s.complete();
+				}
+			this.observers.clear();
+		}
 	}
 }
 
@@ -339,8 +350,7 @@ export class ReplaySubject<T, ErrorT = unknown> extends Subject<T, ErrorT> {
 		this.buffer.forEach(val => subscriber.next(val));
 		if (this.hasError) subscriber.error(this.lastError as ErrorT);
 		else if (this.closed) subscriber.complete();
-
-		return () => this.observers.delete(subscriber);
+		subscriber.signal.subscribe(() => this.observers.delete(subscriber));
 	}
 
 	error(val: ErrorT) {
@@ -378,7 +388,7 @@ export class Reference<T> extends Subject<T> {
 	protected onSubscribe(subscription: Subscriber<T>) {
 		if (!this.closed && this.$value !== Undefined)
 			subscription.next(this.$value as T);
-		return super.onSubscribe(subscription);
+		super.onSubscribe(subscription);
 	}
 
 	next(val: T) {
@@ -425,9 +435,7 @@ export function concat<R extends Observable<unknown>[]>(
  * Creates an Observable that, on subscribe, calls an Observable factory to make an Observable for each new Observer.
  */
 export function defer<T>(fn: () => Subscribable<T>) {
-	return new Observable<T>(subs => {
-		fn().subscribe(subs);
-	});
+	return new Observable<T>(subs => fn().subscribe(subs));
 }
 
 export function fromArray<T>(input: Array<T>): Observable<T> {
@@ -631,7 +639,7 @@ export function timer(delay: number) {
 			subscriber.next();
 			subscriber.complete();
 		}, delay);
-		return () => clearTimeout(to);
+		subscriber.signal.subscribe(() => clearTimeout(to));
 	});
 }
 
@@ -963,8 +971,7 @@ export function merge<R extends Observable<unknown>[]>(
 					},
 					signal,
 				});
-
-		return () => signal.next();
+		subs.signal.subscribe(() => signal.next());
 	}) as MergeResult<R>;
 }
 

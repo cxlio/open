@@ -47,7 +47,7 @@ export default spec('switchMap', it => {
 			.switchMap(x =>
 				observable(subscriber => {
 					subscriber.complete();
-					return () => unsubbed.push(x);
+					subscriber.signal.subscribe(() => unsubbed.push(x));
 				}),
 			)
 			.subscribe();

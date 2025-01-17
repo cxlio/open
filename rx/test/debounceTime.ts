@@ -68,10 +68,11 @@ export default spec('debounceTime', it => {
 					subscriber.next();
 					subscriber.complete();
 				}, delay);
-				return () => {
+
+				subscriber.signal.subscribe(() => {
 					timeoutCleared++;
 					clearTimeout(to);
-				};
+				});
 			});
 		}
 
@@ -86,7 +87,7 @@ export default spec('debounceTime', it => {
 				a.equal(timeoutCleared, 3);
 				done();
 			});
-		obs.subscribe().unsubscribe();
+		obs.subscribe({ complete: () => timeoutCleared++ }).unsubscribe();
 		obs2.subscribe();
 	});
 });

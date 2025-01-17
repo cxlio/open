@@ -47,16 +47,15 @@ export default suite('merge', test => {
 		expectLog(a, merge(e1, e2), '#');
 	});
 
-	test('should merge hot and error', a => {
+	test('should merge hot and error', async a => {
 		const e1 = cold('--a--b--c--|');
 		const e1subs = '^      !';
 		const e2 = cold('-------#');
 		const e2subs = '^      !';
 		const expected = '--a--b-#';
-
 		const result = merge(e1, e2);
 
-		expectLog(a, result, expected);
+		await expectLog(a, result, expected);
 		a.equal(e1.subscriptions, e1subs);
 		a.equal(e2.subscriptions, e2subs);
 	});

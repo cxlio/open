@@ -270,10 +270,8 @@ export default suite('rx', [
 		test('should return a Subscription that calls the unsubscribe function returned by the subscriber', a => {
 			let unsubscribeCalled = false;
 
-			const source = new Observable<number>(() => {
-				return () => {
-					unsubscribeCalled = true;
-				};
+			const source = new Observable<number>(({ signal }) => {
+				signal.subscribe(() => (unsubscribeCalled = true));
 			});
 
 			const sub = source.subscribe(() => {
@@ -291,15 +289,12 @@ export default suite('rx', [
 			const subscription = new Observable<number>(observer => {
 				let i = 0;
 				const done = a.async();
-				const id = setInterval(() => {
-					observer.next(i++);
-				});
-
-				return () => {
+				const id = setInterval(() => observer.next(i++));
+				observer.signal.subscribe(() => {
 					clearInterval(id);
 					a.equal(times, 2);
 					done();
-				};
+				});
 			})
 				.pipe(tap(() => (times += 1)))
 				.subscribe(function () {
@@ -323,12 +318,12 @@ export default suite('rx', [
 					}
 				});
 
-				return () => {
+				observer.signal.subscribe(() => {
 					clearInterval(id);
 					a.equal(times, 2);
 					a.ok(!errorCalled);
 					done();
-				};
+				});
 			})
 				.pipe(tap(() => (times += 1)))
 				.subscribe({
@@ -356,13 +351,12 @@ export default suite('rx', [
 						observer.complete();
 					}
 				});
-
-				return () => {
+				observer.signal.subscribe(() => {
 					clearInterval(id);
 					a.equal(times, 2);
 					a.ok(!completeCalled);
 					done();
-				};
+				});
 			})
 				.pipe(tap(() => (times += 1)))
 				.subscribe({
@@ -379,10 +373,10 @@ export default suite('rx', [
 
 		test('should not be unsubscribed when other empty subscription completes', a => {
 			let unsubscribeCalled = false;
-			const source = new Observable<number>(() => {
-				return () => {
+			const source = new Observable<number>(({ signal }) => {
+				signal.subscribe(() => {
 					unsubscribeCalled = true;
-				};
+				});
 			});
 
 			source.subscribe();
@@ -393,10 +387,10 @@ export default suite('rx', [
 
 		test('should not be unsubscribed when other subscription with same observer completes', a => {
 			let unsubscribeCalled = false;
-			const source = new Observable<number>(() => {
-				return () => {
+			const source = new Observable<number>(observer => {
+				observer.signal.subscribe(() => {
 					unsubscribeCalled = true;
-				};
+				});
 			});
 
 			const observer = {};
@@ -816,7 +810,7 @@ export default suite('rx', [
 
 			const source = observable(subs => {
 				subs.complete();
-				return () => wasCalled++;
+				subs.signal.subscribe(() => wasCalled++);
 			});
 			const obs = source.switchMap(s => of(s));
 			obs.subscribe();

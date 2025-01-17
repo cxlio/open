@@ -171,11 +171,10 @@ class ColdObservable extends Observable<string> {
 			}
 
 			const inner = scheduler.subscribe(next);
-
-			return () => {
+			subs.signal.subscribe(() => {
 				if (emitUnsub) this.log('!');
 				inner.unsubscribe();
-			};
+			});
 		});
 	}
 }

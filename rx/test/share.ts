@@ -15,9 +15,9 @@ export default spec('share', it => {
 
 	it.should('share a single subscription', a => {
 		let subscriptionCount = 0;
-		const obs = new Observable<never>(() => {
+		const obs = new Observable<never>(({ signal }) => {
 			subscriptionCount++;
-			return () => subscriptionCount--;
+			signal.subscribe(() => subscriptionCount--);
 		});
 
 		const source = obs.pipe(share());

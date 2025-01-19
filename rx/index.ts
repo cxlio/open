@@ -340,8 +340,8 @@ export class OrderedSubject<T> extends Subject<T> {
 		else {
 			this.emitting = true;
 			super.next(a);
+			while (this.queue.length) super.next(this.queue.shift() as T);
 			this.emitting = false;
-			if (this.queue.length) this.next(this.queue.shift() as T);
 		}
 	}
 }

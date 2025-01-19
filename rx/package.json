@@ -7,6 +7,13 @@
 	"type": "module",
 	"scripts": {
 		"build": "cxl-build",
-		"test": "npm run build && cd ../dist/rx && cxl-tester --mjs"
-	}
+		"test": "npm run build && cd ../dist/rx && cxl-tester --mjs --baselinePath=../../rx/spec"
+	},
+	"bugs": "https://github.com/cxlio/open/issues",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cxlio/open.git",
+		"directory": "rx"
+	},
+	"homepage": "https://github.com/cxlio/open/tree/main/rx"
 }

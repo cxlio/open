@@ -1,39 +1,12 @@
 import { interval } from '../index.js';
 import { spec } from '@cxl/spec';
+import { mockSetInterval } from './util.js';
 
 declare const setTimeout: (fn: (a?: unknown) => unknown, n?: number) => number;
 declare let clearInterval: (n: number) => void;
 declare let setInterval: (fn: () => unknown, n?: number) => number;
 
 export default spec('interval', it => {
-	function mockSetInterval(fn: (advance: (ms: number) => void) => void) {
-		let id = 0;
-		let lastCalled = 0;
-		const intervals: Record<number, { cb: () => void; delay: number }> = {};
-		const originalSet = setInterval;
-		const originalClear = clearInterval;
-
-		setInterval = (cb: () => unknown, delay = 0): number => {
-			intervals[++id] = { cb, delay };
-			return id;
-		};
-		clearInterval = (id: number) => {
-			delete intervals[id];
-		};
-
-		fn((ms: number) => {
-			const elapsedTime = ms - lastCalled;
-			for (const { cb, delay } of Object.values(intervals)) {
-				const timesToFire = Math.floor(elapsedTime / delay);
-				for (let i = 0; i < timesToFire; i++) cb();
-				lastCalled = Math.floor(ms / delay) * delay;
-			}
-		});
-
-		setInterval = originalSet;
-		clearInterval = originalClear;
-	}
-
 	it.should('emit values at specified intervals', a => {
 		mockSetInterval(advance => {
 			const period = 5;

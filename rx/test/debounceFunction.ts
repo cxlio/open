@@ -1,5 +1,6 @@
 import { spec } from '@cxl/spec';
 import { debounceFunction } from '../index.js';
+import { mockSetTimeout } from './util.js';
 
 declare const setTimeout: (fn: () => unknown, n?: number) => number;
 
@@ -63,20 +64,19 @@ export default spec('debounceFunction', it => {
 	});
 
 	it.should('handle multiple debounce invocations correctly', a => {
-		let callCount = 0;
-		const debouncedFunc = debounceFunction(() => {
-			callCount++;
-		}, 50);
-		const done = a.async();
+		mockSetTimeout(advance => {
+			let callCount = 0;
+			const debouncedFunc = debounceFunction(() => {
+				callCount++;
+			}, 50);
 
-		debouncedFunc();
-		setTimeout(debouncedFunc, 10);
-		setTimeout(debouncedFunc, 20);
+			debouncedFunc();
+			setTimeout(debouncedFunc, 10);
+			setTimeout(debouncedFunc, 20);
 
-		setTimeout(() => {
+			advance(100);
 			a.equal(callCount, 1);
-			done();
-		}, 100);
+		});
 	});
 
 	it.should(

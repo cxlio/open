@@ -2,7 +2,7 @@
 	"private": true,
 	"name": "@cxl/",
 	"version": "0.0.0",
-	"homepage": "https://github.com/cxlio/open",
+	"homepage": "https://github.com/cxlio/open/tree/main",
 	"devDependencies": {
 		"@cxl/build": "*",
 		"@cxl/spec": "*",

@@ -4,10 +4,11 @@
 	"version": "0.0.0",
 	"homepage": "https://github.com/cxlio/open/tree/main",
 	"devDependencies": {
-		"@cxl/build": "*",
-		"@cxl/spec": "*",
-		"@cxl/tester": "*",
+		"@cxl/build": "^0.2.1",
+		"@cxl/spec": "^0.3.1",
+		"@cxl/tester": "^0.2.0",
 		"@types/node": "^20.17.12",
+		"eslint": "^9.18.0",
 		"typescript-eslint": "^8.20.0"
 	},
 	"bugs": "https://github.com/cxlio/open/issues",

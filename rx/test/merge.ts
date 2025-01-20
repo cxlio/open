@@ -1,5 +1,5 @@
 import { cold, expectLog } from './util.js';
-import { merge, of } from '../index.js';
+import { Observable, merge, of } from '../index.js';
 import { suite } from '@cxl/spec';
 
 export default suite('merge', test => {
@@ -58,5 +58,62 @@ export default suite('merge', test => {
 		await expectLog(a, result, expected);
 		a.equal(e1.subscriptions, e1subs);
 		a.equal(e2.subscriptions, e2subs);
+	});
+
+	test('should merge empty and non-empty', a => {
+		const e1 = cold('|');
+		const e2 = cold('---a--b--|');
+		const expected = '---a--b--|';
+
+		expectLog(a, merge(e1, e2), expected);
+	});
+	test('should merge synchronous streams', a => {
+		const e1 = of(1);
+		const e2 = of(2);
+		const e3 = of(3);
+
+		const result = merge(e1, e2, e3);
+		const expected = [1, 2, 3];
+		const complete = a.async();
+
+		result.subscribe({
+			next: value => a.ok(expected.includes(value)),
+			complete,
+		});
+	});
+
+	test('should merge delayed emissions', a => {
+		const e1 = cold('----a|');
+		const e2 = cold('-------b|');
+		const expected = '----a--b|';
+
+		expectLog(a, merge(e1, e2), expected);
+	});
+
+	test('should handle completion order', a => {
+		const e1 = cold('---a--|');
+		const e2 = cold('---b-------|');
+		const expected = '---(ab)-------|';
+
+		expectLog(a, merge(e1, e2), expected);
+	});
+	test('should merge multiple observables', a => {
+		const e1 = cold('---a-----|');
+		const e2 = cold('------b--|');
+		const e3 = cold('---x---y-|');
+		const expected = '---(ax)--by-|';
+
+		expectLog(a, merge(e1, e2, e3), expected);
+	});
+
+	test('type inference with heterogeneous types', a => {
+		const e1 = of<number>(1);
+		const e2 = of<string>('2');
+		const e3 = of<boolean>(true);
+
+		// Resulting type should be inferred as Observable<number | string | boolean>
+		const result = merge(e1, e2, e3);
+		const expected: Observable<number | string | boolean> = result;
+		a.ok(expected);
 	});
 });

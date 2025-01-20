@@ -49,8 +49,7 @@ export default spec('zip', it => {
 	);
 
 	it.should(
-		'end once one observable nexts and zips value from completed other ' +
-			'observable whose buffer is empty',
+		'end once one observable nexts and zips value from completed other observable whose buffer is empty',
 		a => {
 			const e1 = cold('---a--b--c--|             ');
 			const e1subs = '^           !';
@@ -79,14 +78,14 @@ export default spec('zip', it => {
 		a.equal(e2.subscriptions, e2subs);
 	});
 
-	it.should('work with never and empty', a => {
+	it.should('work with never and empty', async a => {
 		const e1 = cold('-');
 		const e1subs = '(^!)';
 		const e2 = cold('|');
 		const e2subs = '(^!)';
 		const expected = '|';
 
-		expectLog(a, zip(e1, e2), expected);
+		await expectLog(a, zip(e1, e2), expected);
 		a.equal(e1.subscriptions, e1subs);
 		a.equal(e2.subscriptions, e2subs);
 	});
@@ -117,6 +116,50 @@ export default spec('zip', it => {
 			});
 
 			a.equal(results[0], 'done');
+		},
+	);
+
+	it.should(
+		'work when one source observable emits but other completes without emitting',
+		a => {
+			const e1 = cold('---a---b---c---|');
+			const e1subs = '(^!)';
+			const e2 = cold('|');
+			const e2subs = '(^!)';
+			const expected = '|'; // Should complete immediately since one completes before emitting
+
+			expectLog(a, zip(e1, e2), expected);
+			a.equal(e1.subscriptions, e1subs);
+			a.equal(e2.subscriptions, e2subs);
+		},
+	);
+
+	it.should(
+		'work when one source observable produces more values than the others',
+		a => {
+			const e1 = cold('---a---b---c---|');
+			const e1subs = '^          !';
+			const e2 = cold('---x---y---|');
+			const e2subs = '^          !';
+			const expected = '---a,x---b,y---|';
+
+			expectLog(a, zip(e1, e2), expected);
+			a.equal(e1.subscriptions, e1subs);
+			a.equal(e2.subscriptions, e2subs);
+		},
+	);
+	it.should(
+		'work when zipped with an observable that errors before emitting',
+		a => {
+			const e1 = cold('---a--|');
+			const e1subs = '^  !';
+			const e2 = cold('---#');
+			const e2subs = '^  !';
+			const expected = '---#'; // Should emit the error from the second observable
+
+			expectLog(a, zip(e1, e2), expected);
+			a.equal(e1.subscriptions, e1subs);
+			a.equal(e2.subscriptions, e2subs);
 		},
 	);
 });

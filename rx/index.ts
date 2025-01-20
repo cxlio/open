@@ -9,7 +9,6 @@ type ObservableError = unknown;
 type NextFunction<T> = (val: T) => void;
 type ErrorFunction = (err: ObservableError) => void;
 type CompleteFunction = () => void;
-type UnsubscribeFunction = () => void;
 type SubscribeFunction<T> = (subscription: Subscriber<T>) => void;
 type Merge<T> = T extends Observable<infer U> ? U : never;
 type ObservableT<T> = T extends Observable<infer U> ? U : never;
@@ -18,6 +17,9 @@ type PickObservable<T> = {
 		? ObservableT<T[P]>
 		: never;
 };
+type CombineResult<R extends Observable<unknown>[]> = R extends (infer U)[]
+	? Observable<Merge<U>>
+	: never;
 
 export type Operator<T, T2 = T> = (observable: Observable<T>) => Observable<T2>;
 
@@ -68,6 +70,11 @@ export type Subscriber<T> = ReturnType<typeof Subscriber<T>>;
 export interface Subscription {
 	unsubscribe(): void;
 }
+
+// Represents the initial state
+const Undefined = {};
+// Represents when the observable is ready to complete
+const Terminator = Symbol('terminator');
 
 export function Subscriber<T>(
 	observer: Observer<T>,
@@ -228,20 +235,10 @@ export class Observable<T, P = 'none'> {
  * multicasted to many Observers.
  */
 export class Subject<T, ErrorT = unknown> extends Observable<T> {
-	protected observers = new Set<Subscriber<T>>();
+	closed = false;
 	signal = cancel();
 
-	protected onSubscribe(subscriber: Subscriber<T>): void {
-		if (this.closed) subscriber.complete();
-		else {
-			this.observers.add(subscriber);
-			subscriber.signal.subscribe(() =>
-				this.observers.delete(subscriber),
-			);
-		}
-	}
-
-	closed = false;
+	protected observers = new Set<Subscriber<T>>();
 
 	constructor() {
 		super((subscriber: Subscriber<T>) => this.onSubscribe(subscriber));
@@ -289,6 +286,16 @@ export class Subject<T, ErrorT = unknown> extends Observable<T> {
 			this.closed = true;
 			Array.from(this.observers).forEach(s => s.complete());
 			this.observers.clear();
+		}
+	}
+
+	protected onSubscribe(subscriber: Subscriber<T>): void {
+		if (this.closed) subscriber.complete();
+		else {
+			this.observers.add(subscriber);
+			subscriber.signal.subscribe(() =>
+				this.observers.delete(subscriber),
+			);
 		}
 	}
 }
@@ -359,15 +366,15 @@ export class BehaviorSubject<T> extends Subject<T> {
 		return this.currentValue;
 	}
 
+	next(val: T) {
+		this.currentValue = val;
+		super.next(val);
+	}
+
 	protected onSubscribe(subscription: Subscriber<T>) {
 		const result = super.onSubscribe(subscription);
 		if (!this.closed) subscription.next(this.currentValue);
 		return result;
-	}
-
-	next(val: T) {
-		this.currentValue = val;
-		super.next(val);
 	}
 }
 
@@ -385,15 +392,6 @@ export class ReplaySubject<T, ErrorT = unknown> extends Subject<T, ErrorT> {
 		super();
 	}
 
-	protected onSubscribe(subscriber: Subscriber<T>) {
-		this.observers.add(subscriber);
-
-		this.buffer.forEach(val => subscriber.next(val));
-		if (this.hasError) subscriber.error(this.lastError as ErrorT);
-		else if (this.closed) subscriber.complete();
-		subscriber.signal.subscribe(() => this.observers.delete(subscriber));
-	}
-
 	error(val: ErrorT) {
 		this.hasError = true;
 		this.lastError = val;
@@ -406,9 +404,16 @@ export class ReplaySubject<T, ErrorT = unknown> extends Subject<T, ErrorT> {
 		this.buffer.push(val);
 		return super.next(val);
 	}
-}
 
-const Undefined = {};
+	protected onSubscribe(subscriber: Subscriber<T>) {
+		this.observers.add(subscriber);
+
+		this.buffer.forEach(val => subscriber.next(val));
+		if (this.hasError) subscriber.error(this.lastError as ErrorT);
+		else if (this.closed) subscriber.complete();
+		subscriber.signal.subscribe(() => this.observers.delete(subscriber));
+	}
+}
 
 /**
  * A Reference is a behavior subject that does not require an initial value.
@@ -426,21 +431,21 @@ export class Reference<T> extends Subject<T> {
 		return this.$value as T;
 	}
 
+	next(val: T) {
+		this.$value = val;
+		return super.next(val);
+	}
+
 	protected onSubscribe(subscription: Subscriber<T>) {
 		if (!this.closed && this.$value !== Undefined)
 			subscription.next(this.$value as T);
 		super.onSubscribe(subscription);
 	}
-
-	next(val: T) {
-		this.$value = val;
-		return super.next(val);
-	}
 }
 
-type ConcatResult<R extends Observable<unknown>[]> = R extends (infer U)[]
-	? Observable<Merge<U>>
-	: never;
+export class EmptyError extends Error {
+	message = 'No elements in sequence';
+}
 
 export function cancel() {
 	return new CancelSignal();
@@ -450,7 +455,7 @@ export function cancel() {
  */
 export function concat<R extends Observable<unknown>[]>(
 	...observables: R
-): ConcatResult<R> {
+): CombineResult<R> {
 	return new Observable(subscriber => {
 		let index = 0;
 		let innerSignal: CancelSignal;
@@ -469,7 +474,7 @@ export function concat<R extends Observable<unknown>[]>(
 		}
 		subscriber.signal.subscribe(() => innerSignal?.next());
 		onComplete();
-	}) as ConcatResult<R>;
+	}) as CombineResult<R>;
 }
 
 /**
@@ -557,10 +562,6 @@ export function toPromise<T, P>(
 	);
 }
 
-export class EmptyError extends Error {
-	message = 'No elements in sequence';
-}
-
 export async function firstValueFrom<T>(observable: Observable<T>) {
 	return _toPromise(observable.first()) as Promise<T>;
 }
@@ -577,7 +578,7 @@ export function operator<T, T2 = T>(
 		subs: Subscriber<T2>,
 		source: Observable<T>,
 	) => Observer<T> & {
-		unsubscribe?: UnsubscribeFunction;
+		unsubscribe?: () => void;
 	},
 ): Operator<T, T2> {
 	return (source: Observable<T>) =>
@@ -751,10 +752,8 @@ export function mergeMap<T, T2>(project: (val: T) => Observable<T2>) {
 				next: (val: T) => {
 					count++;
 					project(val).subscribe({
-						next: val => subscriber.next(val),
-						error: e => {
-							subscriber.error(e);
-						},
+						next: subscriber.next,
+						error: subscriber.error,
 						complete: () => {
 							completed++;
 							if (sourceCompleted && completed === count) {
@@ -767,9 +766,7 @@ export function mergeMap<T, T2>(project: (val: T) => Observable<T2>) {
 				error: subscriber.error,
 				complete() {
 					sourceCompleted = true;
-					if (completed === count) {
-						subscriber.complete();
-					}
+					if (completed === count) subscriber.complete();
 				},
 				signal,
 			});
@@ -894,15 +891,13 @@ export function catchError<T, O extends T | never>(
 	});
 }
 
-const initialDistinct = {};
-
 /**
  * Returns an Observable that emits all items emitted by the source Observable
  * that are distinct by comparison from the previous item.
  */
 export function distinctUntilChanged<T>(): Operator<T, T> {
 	return operatorNext((subscriber: Subscriber<T>) => {
-		let lastValue: T | typeof initialDistinct = initialDistinct;
+		let lastValue: T | typeof Undefined = Undefined;
 		return (val: T) => {
 			if (val !== lastValue) {
 				lastValue = val;
@@ -952,33 +947,30 @@ export function publishLast<T>(): Operator<T, T> {
 				subs.complete();
 			} else subject.subscribe(subs);
 
-			if (!sourceSubscription)
-				sourceSubscription = source.subscribe({
-					next: val => {
-						hasEmitted = true;
-						lastValue = val;
-					},
-					error: subs.error,
-					complete() {
-						ready = true;
-						if (hasEmitted) subject.next(lastValue);
-						subject.complete();
-					},
-				});
+			sourceSubscription ??= source.subscribe({
+				next: val => {
+					hasEmitted = true;
+					lastValue = val;
+				},
+				error: subs.error,
+				complete() {
+					ready = true;
+					if (hasEmitted) subject.next(lastValue);
+					subject.complete();
+				},
+				signal: subs.signal,
+			});
 		});
 	};
 }
 
-type MergeResult<R extends Observable<unknown>[]> = R extends (infer U)[]
-	? Observable<Merge<U>>
-	: never;
 /**
  * Creates an output Observable which concurrently emits all values from every given input Observable.
  */
 export function merge<R extends Observable<unknown>[]>(
 	...observables: R
-): MergeResult<R> {
-	if (observables.length === 1) return observables[0] as MergeResult<R>;
+): CombineResult<R> {
+	if (observables.length === 1) return observables[0] as CombineResult<R>;
 
 	return new Observable(subs => {
 		let refCount = observables.length;
@@ -992,7 +984,7 @@ export function merge<R extends Observable<unknown>[]>(
 					},
 					signal: subs.signal,
 				});
-	}) as MergeResult<R>;
+	}) as CombineResult<R>;
 }
 
 /**
@@ -1005,27 +997,18 @@ export function zip<T extends Observable<unknown>[]>(
 		? EMPTY
 		: (new Observable<unknown>(subs => {
 				const buffer: unknown[][] = new Array(observables.length);
-				let completed = 0;
 
 				function flush() {
 					let hasNext = true;
-					for (const bucket of buffer)
-						if (!bucket || bucket.length === 0) {
-							hasNext = false;
-							break;
+					while (hasNext) {
+						for (const bucket of buffer) {
+							if (bucket?.[0] === Terminator)
+								return subs.complete();
+							if (!bucket || bucket.length === 0) hasNext = false;
 						}
-					if (hasNext) {
-						subs.next(buffer.map(b => b.shift()));
-						flush();
-					}
-
-					if (completed) {
-						for (const bucket of buffer)
-							if (bucket.length !== 0) return;
-						subs.complete();
+						if (hasNext) subs.next(buffer.map(b => b.shift()));
 					}
 				}
-
 				observables.forEach((o, id) => {
 					const bucket: unknown[] = (buffer[id] = []);
 					o.subscribe({
@@ -1035,7 +1018,7 @@ export function zip<T extends Observable<unknown>[]>(
 						},
 						error: subs.error,
 						complete() {
-							completed++;
+							bucket.push(Terminator);
 							flush();
 						},
 						signal: subs.signal,

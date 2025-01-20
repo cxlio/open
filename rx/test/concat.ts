@@ -1,5 +1,5 @@
 import { cold, expectLog } from './util.js';
-import { concat } from '../index.js';
+import { Observable, concat, of } from '../index.js';
 import { spec } from '@cxl/spec';
 
 export default spec('concat', it => {
@@ -75,4 +75,15 @@ export default spec('concat', it => {
 			a.equal(inner.subscriptions, innersubs);
 		},
 	);
+
+	it.should('infer types when concatenating more than two sources', a => {
+		const o1 = of<number>(1);
+		const o2 = of<string>('a');
+		const o3 = of<boolean>(true);
+		const result = concat(o1, o2, o3);
+
+		// `result` should be inferred as Observable<number | string | boolean>
+		const expected: Observable<number | string | boolean> = result;
+		a.ok(expected);
+	});
 });

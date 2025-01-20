@@ -101,40 +101,6 @@ class ColdObservable extends Observable<string> {
 	time = scheduler.value;
 	lastLogPos = 0;
 
-	/* 
-   The `log` method is responsible for maintaining a textual representation of the 
-   subscription's activity over simulated time, stored in the `subscriptions` string. 
-   
-   - If the time difference (`diff`) since the last recorded event is zero and 
-     there are already logged subscriptions, it updates the previous event by 
-     wrapping it in parentheses, grouping it with the new event (`ev`).
-   - If the time difference (`diff`) is greater than zero, it appends spaces to 
-     represent the passage of time and logs the new event, adjusting the 
-     `lastLogPos` marker accordingly.
-
-   This method is fundamental for visualizing subscription and emission events 
-   in a timeline-friendly format.
-	*/
-	log(ev: string) {
-		const diff = scheduler.value - this.time;
-		const subs = this.subscriptions;
-		if (diff === 0 && subs.length)
-			this.subscriptions =
-				subs.charAt(this.lastLogPos) === '('
-					? subs.slice(0, subs.length - 1) + ev + ')'
-					: subs.slice(0, this.lastLogPos) +
-					  '(' +
-					  subs.slice(this.lastLogPos) +
-					  ev +
-					  ')';
-		else {
-			this.subscriptions +=
-				(diff > 0 ? ' '.repeat(diff - (subs ? 1 : 0)) : '') + ev;
-			this.lastLogPos = this.subscriptions.length - ev.length;
-		}
-		this.time = scheduler.value;
-	}
-
 	constructor(
 		stream: string,
 		values?: Record<string, string>,
@@ -176,6 +142,36 @@ class ColdObservable extends Observable<string> {
 				inner.unsubscribe();
 			});
 		});
+	}
+
+	/**
+	 * The `log` method is responsible for maintaining a textual representation of the
+	 * subscription's activity over simulated time, stored in the `subscriptions` string.
+	 *
+	 * - If the time difference (`diff`) since the last recorded event is zero and
+	 *   there are already logged subscriptions, it updates the previous event by
+	 *   wrapping it in parentheses, grouping it with the new event (`ev`).
+	 * - If the time difference (`diff`) is greater than zero, it appends spaces to
+	 *   represent the passage of time and logs the new event.
+	 */
+	log(ev: string) {
+		const diff = scheduler.value - this.time;
+		const subs = this.subscriptions;
+		if (diff === 0 && subs.length)
+			this.subscriptions =
+				subs.charAt(this.lastLogPos) === '('
+					? subs.slice(0, subs.length - 1) + ev + ')'
+					: subs.slice(0, this.lastLogPos) +
+					  '(' +
+					  subs.slice(this.lastLogPos) +
+					  ev +
+					  ')';
+		else {
+			this.subscriptions +=
+				(diff > 0 ? ' '.repeat(diff - (subs ? 1 : 0)) : '') + ev;
+			this.lastLogPos = this.subscriptions.length - ev.length;
+		}
+		this.time = scheduler.value;
 	}
 }
 

@@ -101,4 +101,79 @@ export default spec('mergeMap', it => {
 		expectLog(a, source, expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
+
+	it.should('handle an empty source Observable', async a => {
+		const e1 = cold('|');
+		const e1subs = '(^!)';
+		const expected = '|';
+
+		const result = e1.pipe(mergeMap(() => of('value')));
+
+		await expectLog(a, result, expected);
+		a.equal(e1.subscriptions, e1subs);
+	});
+
+	it.should('handle outer error', async a => {
+		const e1 = cold('#');
+		const e1subs = '(^!)';
+		const expected = '#';
+
+		const result = e1.pipe(mergeMap(() => of('value')));
+
+		await expectLog(a, result, expected);
+		a.equal(e1.subscriptions, e1subs);
+	});
+
+	it.should('handle inner error', async a => {
+		const e1 = cold('-1-|');
+		const e1subs = '^!';
+		const i1 = cold('#');
+		const expected = '-#';
+
+		const result = e1.pipe(mergeMap(() => i1));
+
+		await expectLog(a, result, expected);
+		a.equal(e1.subscriptions, e1subs);
+	});
+
+	it.should('handle a synchronous inner Observable', a => {
+		const source = of(1, 2, 3).mergeMap(x => of(x * 10));
+
+		const expected = [10, 20, 30];
+		const results: number[] = [];
+
+		source.subscribe({
+			next: x => results.push(x),
+			complete: () => {
+				a.equalValues(results, expected);
+			},
+		});
+	});
+
+	it.should('handle project function that throws', async a => {
+		const e1 = cold('--1--|');
+		const e1subs = '^ !';
+		const expected = '--#';
+
+		const result = e1.pipe(
+			mergeMap(() => {
+				throw new Error('Error!');
+			}),
+		);
+
+		await expectLog(a, result, expected);
+		a.equal(e1.subscriptions, e1subs);
+	});
+
+	it.should('handle inner Observable that completes immediately', async a => {
+		const e1 = cold('1---2---|');
+		const e1subs = '^       !';
+		const i1 = cold('|');
+		const expected = '--------|';
+
+		const result = e1.pipe(mergeMap(() => i1));
+
+		await expectLog(a, result, expected);
+		a.equal(e1.subscriptions, e1subs);
+	});
 });

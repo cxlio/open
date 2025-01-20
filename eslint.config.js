@@ -11,6 +11,8 @@ module.exports = ts.config([
 			sourceType: 'module',
 		},
 		rules: {
+			'@typescript-eslint/member-ordering': 'error',
+
 			'no-mixed-spaces-and-tabs': 'off',
 			'no-prototype-builtins': 'off',
 			'no-dupe-class-members': 'off',

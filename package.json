@@ -5,6 +5,7 @@
 	"homepage": "https://github.com/cxlio/open/tree/main",
 	"devDependencies": {
 		"@cxl/build": "^0.2.1",
+		"@cxl/docgen": "^0.1.1",
 		"@cxl/spec": "^0.3.1",
 		"@cxl/tester": "^0.2.0",
 		"@types/node": "^20.17.12",

@@ -182,7 +182,7 @@ export default spec('catchError', it => {
 	);
 
 	it.should(
-		'should stop listening to a synchronous observable when unsubscribed',
+		'stop listening to a synchronous observable when unsubscribed',
 		a => {
 			const sideEffects: number[] = [];
 			const synchronousObservable = observable(subscriber => {
@@ -263,7 +263,7 @@ export default spec('catchError', it => {
 		});
 	});
 
-	it.should('should not handle error if subscriber is already closed', a => {
+	it.should('not handle error if subscriber is already closed', a => {
 		const sideEffects: number[] = [];
 
 		const source = observable<number>(subscriber => {
@@ -287,7 +287,7 @@ export default spec('catchError', it => {
 		a.equalValues(sideEffects, [1]);
 	});
 
-	it.should('should return early if subscriber is closed', a => {
+	it.should('return early if subscriber is closed', a => {
 		const source = observable<number>(subscriber => {
 			subscriber.next(1);
 			subscriber.next(2);

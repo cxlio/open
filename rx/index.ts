@@ -26,10 +26,6 @@ export type Operator<T, T2 = T> = (observable: Observable<T>) => Observable<T2>;
 export interface Observer<T> {
 	/**
 	 * The `next` property allows the observer to react to each value emitted by the Observable.
-	 *
-	 * - It is an optional method of the `Observer` interface that will be executed whenever the Observable calls the `next` function to emit a new value.
-	 * - The argument `val` represents the value emitted, and the observer can use this to perform side effects or other operations in response to the new data.
-	 * - Providing this method enables the `Observer` to handle incoming data from the Observable's execution pipeline.
 	 */
 	next?: NextFunction<T>;
 
@@ -37,9 +33,6 @@ export interface Observer<T> {
 	 * The `error` property within the `Observer` interface is an optional method
 	 * that handles errors from the Observable's execution.
 	 *
-	 * - If the Observable encounters an error during its lifecycle, this method is invoked.
-	 * - The `err` parameter contains details about the encountered error, which can be used for logging
-	 *   or ensuring a graceful failure handling mechanism.
 	 * - Providing an error handler here allows Observers to manage exceptions locally
 	 *   without propagating them further up the execution chain.
 	 */

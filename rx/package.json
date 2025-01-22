@@ -3,11 +3,10 @@
 	"description": "@cxl/rx is a lightweight reactive programming library focused on usability, performance, and type safety.",
 	"version": "1.0.0-beta.1",
 	"license": "Apache-2.0",
-	"browser": "amd/index.js",
 	"type": "module",
 	"scripts": {
 		"build": "cxl-build",
-		"test": "npm run build && cd ../dist/rx && cxl-tester --mjs --baselinePath=../../rx/spec"
+		"test": "npm run build && cd ../dist/rx && cxl-tester --mjs"
 	},
 	"bugs": "https://github.com/cxlio/open/issues",
 	"repository": {

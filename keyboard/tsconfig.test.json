@@ -1,0 +1,12 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"outDir": "../dist/keyboard"
+	},
+	"files": ["test.ts"],
+	"references": [
+		{
+			"path": "."
+		}
+	]
+}

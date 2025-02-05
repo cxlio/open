@@ -1,8 +1,0 @@
-{
-	"extends": "./tsconfig.json",
-	"compilerOptions": {
-		"module": "amd",
-		"outDir": "../dist/rx/amd"
-	},
-	"files": ["index.ts"]
-}

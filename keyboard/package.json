@@ -1,0 +1,19 @@
+{
+	"name": "@cxl/keyboard",
+	"version": "1.1.0",
+	"bugs": "https://github.com/cxlio/open/issues",
+	"homepage": "https://cxlio.github.io/open/keyboard",
+	"browser": "amd/index.js",
+	"license": "UNLICENSED",
+	"description": "Keyboard Handling Library",
+	"type": "module",
+	"scripts": {
+		"build": "cxl-build",
+		"test": "npm run build && cd ../dist/keyboard && cxl-tester --mjs"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cxlio/open.git",
+		"directory": "keyboard"
+	}
+}

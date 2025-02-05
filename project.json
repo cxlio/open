@@ -11,6 +11,14 @@
 			"tgz": {
 				"files": ["tgz/**/*"],
 				"tasks": "cd tgz && npm run build"
+			},
+			"component": {
+				"files": ["component/**/*"],
+				"tasks": "cd component && npm run build"
+			},
+			"keyboard": {
+				"files": ["keyboard/**/*"],
+				"tasks": "cd keyboard && npm run build"
 			}
 		}
 	}

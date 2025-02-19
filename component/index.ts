@@ -97,6 +97,7 @@ const parserSymbol = Symbol('parser');
  */
 export class Bindings {
 	bindings?: Observable<unknown>[];
+	internals?: ElementInternals;
 	attributes$ = new OrderedSubject<unknown>();
 	wasConnected = false;
 
@@ -213,6 +214,10 @@ function registerComponent<T extends Component>(
 	registeredComponents[tagName] =
 		ctor as unknown as ComponentConstructor<Component>;
 	customElements.define(tagName, ctor);
+}
+
+export function internals(host: Component) {
+	return (host[bindings].internals ??= host.attachInternals());
 }
 
 export function component<T extends Component>(

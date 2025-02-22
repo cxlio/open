@@ -1,0 +1,1 @@
+{"index":[{"sig":"Options","name":"Options","kind":4,"flags":1,"href":"index--Options.html","children":[{"sig":"matchBase?: boolean","name":"matchBase","kind":10,"flags":524289,"docs":{"content":[{"value":"Perform a basename-only match."}]},"href":"index--Options.html#s2","typeKind":32,"type":"boolean"}]}]}

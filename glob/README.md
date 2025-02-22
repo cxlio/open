@@ -8,7 +8,7 @@ A utility module for converting glob patterns into regular expressions. It suppo
 
 -   Branch Version: [0.0.1](https://npmjs.com/package/@cxl/glob/v/0.0.1)
 -   License: GPL-3.0
--   Documentation: [Link](https://cxlio.github.io/cxl/glob)
+-   Documentation: [Link](https://cxlio.github.io/open/glob)
 -   Report Issues: [Github](https://github.com/cxlio/open/issues)
 
 ## Installation

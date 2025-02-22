@@ -11,7 +11,6 @@
 		"build": "cxl-build",
 		"test": "npm run build && cd ../dist/glob && cxl-tester --mjs"
 	},
-	"dependencies": {},
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/cxlio/open.git",

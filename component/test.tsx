@@ -1,5 +1,6 @@
 import {
 	Component,
+	ReactElement,
 	Slot,
 	attribute,
 	augment,
@@ -467,7 +468,6 @@ export default spec('component', a => {
 			class Test extends Component {
 				oncustom?: (ev: CustomEvent) => void;
 			}
-
 			component(Test, { tagName: id, init: [event('custom')] });
 
 			const el = create(Test);
@@ -569,7 +569,6 @@ export default spec('component', a => {
 			'ensure the event handler respects scope and triggers only for the target element',
 			a => {
 				const id = getId();
-
 				class Test extends Component {
 					oncustom?: (ev: KeyboardEvent) => void;
 				}
@@ -593,6 +592,27 @@ export default spec('component', a => {
 				a.ok(!parent.hasAttribute('scoped'));
 			},
 		);
+
+		it.should('register custom event with react TSX', a => {
+			const id = getId();
+			const done = a.async();
+			class Test extends Component {
+				oncustom?: (ev: KeyboardEvent) => void;
+			}
+			component(Test, { tagName: id, init: [event('custom')] });
+			const test = {
+				oncustom: () => done(),
+				onClick: () => {
+					/* nop */
+				},
+			} as const;
+			const react: Partial<ReactElement<Test>> = test;
+			a.ok(test);
+			a.ok(react);
+			const el = create(Test, test);
+			a.dom.append(el);
+			el.dispatchEvent(new KeyboardEvent('custom'));
+		});
 	});
 
 	a.test('property', it => {
@@ -691,12 +711,14 @@ export default spec('component', a => {
 			component(TestComponent, { tagName: id });
 
 			const childElement = document.createElement('div');
-			const instance = create(TestComponent, undefined, [
+			const instance = create(
+				TestComponent,
+				undefined,
 				childElement,
 				expr,
 				fn,
 				'text node',
-			]);
+			);
 
 			a.equal(instance.childNodes.length, 4);
 			a.ok(instance.children[0] === childElement);
@@ -726,8 +748,7 @@ export default spec('component', a => {
 			class TestComponent extends Component {}
 			component(TestComponent, { tagName: id });
 
-			const children = [undefined, 123];
-			const instance = create(TestComponent, undefined, children);
+			const instance = create(TestComponent, undefined, undefined, 123);
 
 			a.ok(instance instanceof TestComponent);
 			a.equal(instance.childNodes.length, 1); // All invalid children should be ignored

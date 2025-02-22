@@ -1,0 +1,8 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"outDir": "../dist/glob"
+	},
+	"files": ["index.ts"],
+	"references": [ ]
+}

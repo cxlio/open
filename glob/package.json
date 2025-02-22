@@ -1,0 +1,18 @@
+{
+	"name": "@cxl/glob",
+	"version": "0.0.1",
+	"bugs": "https://github.com/cxlio/open/issues",
+	"homepage": "https://cxlio.github.io/cxl/glob",
+	"description": "A utility module for converting glob patterns into regular expressions. It supports advanced glob features like groups, ranges, special characters, and path-specific matching behaviors.",
+	"license": "GPL-3.0",
+	"scripts": {
+		"build": "cxl-build",
+		"test": "npm run build && cd ../dist/glob && cxl-tester --mjs"
+	},
+	"dependencies": {},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cxlio/open.git",
+		"directory": "glob"
+	}
+}

@@ -475,7 +475,7 @@ export function expression(host: Component, binding: Observable<unknown>) {
 }
 
 export function renderChildren(
-	host: Component,
+	host: HTMLElement,
 	children: Children,
 	appendTo: Node = host,
 ) {
@@ -486,58 +486,136 @@ export function renderChildren(
 	else if (host instanceof Component && children instanceof Observable)
 		appendTo.appendChild(expression(host, children));
 	else if (children instanceof Node) appendTo.appendChild(children);
-	else if (typeof children === 'function')
+	else if (host instanceof Component && typeof children === 'function')
 		renderChildren(host, children(host), appendTo);
 	else appendTo.appendChild(document.createTextNode(children as string));
 }
 
-function eachAttribute<T extends Component, K extends keyof AttributeType<T>>(
+function eachAttribute<T extends HTMLElement, K extends keyof AttributeType<T>>(
 	attributes: AttributeType<T>,
 	cb: (key: K, value: AttributeType<T>[K]) => void,
 ) {
 	for (const attr in attributes) cb(attr as K, attributes[attr as K]);
 }
 
-function renderAttributes<T extends Component>(
+function renderAttributes<T extends HTMLElement>(
 	host: T,
 	attributes: AttributeType<T>,
 ) {
 	eachAttribute(attributes, (attr, value) => {
-		if (value instanceof Observable)
-			host[bindings].add(
-				attr === '$' ? value : value.tap(v => (host[attr] = v)),
-			);
-		else if (attr === '$' && typeof value === 'function')
-			host[bindings].add(value(host));
-		else
+		if (host instanceof Component) {
+			if (value instanceof Observable)
+				host[bindings].add(
+					attr === '$' ? value : value.tap(v => (host[attr] = v)),
+				);
+			else if (attr === '$' && typeof value === 'function')
+				host[bindings].add(value(host));
+			else
+				host[attr] = value as T['children'] &
+					HTMLCollection &
+					(T & Component)[Exclude<keyof T, 'children' | '$'>];
+		} else
 			host[attr] = value as T['children'] &
 				T[Exclude<keyof T, 'children' | '$'>];
 	});
 }
 
+type NativeChild = string | number | Node | Node[] | undefined;
+type NativeChildren = NativeChild | NativeChild[];
+type NativeType<T> = {
+	[K in keyof Omit<T, 'children'>]?: T[K];
+} & {
+	children?: NativeChildren;
+};
+
 /**
  * Creates an instance of a custom component based on the provided constructor.
  * Useful for dynamically generating components at runtime.
  */
+export function create<K extends keyof HTMLElementTagNameMap>(
+	tagName: K,
+	attributes?: NativeType<HTMLElementTagNameMap[K]>,
+	...children: Child[]
+): HTMLElementTagNameMap[K];
 export function create<T extends Component>(
 	component: ComponentConstructor<T>,
 	attributes?: CreateAttribute<T>,
-	children?: Children,
-): T {
-	const element = new component();
+	...children: Child[]
+): T;
+export function create<T extends Component>(
+	component: ComponentConstructor<T> | string,
+	attributes?: unknown,
+	...children: Child[]
+): Node {
+	const element =
+		typeof component === 'string'
+			? document.createElement(component)
+			: new component();
 	if (attributes) renderAttributes(element, attributes);
 	if (children) renderChildren(element, children);
 	return element;
 }
 
-export type EventProperty<T> = {
-	[K in Extract<keyof T, `on${string}`>]: T[K] extends
-		| ((e: infer E) => unknown)
-		| undefined
-		? E extends Event
-			? K extends `on${infer Name}`
-				? Name
-				: never
-			: never
+export type ReactElement<T> = ReactAttributeType<T> &
+	Partial<
+		{
+			class: string;
+			ref: unknown;
+		} & ReactEvents<T>
+	>;
+
+type AttributeProperties<T> = {
+	[K in keyof T]: T[K] extends Disallowed ? never : K;
+}[keyof T];
+
+type ReactAttributeType<T> = {
+	[K in AttributeProperties<
+		Omit<T, 'children' | keyof HTMLElementEventMap>
+	>]?: T[K];
+} & {
+	children?: unknown;
+};
+
+export interface Components {}
+
+/* eslint @typescript-eslint/no-empty-object-type: off */
+/* eslint @typescript-eslint/no-namespace:off */
+declare global {
+	namespace React.JSX {
+		interface IntrinsicElements extends CxlReactComponents {}
+	}
+}
+
+type CxlReactComponents = {
+	[K in keyof Components]: ReactElement<Components[K]>;
+};
+
+type HTMLEvents = {
+	[K in keyof HTMLElementEventMap as `on${Capitalize<K>}`]: (
+		e: HTMLElementEventMap[K],
+	) => void;
+};
+
+type CustomEventProperty<T> = Extract<keyof T, `on${string}`>;
+
+type ReactEvents<T> = {
+	[K in EventProperty<T> as `on${K}`]: `on${K}` extends keyof T
+		? T[K]
 		: never;
-}[Extract<keyof T, `on${string}`>];
+} & HTMLEvents;
+
+export type EventProperty<T> = Exclude<
+	{
+		[K in CustomEventProperty<T>]: T[K] extends
+			| ((e: infer E) => void)
+			| undefined
+			| null
+			? E extends Event
+				? K extends `on${infer Name}`
+					? Name
+					: never
+				: never
+			: never;
+	}[CustomEventProperty<T>],
+	keyof HTMLElementEventMap
+>;

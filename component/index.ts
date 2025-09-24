@@ -12,16 +12,50 @@ import {
 	merge,
 } from '@cxl/rx';
 
+/* eslint @typescript-eslint/no-namespace: 'off' */
+declare global {
+	namespace tsx.JSX {
+		type ElementClass = HTMLElement;
+		interface ElementAttributesProperty {
+			jsxAttributes: unknown;
+		}
+		interface ElementChildrenAttribute {
+			children: unknown;
+		}
+		type Element = Node;
+		type IntrinsicElements = {
+			[P in keyof HTMLElementTagNameMap]: NativeType<
+				HTMLElementTagNameMap[P]
+			>;
+		};
+		interface IntrinsicClassAttributes<T> {
+			$?: Binding<T, unknown> | Observable<unknown>;
+		}
+	}
+}
+
 type RenderFunction<T> = (node: T) => void;
-type Augmentation<T extends Component> = (
+export type Augmentation<T extends Component> = (
 	host: T,
 ) => Node | Comment | Observable<unknown> | void;
 
 /*eslint @typescript-eslint/no-unsafe-function-type: off */
 type Disallowed = Observable<unknown> | Function;
 type InitFn<T extends Component> = (ctor: ComponentConstructor<T>) => void;
-type CreateAttribute<T> = AttributeType<T> & {
+export type CreateAttribute<T> = AttributeType<T> & {
 	$?: Binding<T, unknown> | Observable<unknown>;
+};
+type NativeChild =
+	| string
+	| number
+	| Node
+	| (string | number | Node)[]
+	| undefined;
+type NativeChildren = NativeChild | NativeChild[];
+type NativeType<T> = {
+	[K in keyof Omit<T, 'children'>]?: T[K];
+} & {
+	children?: NativeChildren;
 };
 
 export type ComponentConstructor<T extends Component = Component> = {
@@ -29,15 +63,12 @@ export type ComponentConstructor<T extends Component = Component> = {
 	[augments]?: RenderFunction<T>[];
 	[parserSymbol]?: Record<string, AttributeParser>;
 	prototype: T;
-	new (): T;
-};
+	//new (): T;
+} & ((abstract new () => T) | (new () => T));
 export type Binding<T, DataT> = (el: T) => Observable<DataT>;
 export type Child =
-	| string
-	| Node
-	| number
+	| NativeChild
 	| ((host: Component) => Node)
-	| undefined
 	| Observable<unknown>;
 export type Children = Child | Child[];
 export type AttributeType<T> = {
@@ -67,6 +98,12 @@ export interface AttributeEvent<T> {
 	attribute: AttributeName<T>;
 }
 
+export interface MessageHandler {
+	type: string;
+	next: (x: unknown) => void;
+	stopPropagation: boolean;
+}
+
 /**
  * `AttributeOptions` is an interface for configuring attributes.
  */
@@ -82,11 +119,13 @@ export interface AttributeOptions<T extends Component, K extends keyof T> {
 	parse?(val: string | null, oldval: unknown): T[K];
 }
 
-const registeredComponents: Record<
-	string,
-	ComponentConstructor<Component>
-> = {};
-const bindings = Symbol('bindings');
+/**
+ * Symbol used to uniquely identify and store reactive bindings for a component instance,
+ * enabling management of subscription lifecycles and state tracking internally.
+ */
+export const bindings = Symbol('bindings');
+
+const registeredComponents: Record<string, new () => Component> = {};
 const augments = Symbol('augments');
 const parserSymbol = Symbol('parser');
 
@@ -97,23 +136,52 @@ const parserSymbol = Symbol('parser');
  */
 export class Bindings {
 	bindings?: Observable<unknown>[];
+	messageHandlers?: Set<MessageHandler>;
 	internals?: ElementInternals;
 	attributes$ = new OrderedSubject<unknown>();
 	wasConnected = false;
+	wasInitialized = false;
 
 	private subscriptions?: Subscription[];
+	private prebind?: Observable<unknown>[];
+
+	addMessageHandler(handler: MessageHandler) {
+		(this.messageHandlers ??= new Set()).add(handler);
+	}
+
+	removeMessageHandler(handler: MessageHandler) {
+		this.messageHandlers?.delete(handler);
+	}
+
+	message(event: string, val: unknown) {
+		let stop = false;
+		if (this.messageHandlers)
+			for (const m of this.messageHandlers) {
+				if (m.type === event) {
+					m.next(val);
+					stop ||= m.stopPropagation;
+				}
+			}
+		return stop;
+	}
 
 	add(binding: Observable<unknown>) {
 		if (this.wasConnected)
 			throw new Error('Cannot bind connected component.');
 
-		(this.bindings ??= []).push(binding);
+		if (this.wasInitialized) (this.bindings ??= []).push(binding);
+		else (this.prebind ??= []).push(binding);
 	}
 
 	connect() {
 		this.wasConnected = true;
-		if (!this.subscriptions && this.bindings)
-			this.subscriptions = this.bindings?.map(s => s.subscribe());
+		if (!this.subscriptions && (this.prebind || this.bindings)) {
+			const subs: Subscription[] = (this.subscriptions = []);
+			if (this.bindings)
+				for (const b of this.bindings) subs.push(b.subscribe());
+			if (this.prebind)
+				for (const b of this.prebind) subs.push(b.subscribe());
+		}
 	}
 	disconnect() {
 		this.subscriptions?.forEach(s => s.unsubscribe());
@@ -124,6 +192,12 @@ export class Bindings {
 export interface ComponentT extends HTMLElement {
 	[bindings]: Bindings;
 }
+/* eslint @typescript-eslint/no-unsafe-declaration-merging:off */
+export interface Component {
+	jsxAttributes: AttributeType<this>;
+}
+
+export const cssSymbol = Symbol('css');
 
 /**
  * The `Component` class serves as a base for web components with built-in reactive
@@ -136,7 +210,14 @@ export abstract class Component extends HTMLElement {
 
 	[bindings] = new Bindings();
 
+	/**
+	 * Symbol used to indicate whether the CSS for this node has been applied,
+	 * preventing duplicate style insertions.
+	 */
+	[cssSymbol]?: boolean;
+
 	protected connectedCallback() {
+		this[bindings].wasInitialized = true;
 		if (!this[bindings].wasConnected)
 			(this.constructor as typeof Component)[augments]?.forEach(f =>
 				f(this),
@@ -149,7 +230,7 @@ export abstract class Component extends HTMLElement {
 	}
 
 	protected attributeChangedCallback(
-		name: keyof this,
+		name: string,
 		oldValue: string | null,
 		value: string | null,
 	) {
@@ -158,9 +239,9 @@ export abstract class Component extends HTMLElement {
 				name as string
 			] ?? defaultAttributeParser;
 		if (oldValue !== value)
-			this[name] = parser(
+			this[name as keyof this] = parser(
 				value as string,
-				this[name],
+				this[name as keyof this],
 			) as this[keyof this];
 	}
 }
@@ -183,7 +264,7 @@ function pushRender<T extends Component>(
 
 const shadowConfig: ShadowRootInit = { mode: 'open' };
 export function getShadow(el: Element) {
-	return el.shadowRoot || el.attachShadow(shadowConfig);
+	return el.shadowRoot ?? el.attachShadow(shadowConfig);
 }
 
 function appendShadow<T extends Component>(
@@ -209,10 +290,9 @@ function doAugment<T extends Component>(
 
 function registerComponent<T extends Component>(
 	tagName: string,
-	ctor: ComponentConstructor<T>,
+	ctor: new () => T,
 ) {
-	registeredComponents[tagName] =
-		ctor as unknown as ComponentConstructor<Component>;
+	registeredComponents[tagName] = ctor;
 	customElements.define(tagName, ctor);
 }
 
@@ -220,6 +300,21 @@ export function internals(host: Component) {
 	return (host[bindings].internals ??= host.attachInternals());
 }
 
+export function component<T extends Component>(
+	ctor: abstract new () => T,
+	options: {
+		init?: InitFn<T>[];
+		augment?: Augmentation<T>[];
+	},
+): void;
+export function component<T extends Component>(
+	ctor: ComponentConstructor<T>,
+	options: {
+		init?: InitFn<T>[];
+		augment?: Augmentation<T>[];
+		tagName?: string;
+	},
+): void;
 export function component<T extends Component>(
 	ctor: ComponentConstructor<T>,
 	{
@@ -235,7 +330,7 @@ export function component<T extends Component>(
 	if (init) for (const fn of init) fn(ctor);
 	if (augment) doAugment(ctor, augment);
 	// Next line needs to be last to prevent early component upgrade
-	if (tagName) registerComponent(tagName, ctor);
+	if (tagName) registerComponent(tagName, ctor as new () => T);
 }
 
 /**
@@ -348,42 +443,49 @@ export function attribute<
 		if (options?.observe !== false) getObservedAttributes(ctor).push(name);
 		if (options?.parse) pushParser(ctor, name, options.parse);
 
+		const prop = `$$${name}` as K;
+		const proto = ctor.prototype;
+		const descriptor = Object.getOwnPropertyDescriptor(proto, name);
+
+		if (descriptor) Object.defineProperty(proto, prop, descriptor);
+
+		const persist = options?.persist;
+		const newDescriptor = {
+			enumerable: true,
+			configurable: false,
+			get(this: T) {
+				return this[prop];
+			},
+			set(this: T, value: T[K]) {
+				const current = this[prop];
+				if (current !== value) {
+					this[prop] = value;
+					persist?.(this, name, value);
+					this[bindings].attributes$.next({
+						target: this,
+						attribute: name,
+						value: value,
+					});
+				} else if (descriptor?.set) {
+					persist?.(this, name, value);
+					this[prop] = value;
+				}
+			},
+		};
+
 		pushRender(ctor, (target: T) => {
-			const prop = `$$${name}` as K;
-			const descriptor = Object.getOwnPropertyDescriptor(
-				ctor.prototype,
-				name,
-			);
-			if (descriptor) Object.defineProperty(target, prop, descriptor);
-			else target[prop] = target[name];
+			if (!descriptor) target[prop] = target[name];
 
-			Object.defineProperty(target, name, {
-				enumerable: true,
-				configurable: false,
-				get(this: T) {
-					return this[prop];
-				},
-				set(this: T, value: T[K]) {
-					const current = this[prop];
-					if (current !== value) {
-						this[prop] = value;
-						this[bindings].attributes$.next({
-							target: this,
-							attribute: name,
-							value: value,
-						});
-					} else if (descriptor?.set) this[prop] = value;
-				},
-			});
+			Object.defineProperty(target, name, newDescriptor);
 
-			const persist = options?.persist;
+			persist?.(target, name, target[name]);
 
-			if (persist)
+			/*if (persist)
 				target[bindings].add(
 					get(target, name).tap(() =>
 						persist(target, name, target[name]),
 					),
-				);
+				);*/
 
 			if (options?.render) {
 				const result = options.render(target);
@@ -417,11 +519,12 @@ export function event<T extends Component, K extends EventProperty<T>>(
 	name: K,
 ) {
 	const prop = `on${name}` as Extract<keyof T, string>;
+
 	return attribute<T, Extract<keyof T, string>>(prop, {
 		render(el) {
 			return get(el, prop).switchMap(val => {
 				if (!val) return EMPTY;
-				return new Observable<Event>(() => {
+				return new Observable<Event>(subs => {
 					const handler = (ev: Event) => {
 						if (ev.target === el)
 							(
@@ -429,7 +532,9 @@ export function event<T extends Component, K extends EventProperty<T>>(
 							)?.call(el, ev);
 					};
 					el.addEventListener(name, handler);
-					return el.removeEventListener.bind(el, name, handler);
+					subs.signal.subscribe(() =>
+						el.removeEventListener(name, handler),
+					);
 				});
 			});
 		},
@@ -466,6 +571,21 @@ export function Slot() {
 	return document.createElement('slot');
 }
 
+export function placeholder(source: () => [Observable<unknown>, Node]) {
+	return (host: Component) => {
+		const [bind, node] = source();
+		host[bindings].add(bind);
+		return node;
+	};
+}
+
+/**
+ * Empty Component
+ * @beta
+ */
+export class Span extends Component {}
+component(Span, { tagName: 'c-span' });
+
 export function expression(host: Component, binding: Observable<unknown>) {
 	const result = document.createTextNode('');
 	host[bindings].add(
@@ -474,16 +594,20 @@ export function expression(host: Component, binding: Observable<unknown>) {
 	return result;
 }
 
+const childrenFragment = document.createDocumentFragment();
 export function renderChildren(
-	host: HTMLElement,
+	host: HTMLElement | DocumentFragment,
 	children: Children,
 	appendTo: Node = host,
 ) {
 	if (children === undefined || children === null) return;
 
-	if (Array.isArray(children))
-		for (const child of children) renderChildren(host, child, appendTo);
-	else if (host instanceof Component && children instanceof Observable)
+	if (Array.isArray(children)) {
+		for (const child of children)
+			renderChildren(host, child, childrenFragment);
+		if (appendTo !== childrenFragment)
+			appendTo.appendChild(childrenFragment);
+	} else if (host instanceof Component && children instanceof Observable)
 		appendTo.appendChild(expression(host, children));
 	else if (children instanceof Node) appendTo.appendChild(children);
 	else if (host instanceof Component && typeof children === 'function')
@@ -491,42 +615,30 @@ export function renderChildren(
 	else appendTo.appendChild(document.createTextNode(children as string));
 }
 
-function eachAttribute<T extends HTMLElement, K extends keyof AttributeType<T>>(
-	attributes: AttributeType<T>,
-	cb: (key: K, value: AttributeType<T>[K]) => void,
-) {
-	for (const attr in attributes) cb(attr as K, attributes[attr as K]);
-}
-
 function renderAttributes<T extends HTMLElement>(
 	host: T,
 	attributes: AttributeType<T>,
 ) {
-	eachAttribute(attributes, (attr, value) => {
+	for (const attr in attributes) {
+		const value = attributes[attr as keyof AttributeType<T>];
 		if (host instanceof Component) {
 			if (value instanceof Observable)
 				host[bindings].add(
-					attr === '$' ? value : value.tap(v => (host[attr] = v)),
+					attr === '$'
+						? value
+						: value.tap(v => (host[attr as keyof T] = v)),
 				);
 			else if (attr === '$' && typeof value === 'function')
 				host[bindings].add(value(host));
 			else
-				host[attr] = value as T['children'] &
+				host[attr as keyof T] = value as T['children'] &
 					HTMLCollection &
 					(T & Component)[Exclude<keyof T, 'children' | '$'>];
 		} else
-			host[attr] = value as T['children'] &
+			host[attr as keyof T] = value as T['children'] &
 				T[Exclude<keyof T, 'children' | '$'>];
-	});
+	}
 }
-
-type NativeChild = string | number | Node | Node[] | undefined;
-type NativeChildren = NativeChild | NativeChild[];
-type NativeType<T> = {
-	[K in keyof Omit<T, 'children'>]?: T[K];
-} & {
-	children?: NativeChildren;
-};
 
 /**
  * Creates an instance of a custom component based on the provided constructor.
@@ -535,15 +647,15 @@ type NativeType<T> = {
 export function create<K extends keyof HTMLElementTagNameMap>(
 	tagName: K,
 	attributes?: NativeType<HTMLElementTagNameMap[K]>,
-	...children: Child[]
+	...children: NativeChild[]
 ): HTMLElementTagNameMap[K];
 export function create<T extends Component>(
-	component: ComponentConstructor<T>,
+	component: new () => T,
 	attributes?: CreateAttribute<T>,
 	...children: Child[]
 ): T;
 export function create<T extends Component>(
-	component: ComponentConstructor<T> | string,
+	component: (new () => T) | string,
 	attributes?: unknown,
 	...children: Child[]
 ): Node {
@@ -552,6 +664,47 @@ export function create<T extends Component>(
 			? document.createElement(component)
 			: new component();
 	if (attributes) renderAttributes(element, attributes);
+	if (children) renderChildren(element, children);
+	return element;
+}
+
+export function tsx<K extends keyof HTMLElementTagNameMap>(
+	tagName: K,
+	attributes?: NativeType<HTMLElementTagNameMap[K]>,
+	...children: Child[]
+): HTMLElementTagNameMap[K];
+export function tsx<T extends Component>(
+	component: new () => T,
+	attributes?: CreateAttribute<T>,
+	...children: Child[]
+): T;
+export function tsx<T>(
+	elementType: (attributes?: T) => Node,
+	attributes?: T,
+	...children: Child[]
+): Node;
+export function tsx<T extends Component>(
+	component: (new () => T) | string | typeof tsx,
+	attributes?: unknown,
+	...children: Child[]
+): Node {
+	if (
+		component !== tsx &&
+		typeof component === 'function' &&
+		!(component.prototype instanceof Component)
+	) {
+		if (children.length)
+			((attributes ??= {}) as { children: unknown }).children = children;
+		return (component as (...args: unknown[]) => Node)(attributes);
+	}
+
+	const element =
+		component === tsx
+			? document.createDocumentFragment()
+			: typeof component === 'string'
+			? document.createElement(component)
+			: new (component as new () => T)();
+	if (attributes) renderAttributes(element as HTMLElement, attributes);
 	if (children) renderChildren(element, children);
 	return element;
 }
@@ -579,7 +732,6 @@ type ReactAttributeType<T> = {
 export interface Components {}
 
 /* eslint @typescript-eslint/no-empty-object-type: off */
-/* eslint @typescript-eslint/no-namespace:off */
 declare global {
 	namespace React.JSX {
 		interface IntrinsicElements extends CxlReactComponents {}

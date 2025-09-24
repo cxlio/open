@@ -1,1 +1,1 @@
-{"index":[{"sig":"Options","name":"Options","kind":4,"flags":1,"href":"index--Options.html","children":[{"sig":"matchBase?: boolean","name":"matchBase","kind":10,"flags":524289,"docs":{"content":[{"value":"Perform a basename-only match."}]},"href":"index--Options.html#s2","typeKind":32,"type":"boolean"}]}]}
+{"index":[{"id":1,"name":"Options","kind":4,"flags":1,"children":[{"id":2,"name":"matchBase","kind":10,"flags":524292,"docs":{"content":[{"value":"Perform a basename-only match."}]},"type":"boolean"}],"tsconfig":"tsconfig.json"}]}

@@ -8,8 +8,8 @@
 	"description": "Keyboard Handling Library",
 	"type": "module",
 	"scripts": {
-		"build": "cxl-build",
-		"test": "npm run build && cd ../dist/keyboard && cxl-tester --mjs"
+		"build": "node ../scripts/build.js",
+		"test": "node ../scripts/build.js test"
 	},
 	"repository": {
 		"type": "git",

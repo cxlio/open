@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+	<head><script>window.docgen={"activeVersion":"1.0.0-beta.1","userScripts":[],"versions":"../version.json","repository":"https://github.com/cxlio/open.git"};</script><meta charset="utf-8"><meta name="description" content="Documentation for @cxl/rx" /><script src="runtime.bundle.min.js"></script></head>
+	<style>body{font-family:var(--cxl-font); } cxl-td > :first-child { margin-top: 0 } cxl-td > :last-child { margin-bottom: 0 } ul{list-style-position:inside;padding-left: 8px;}li{margin-bottom:8px;}pre{white-space:pre-wrap;font-size:var(--cxl-font-size)}doc-it>cxl-badge{margin-right:0} doc-grd>*,doc-a,doc-it{word-break:break-word}cxl-t[code][subtitle]{margin: 8px 0 16px 0}.target{box-shadow:0 0 0 2px var(--cxl-primary)}cxl-t[h6]{margin:32px 0 32px 0}cxl-t[h5]:not([inline]){margin:40px 0}code,.hljs{font:var(--cxl-font-code);font-size:0.875em}pre{margin:32px 0 32px 0} .navbar-title{font-size: 18px;font-weight:500;flex-grow:1}p,ul{line-height:1.6}</style>
+
+	<cxl-application permanent><title>@cxl/rx API Reference</title><cxl-appbar center>
+	<cxl-navbar permanent><cxl-flex middle pad="16"><div class="navbar-title">@cxl/rx</div><doc-version-select></doc-version-select>
+	</cxl-flex>
+		<cxl-hr></cxl-hr>
+		<doc-it href="index.html" external>Home</doc-it><cxl-hr></cxl-hr>	
+		<doc-it href="index-api.html" external><i>Index</i></doc-it><doc-it href="index--BehaviorSubject.html" external><cxl-avatar size="-1" text="C"></cxl-avatar>BehaviorSubject</doc-it><doc-it href="index--CancelSignal.html" external><cxl-avatar size="-1" text="C"></cxl-avatar>CancelSignal</doc-it><doc-it href="index--EmptyError.html" external><cxl-avatar size="-1" text="C"></cxl-avatar>EmptyError</doc-it><doc-it href="index--Observable.html" external><cxl-avatar size="-1" text="C"></cxl-avatar>Observable</doc-it><doc-it href="index--Observable.html" external><cxl-avatar size="-1" text="I"></cxl-avatar>Observable</doc-it><doc-it href="index--Observer.html" external><cxl-avatar size="-1" text="I"></cxl-avatar>Observer</doc-it><doc-it href="index--OrderedSubject.html" external><cxl-avatar size="-1" text="C"></cxl-avatar>OrderedSubject</doc-it><doc-it href="index--Reference.html" external><cxl-avatar size="-1" text="C"></cxl-avatar>Reference</doc-it><doc-it href="index--ReplaySubject.html" external><cxl-avatar size="-1" text="C"></cxl-avatar>ReplaySubject</doc-it><doc-it href="index--Subject.html" external><cxl-avatar size="-1" text="C"></cxl-avatar>Subject</doc-it><doc-it href="index--Subscribable.html" external><cxl-avatar size="-1" text="I"></cxl-avatar>Subscribable</doc-it><doc-it href="index--Subscription.html" external><cxl-avatar size="-1" text="I"></cxl-avatar>Subscription</doc-it>
+		</cxl-navbar>
+	<doc-search></doc-search>
+	<cxl-theme-toggle-icon title="Dark theme toggle" darktheme="@cxl/ui/theme-dark.js" persistkey="cxl.ui-demo.theme"></cxl-theme-toggle-icon>
+	</cxl-appbar><cxl-page center><link id="styles.css" rel="stylesheet" href="styles.css" /><script src="highlight.js"></script><cxl-t h3><span style="float:right"><cxl-chip size="small" color="primary">interface</cxl-chip> </span>Observer&lt;T&gt;</cxl-t><div style="margin-top:32px"></div><cxl-t font="h6">Properties
+		</cxl-t><doc-grd><a href="#s78">complete</a><a href="#s77">error</a><a href="#s76">next</a><a href="#s79">signal</a></doc-grd><cxl-t h5>Properties</cxl-t><a name="s78"></a><doc-c src="index.ts#L37"><doc-ct>complete?: <a href="#s29">CompleteFunction</a></doc-ct><p><p>The <code>complete</code> property within the <code>Observer</code> interface is an optional method
+that signals the successful completion of the Observable's emission sequence.</p>
+<ul>
+<li>If provided, it will be invoked when the Observable has finished emitting all values without an error.</li>
+<li>This is particularly useful for cleaning up resources or triggering follow-up logic.</li>
+</ul>
+</p></doc-c><a name="s77"></a><doc-c src="index.ts#L28"><doc-ct>error?: <a href="#s24">ErrorFunction</a></doc-ct><p><p>The <code>error</code> property within the <code>Observer</code> interface is an optional method
+that handles errors from the Observable's execution.</p>
+<ul>
+<li>Providing an error handler here allows Observers to manage exceptions locally
+without propagating them further up the execution chain.</li>
+</ul>
+</p></doc-c><a name="s76"></a><doc-c src="index.ts#L24"><doc-ct>next?: <a href="#s18">NextFunction</a>&lt;<a href="#s75">T</a>&gt;</doc-ct><p>The <code>next</code> property allows the observer to react to each value emitted by the Observable.</p></doc-c><a name="s79"></a><doc-c src="index.ts#L46"><doc-ct>signal?: <a href="index--Observable.html">Observable</a>&lt;void&gt;</doc-ct><p>The <code>signal</code> property is an optional Observable that provides a mechanism for external cancellation.</p></doc-c></cxl-page></cxl-application>

@@ -1,20 +1,16 @@
 {
 	"name": "@cxl/component",
 	"version": "0.2.0",
-	"description": "Web Component Framework",
 	"license": "GPL-3.0",
+	"description": "Lightweight TypeScript runtime for building reactive Web Components with Rx-style observables (works with @cxl/rx). Provides a Component base class, attribute/property/event decorators, binding lifecycle management, JSX/tsx factory, shadow DOM and rendering helpers, and utilities to register and augment custom elements.",
 	"scripts": {
-		"build": "cxl-build",
-		"test": "npm run build && cd ../dist/component && cxl-tester --mjs"
+		"build": "node ../scripts/build.js",
+		"test": "node ../scripts/build.js test"
 	},
+	"browser": true,
 	"type": "module",
 	"bugs": "https://github.com/cxlio/open/issues",
 	"homepage": "https://cxlio.github.io/cxl/component",
-	"devDependencies": {
-		"@cxl/rx": "~0.5.0",
-		"@cxl/dom": "~0.0.1",
-		"@cxl/tsx": "~0.1.0"
-	},
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/cxlio/cxl.git",

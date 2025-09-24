@@ -1,5 +1,3 @@
-///<amd-module name="@cxl/tgz"/>
-
 interface Header {
 	path: string;
 	lastModified: Date;
@@ -61,7 +59,7 @@ export async function untarStream(stream: ReadableStream<Uint8Array>) {
 	let header: Header | undefined;
 	let expected = 512;
 	let size = 0;
-	let leftover = new Uint8Array(0);
+	let leftover: Uint8Array | undefined;
 	let longName: string | undefined;
 
 	function next(buffer: Uint8Array) {
@@ -112,7 +110,7 @@ export async function untarStream(stream: ReadableStream<Uint8Array>) {
 	while (true) {
 		const { done, value } = await reader.read();
 		if (done) break;
-		const buffer = leftover.length ? concat(leftover, value) : value;
+		const buffer = leftover ? concat(leftover, value) : value;
 		next(buffer);
 	}
 	return result;

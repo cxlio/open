@@ -14,7 +14,7 @@ import {
 	event,
 	property,
 } from './index.js';
-import { be, observable, of } from '@cxl/rx';
+import { be, observable, of } from '../rx/index.js';
 import { TestApi, spec } from '@cxl/spec';
 
 export default spec('component', a => {
@@ -37,7 +37,11 @@ export default spec('component', a => {
 				],
 			});
 
-			const el = create(Test);
+			const el = create(
+				Test,
+				{ $: observable(() => a.equal(order++, 2)) },
+				observable(() => a.equal(order++, 3)),
+			);
 
 			a.dom.appendChild(el);
 
@@ -58,21 +62,19 @@ export default spec('component', a => {
 		});
 		it.should('allow external augments', a => {
 			const id = getId();
-			function bindTest<T extends Component & { title: string }>(
-				node: T,
-			) {
+			function bindTest<T extends Component & { test: string }>(node: T) {
 				a.equal(node.tagName, id.toUpperCase());
-				return of('hello').tap(val => (node.title = val));
+				return of('hello').tap(val => (node.test = val));
 			}
 			class Test extends Component {
-				title = 'hello';
+				test = 'hello';
 			}
 
 			component(Test, { tagName: id, augment: [bindTest] });
 
-			const el = document.createElement(id);
+			const el = document.createElement(id) as Test;
 			a.dom.appendChild(el);
-			a.equal(el.title, 'hello');
+			a.equal(el.test, 'hello');
 			a.ran(2);
 		});
 		it.should('support inheritance', (a: TestApi) => {

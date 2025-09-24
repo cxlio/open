@@ -1,5 +1,3 @@
-///<amd-module name="@cxl/rx"/>
-
 declare const setTimeout: (fn: () => unknown, n?: number) => number;
 declare const clearTimeout: (n: number) => void;
 declare const setInterval: (fn: () => unknown, n?: number) => number;
@@ -124,7 +122,10 @@ export function Subscriber<T>(
 	}
 
 	try {
-		subscribe?.(result);
+		const r = subscribe?.(result);
+		if (r) {
+			throw new Error('Unsubscribe function result is deprectaed');
+		}
 	} catch (e) {
 		error(e);
 	}
@@ -474,7 +475,9 @@ export function concat<R extends Observable<unknown>[]>(
  * Creates an Observable that, on subscribe, calls an Observable factory to make an Observable for each new Observer.
  */
 export function defer<T>(fn: () => Subscribable<T>) {
-	return new Observable<T>(subs => fn().subscribe(subs));
+	return new Observable<T>(subs => {
+		fn().subscribe(subs);
+	});
 }
 
 export function fromArray<T>(input: Array<T>): Observable<T> {
@@ -643,6 +646,28 @@ export function debounceFunction<F extends (...args: any) => any>(
 	(result as unknown as { cancel(): void }).cancel = () => clearTimeout(to);
 
 	return result as ((...args: Parameters<F>) => void) & { cancel(): void };
+}
+
+/**
+ * Limits the rate at which values are emitted to the subscriber by ensuring
+ * only one emission can occur per specified time interval.
+ * Subsequent values emitted within the throttling period are ignored.
+ * Clears the timeout on unsubscription to prevent memory leaks.
+ */
+export function throttleTime<T>(time: number) {
+	return operator<T, T>(subscriber => {
+		let ready = true;
+		let to: number;
+		return {
+			next(val: T) {
+				if (!ready) return;
+				ready = false;
+				subscriber.next(val);
+				to = setTimeout(() => (ready = true), time);
+			},
+			unsubscribe: () => clearTimeout(to),
+		};
+	});
 }
 
 /**
@@ -900,7 +925,44 @@ export function distinctUntilChanged<T>(): Operator<T, T> {
 	});
 }
 
-/*
+/**
+ * The `shareLatest` operator multicasts the latest value from the source Observable to all current and future subscribers.
+ * - It uses a `ReplaySubject` with a buffer size of 1 to cache and share the latest emission.
+ * - The source Observable is subscribed to only once, and its latest emitted value is replayed to any new subscribers.
+ * - This is useful when you want all subscribers to receive the most recent value without resubscribing to the source.
+ */
+export function shareLatest<T>(): Operator<T, T> {
+	return (source: Observable<T>) => {
+		const subject = new ReplaySubject<T>(1);
+		let ready = false;
+		return observable<T>(subs => {
+			subject.subscribe(subs);
+			if (!ready) {
+				ready = true;
+				source.subscribe(subject);
+			}
+		});
+	};
+}
+
+export function shareReplay<T>(bufferSize?: number): Operator<T, T> {
+	return (source: Observable<T>) => {
+		const subject = new ReplaySubject<T>(bufferSize);
+		let refCount = 0;
+		return observable<T>(subs => {
+			refCount++;
+			subject.subscribe(subs);
+			if (refCount === 1) {
+				source.subscribe(subject);
+			}
+			subs.signal.subscribe(() => {
+				if (--refCount === 0) subject.signal.next();
+			});
+		});
+	};
+}
+
+/**
  * The `share` operator enables multiple subscribers to share a single subscription to the provided Observable.
  */
 export function share<T>(): Operator<T, T> {
@@ -1127,10 +1189,12 @@ export const operators = {
 	publishLast,
 	reduce,
 	share,
+	shareLatest,
 	switchMap,
 	take,
 	takeWhile,
 	tap,
+	throttleTime,
 } as const;
 
 for (const p in operators) {
@@ -1167,9 +1231,11 @@ export interface Observable<T> {
 		seed: T2,
 	): Observable<T2>;
 	share(): Observable<T>;
+	shareLatest(): Observable<T>;
 	switchMap<T2>(project: (val: T) => Observable<T2>): Observable<T2>;
 	take(howMany: number): Observable<T>;
 	takeWhile(fn: (val: T) => boolean): Observable<T>;
 	tap(tapFn: (val: T) => void): Observable<T>;
 	ignoreElements(): Observable<never>;
+	throttleTime(number: number): Observable<T>;
 }

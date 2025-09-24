@@ -1,5 +1,3 @@
-///<amd-module name="@cxl/glob"/>
-
 export interface Options {
 	/**
 	 * Perform a basename-only match.

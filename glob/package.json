@@ -8,8 +8,8 @@
 	"type": "module",
 	"browser": "index.js",
 	"scripts": {
-		"build": "cxl-build",
-		"test": "npm run build && cd ../dist/glob && cxl-tester --mjs"
+		"build": "node ../scripts/build.js",
+		"test": "node ../scripts/build.js test"
 	},
 	"repository": {
 		"type": "git",

@@ -4,14 +4,11 @@
 	"version": "0.0.0",
 	"homepage": "https://github.com/cxlio/open/tree/main",
 	"devDependencies": {
-		"@cxl/build": "^0.2.1",
-		"@cxl/docgen": "^0.1.1",
-		"@cxl/spec": "^0.4.0",
-		"@cxl/tester": "^0.3.0",
-		"@types/node": "^20.17.16",
-		"eslint": "^9.18.0",
-		"typescript-eslint": "^8.20.0"
+		"@cxl/build": "file:../cxl/dist/build",
+		"@cxl/spec": "file:../cxl/dist/spec",
+		"@types/node": "^24.0.3"
 	},
+	"type": "module",
 	"bugs": "https://github.com/cxlio/open/issues",
 	"scripts": {
 		"docs": "./scripts/build-docs.sh"

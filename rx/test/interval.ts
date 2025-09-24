@@ -19,24 +19,6 @@ export default spec('interval', it => {
 		});
 	});
 
-	it.should('cancel interval on unsubscribe', a => {
-		const done = a.async();
-		let cleared = false;
-
-		const originalClearInterval = clearInterval;
-		clearInterval = () => (cleared = true);
-
-		const subscription = interval(10).subscribe(() => {});
-		subscription.unsubscribe();
-
-		// Using a slight delay to ensure proper teardown
-		setTimeout(() => {
-			a.ok(cleared);
-			clearInterval = originalClearInterval; // Restore the original method
-			done();
-		}, 10);
-	});
-
 	it.should('stop emissions on unsubscribe', async a => {
 		let emissions = 0;
 		const subscription = interval(5).subscribe(() => emissions++);

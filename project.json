@@ -8,6 +8,10 @@
 				"files": ["rx/**/*"],
 				"tasks": "cd rx && npm run build"
 			},
+			"glob": {
+				"files": ["glob/**/*"],
+				"tasks": "cd glob && npm run build"
+			},
 			"tgz": {
 				"files": ["tgz/**/*"],
 				"tasks": "cd tgz && npm run build"

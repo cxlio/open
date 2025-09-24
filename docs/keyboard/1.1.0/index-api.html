@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+	<head><script>window.docgen={"activeVersion":"1.1.0","userScripts":[],"versions":"../version.json","repository":"https://github.com/cxlio/open.git"};</script><meta charset="utf-8"><meta name="description" content="Documentation for @cxl/keyboard" /><script src="runtime.bundle.min.js"></script></head>
+	<style>body{font-family:var(--cxl-font); } cxl-td > :first-child { margin-top: 0 } cxl-td > :last-child { margin-bottom: 0 } ul{list-style-position:inside;padding-left: 8px;}li{margin-bottom:8px;}pre{white-space:pre-wrap;font-size:var(--cxl-font-size)}doc-it>cxl-badge{margin-right:0} doc-grd>*,doc-a,doc-it{word-break:break-word}cxl-t[code][subtitle]{margin: 8px 0 16px 0}.target{box-shadow:0 0 0 2px var(--cxl-primary)}cxl-t[h6]{margin:32px 0 32px 0}cxl-t[h5]:not([inline]){margin:40px 0}code,.hljs{font:var(--cxl-font-code);font-size:0.875em}pre{margin:32px 0 32px 0} .navbar-title{font-size: 18px;font-weight:500;flex-grow:1}p,ul{line-height:1.6}</style>
+
+	<cxl-application permanent><title>@cxl/keyboard API Reference</title><cxl-appbar center>
+	<cxl-navbar permanent><cxl-flex middle pad="16"><div class="navbar-title">@cxl/keyboard</div><doc-version-select></doc-version-select>
+	</cxl-flex>
+		<cxl-hr></cxl-hr>
+		<doc-it href="index.html" external>Home</doc-it><cxl-hr></cxl-hr>	
+		<doc-it href="index-api.html" external><i>Index</i></doc-it><doc-it href="index--KeyboardLayout.html" external><cxl-avatar size="-1" text="I"></cxl-avatar>KeyboardLayout</doc-it><doc-it href="index--KeyboardOptions.html" external><cxl-avatar size="-1" text="I"></cxl-avatar>KeyboardOptions</doc-it>
+		</cxl-navbar>
+	<doc-search></doc-search>
+	<cxl-theme-toggle-icon title="Dark theme toggle" darktheme="@cxl/ui/theme-dark.js" persistkey="cxl.ui-demo.theme"></cxl-theme-toggle-icon>
+	</cxl-appbar><cxl-page center><link id="styles.css" rel="stylesheet" href="styles.css" /><script src="highlight.js"></script><cxl-t h3><span style="float:right"><cxl-chip size="small" color="primary">module</cxl-chip> </span>index.ts</cxl-t><div style="margin-top:32px"></div><cxl-t font="h6">Constants
+		</cxl-t><doc-grd><a href="#s33">KeyboardLayoutData</a></doc-grd><cxl-t font="h6">Functions
+		</cxl-t><doc-grd><a href="#s37">handleKeyboard</a><a href="#s50">normalize</a><a href="#s47">parseKey</a></doc-grd><cxl-t font="h6">Interfaces
+		</cxl-t><doc-grd><a href="index--KeyboardLayout.html">KeyboardLayout</a><a href="index--KeyboardOptions.html">KeyboardOptions</a></doc-grd><cxl-t h5>Constants</cxl-t><a name="s33"></a><doc-c src="index.ts#L129"><doc-ct>KeyboardLayoutData: <a href="#s31">Record</a>&lt;string, <a href="index--KeyboardLayout.html">KeyboardLayout</a>&gt;</doc-ct></doc-c><cxl-t h5>Functions</cxl-t><a name="s37"></a><doc-c src="index.ts#L183"><doc-ct>handleKeyboard({
+	element,
+	onKey,
+	delay,
+	layout,
+	capture,
+}: <a href="index--KeyboardOptions.html">KeyboardOptions</a>): () => void</doc-ct><p><p>The <code>handleKeyboard</code> function sets up event listeners to handle keyboard events on a given HTML element.
+It accepts a  configuration object (<code>KeyboardOptions</code>) which includes the target HTML element, a callback
+<code>onKey</code> to handle keyboard sequences, a <code>delay</code> for typing sequence recognition, an optional keyboard
+layout, and an optional capture mode for events.</p>
+<ul>
+<li>Defaults the delay to 250ms if not specified, using this delay to determine when to treat subsequent
+key presses as part of the same sequence or a new one.</li>
+<li>Determines the keyboard layout, either from the provided options or defaults, which affects how keys
+(especially with modifiers) are interpreted.</li>
+<li>Adds a <code>keydown</code> event listener to the provided element, allowing modification of event behavior such
+as propagation and default handling based on the <code>onKey</code> callback result.</li>
+<li>Builds a key sequence based on timing and calls the <code>onKey</code> handler with the assembled sequence,
+stopping event propagation based on handler response.</li>
+<li>The handler uses the sequence to manage shortcuts and performs preventative measures against default
+browser actions.</li>
+</ul>
+</p><cxl-t h6>Returns</cxl-t><p>A cleanup function that removes the event listener.</p><cxl-t font="subtitle2">Parameters</cxl-t><ul><li><code>{
+	element,
+	onKey,
+	delay,
+	layout,
+	capture,
+}: <a href="index--KeyboardOptions.html">KeyboardOptions</a></code></li></ul></doc-c><a name="s50"></a><doc-c src="index.ts#L319"><doc-ct>normalize(key: string, layout: <a href="index--KeyboardLayout.html">KeyboardLayout</a> = getDefaultLayout()): string</doc-ct><p><p>Converts a string representing a key combination into a normalized string format.
+This function takes a <code>key</code> string and an optional <code>layout</code> object (defaults to the user's layout).</p>
+<p>It uses <code>parseKey</code> to break the key combination into individual <code>Key</code> objects, each representing
+a parsed key press. It then converts each <code>Key</code> object back to a string using <code>keyboardEventToString</code>,
+considering the layout's details. This is useful
+for ensuring consistent representation of key sequences across different keyboard layouts.</p>
+</p><cxl-t font="subtitle2">Parameters</cxl-t><ul><li><code>key: string</code></li><li><code>layout: <a href="index--KeyboardLayout.html">KeyboardLayout</a> = getDefaultLayout()</code></li></ul></doc-c><a name="s47"></a><doc-c src="index.ts#L312"><doc-ct>parseKey(key: string, layout: <a href="index--KeyboardLayout.html">KeyboardLayout</a> = getDefaultLayout()): Key[]</doc-ct><cxl-t font="subtitle2">Parameters</cxl-t><ul><li><code>key: string</code></li><li><code>layout: <a href="index--KeyboardLayout.html">KeyboardLayout</a> = getDefaultLayout()</code></li></ul></doc-c></cxl-page></cxl-application>

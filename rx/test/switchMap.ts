@@ -1,6 +1,6 @@
 import { cold, expectLog, logEvents, replaceValues } from './util.js';
 import { be, concat, defer, observable, of } from '../index.js';
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
 export default spec('switchMap', it => {
 	it.should('map-and-flatten each item to an Observable', a => {

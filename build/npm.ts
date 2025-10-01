@@ -1,4 +1,4 @@
-import { sh } from '@cxl/program';
+import { sh } from '../program/index.js';
 import { readFile } from 'fs/promises';
 import { checkBranchClean, getBranch } from './git.js';
 import { resolve } from 'path';

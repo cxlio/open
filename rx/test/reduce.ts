@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { reduce } from '../index.js';
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
 export default spec('reduce', a => {
 	a.should('reduce', async a => {

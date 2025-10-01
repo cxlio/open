@@ -1,4 +1,4 @@
-import { sh } from '@cxl/program';
+import { sh } from '../program/index.js';
 
 export async function getBranch(cwd: string): Promise<string> {
 	return (await sh('git rev-parse --abbrev-ref HEAD', { cwd })).trim();

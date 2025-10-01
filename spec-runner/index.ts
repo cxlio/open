@@ -22,9 +22,6 @@ export type SpecRunner = Omit<SpecRunnerOptions, '$'> & {
 
 const parameters = {
 	node: { type: 'boolean', help: 'Run tests in node mode.' },
-	firefox: {
-		help: 'Run tests in firefox through puppeteer.',
-	},
 	baselinePath: { type: 'string', help: 'Baseline Path' },
 	updateBaselines: { help: 'Update baselines' },
 	ignoreCoverage: { help: 'Disable coverage report.' },
@@ -57,10 +54,8 @@ const start = program({}, async ({ log }) => {
 		entryFile: args.$[0] || './test.js',
 		updateBaselines: false,
 		ignoreCoverage: false,
-		amd: false,
-		mjs: false,
+		mjs: true,
 		node: false,
-		firefox: false,
 		log,
 		reportPath: 'test-report.json',
 		...args,

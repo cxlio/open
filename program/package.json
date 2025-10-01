@@ -4,9 +4,10 @@
 	"bugs": "https://github.com/cxlio/cxl/issues",
 	"homepage": "https://cxlio.github.io/cxl/program",
 	"description": "CLI Utilities",
+	"type": "module",
 	"scripts": {
 		"build": "node ../dist/build",
-		"test": "npm run build && cd ../dist/program && node ../tester --node"
+		"test": "npm run build test"
 	},
 	"dependencies": {},
 	"license": "GPL-3.0",

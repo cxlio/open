@@ -14,7 +14,7 @@ import {
 } from '../rx/index.js';
 import { raf } from './dom.js';
 
-declare module '@cxl/rx' {
+declare module '../rx/index.js' {
 	interface Observable<T> {
 		log(): Observable<T>;
 		raf(fn?: (val: T) => void): Observable<T>;

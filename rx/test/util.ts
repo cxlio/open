@@ -4,7 +4,8 @@ import {
 	Subject,
 	firstValueFrom,
 } from '../index.js';
-import { TestApi } from '@cxl/spec';
+
+import type { TestApi } from '../../spec/index.js';
 
 interface Log {
 	events: string;

@@ -1,8 +1,8 @@
 import { from, fromAsync, of } from '../index.js';
-import { suite } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
-export default suite('from', test => {
-	test('should create an observable from an array', a => {
+export default spec('from', s => {
+	s.test('should create an observable from an array', a => {
 		let current = 10,
 			count = 0;
 		const done = a.async();
@@ -19,7 +19,7 @@ export default suite('from', test => {
 			},
 		});
 	});
-	test('should create an observable from a promise', a => {
+	s.test('should create an observable from a promise', a => {
 		const done = a.async();
 		let count = 0;
 
@@ -34,16 +34,19 @@ export default suite('from', test => {
 			},
 		});
 	});
-	test('should create an observable from promise and propagate errors', a => {
-		const done = a.async();
-		from(new Promise((_, reject) => reject('Test error'))).subscribe({
-			error(err) {
-				a.equal(err, 'Test error');
-				done();
-			},
-		});
-	});
-	test('should create an observable from a generator', a => {
+	s.test(
+		'should create an observable from promise and propagate errors',
+		a => {
+			const done = a.async();
+			from(new Promise((_, reject) => reject('Test error'))).subscribe({
+				error(err) {
+					a.equal(err, 'Test error');
+					done();
+				},
+			});
+		},
+	);
+	s.test('should create an observable from a generator', a => {
 		const done = a.async();
 		from(
 			(function* () {
@@ -60,7 +63,7 @@ export default suite('from', test => {
 			},
 		});
 	});
-	test('should create an observable from a `async function()`', a => {
+	s.test('should create an observable from a `async function()`', a => {
 		const done = a.async();
 		async function generateValue() {
 			return 10;
@@ -75,7 +78,7 @@ export default suite('from', test => {
 		});
 	});
 
-	test('should create an observable from observable', a => {
+	s.test('should create an observable from observable', a => {
 		const done = a.async();
 		const source = of(10);
 		let count = 0;

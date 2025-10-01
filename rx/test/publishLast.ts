@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { Observable, publishLast } from '../index.js';
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
 export default spec('publishLast', it => {
 	it.should('emit last notification of a simple source Observable', a => {

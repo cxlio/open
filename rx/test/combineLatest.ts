@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { combineLatest } from '../index.js';
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
 export default spec('combineLatest', it => {
 	it.should('combineLatest the provided observables', a => {

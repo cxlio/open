@@ -6,6 +6,9 @@
 	"references": [
 		{
 			"path": "tsconfig.json"
+		},
+		{
+			"path": "../spec"
 		}
 	],
 	"include": ["test.ts", "test/*.ts"]

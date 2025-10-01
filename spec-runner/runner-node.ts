@@ -1,7 +1,7 @@
 import { resolve } from 'path';
 import * as inspector from 'inspector';
 
-import type { Test, Result } from '@cxl/spec';
+import type { Test } from '../spec/index.js';
 import type { SpecRunner } from './index.js';
 
 import { Coverage, generateReport } from './report.js';
@@ -14,26 +14,25 @@ function post(session: inspector.Session, msg: string, params = {}) {
 	});
 }
 
-/* eslint @typescript-eslint/no-require-imports: off */
-async function recordCoverage(
-	session: inspector.Session,
-	cb: () => Promise<Result[]>,
-): Promise<Coverage> {
+async function recordCoverage(session: inspector.Session, cb: Function) {
 	await post(session, 'Profiler.enable');
 	await post(session, 'Profiler.startPreciseCoverage', { detailed: true });
-	await cb();
+	const result = await cb();
 	const coverage = await post(session, 'Profiler.takePreciseCoverage');
 	await post(session, 'Profiler.stopPreciseCoverage');
 	await post(session, 'Profiler.disable');
-	return (coverage as { result: Coverage }).result;
-}
-
-function runSuite(suitePath: string) {
-	const suite = require(suitePath).default as Test;
-	return suite.run().then(() => suite);
+	return {
+		coverage: (coverage as { result: Coverage }).result,
+		result,
+	};
 }
 
 export default async function runNode(app: SpecRunner) {
+	async function runSuite() {
+		const suite = (await import(entryFile)).default as Test;
+		return suite.run().then(() => suite);
+	}
+
 	const entryFile = app.entryFile;
 	const session = new inspector.Session();
 	app.log(`Node ${process.version}`);
@@ -48,16 +47,11 @@ export default async function runNode(app: SpecRunner) {
 
 	session.connect();
 
-	let result!: Test;
-
 	if (app.ignoreCoverage) {
-		const suite = await runSuite(suitePath);
+		const suite = await runSuite();
 		return generateReport(suite);
 	} else {
-		const coverage = await recordCoverage(session, () => {
-			const suite = (result = require(suitePath).default as Test);
-			return suite.run();
-		});
+		const { result, coverage } = await recordCoverage(session, runSuite);
 		if (process.argv.includes('--inspect')) {
 			console.log('Press any key to continue');
 			await new Promise(res => process.stdin.once('data', res));

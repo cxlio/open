@@ -1,6 +1,6 @@
 import { relative } from 'path';
 
-import type { JsonResult, FigureData } from '@cxl/spec';
+import type { JsonResult, FigureData } from '../spec/index.js';
 
 export interface TestResult {
 	success: boolean;

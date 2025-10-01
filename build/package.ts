@@ -1,4 +1,4 @@
-import { Observable, defer, merge, of, EMPTY } from '@cxl/rx';
+import { Observable, defer, merge, of, EMPTY } from '../rx/index.js';
 import { existsSync, readFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { file } from './file.js';

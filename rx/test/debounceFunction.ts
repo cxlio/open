@@ -1,4 +1,4 @@
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 import { debounceFunction } from '../index.js';
 import { mockSetTimeout } from './util.js';
 

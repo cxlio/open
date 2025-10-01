@@ -1,4 +1,4 @@
-import { spec } from '@cxl/spec';
+import { spec } from '../spec/index.js';
 import browserRunner from './runner-puppeteer.js';
 
 export default spec('tester', s => {

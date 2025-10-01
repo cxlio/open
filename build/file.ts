@@ -7,7 +7,8 @@ import {
 	reduce,
 	tap,
 	filter,
-} from '@cxl/rx';
+} from '../rx/index.js';
+
 import { promises as fs, readFileSync } from 'fs';
 import { basename as pathBasename, dirname, resolve } from 'path';
 import { Output, exec, shell } from './builder.js';

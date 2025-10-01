@@ -1,6 +1,6 @@
 import { relative, join } from 'path';
 
-import { Observable } from '@cxl/rx';
+import { Observable } from '../rx/index.js';
 import { Output, appLog, resolveRequire } from './builder.js';
 
 import type { ESLint } from 'eslint';

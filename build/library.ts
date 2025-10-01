@@ -1,13 +1,15 @@
 import { join } from 'path';
 import { readFileSync } from 'fs';
 
-import { EMPTY } from '@cxl/rx';
+import { EMPTY } from '../rx/index.js';
 
 import { BuildConfiguration, build, exec } from './builder.js';
 import { pkg, readme, esbuild } from './package.js';
 import { file } from './file.js';
 import { eslint } from './lint.js';
 import { tsconfig } from './tsc.js';
+
+import type { Package } from './npm.js';
 
 export function buildLibrary(...extra: BuildConfiguration[]) {
 	const cwd = process.cwd();
@@ -16,6 +18,8 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	);
 	const outputDir = tsconfigFile?.compilerOptions?.outDir;
 	const pkgDir = join(outputDir, 'package');
+	const pkgJson = JSON.parse(readFileSync('package.json', 'utf8')) as Package;
+	const isBrowser = pkgJson.browser;
 
 	return build(
 		{
@@ -24,14 +28,23 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				file('test-screenshot.html', 'test-screenshot.html').catchError(
 					() => EMPTY,
 				),
-				tsconfig(),
+				tsconfig('tsconfig.test.json'),
 				pkg(),
 			],
 		},
 		{
 			target: 'test',
 			outputDir,
-			tasks: [exec(`node ../spec-runner --mjs`, { cwd: outputDir })],
+			tasks: [
+				exec(
+					`node ../spec-runner ${
+						isBrowser ? '' : '--node'
+					} --vfsRoot=".."`,
+					{
+						cwd: outputDir,
+					},
+				),
+			],
 		},
 		{
 			target: 'package',

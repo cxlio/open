@@ -1,6 +1,6 @@
 import { cold, expectLog, logEvents, replaceValues } from './util.js';
 import { exhaustMap, map } from '../index.js';
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
 export default spec('exhaustMap', it => {
 	it.should('map-and-flatten each item to an Observable', a => {

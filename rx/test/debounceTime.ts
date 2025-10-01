@@ -9,7 +9,7 @@ import {
 	throwError,
 	toPromise,
 } from '../index.js';
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
 declare const setTimeout: (fn: () => unknown, n?: number) => number;
 declare const clearTimeout: (n: number) => void;

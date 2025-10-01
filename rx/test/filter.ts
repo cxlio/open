@@ -1,9 +1,9 @@
 import { Observable, filter } from '../index.js';
 import { cold, expectLog } from './util.js';
-import { suite } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
-export default suite('filter', test => {
-	test('should filter out event values', a => {
+export default spec('filter', s => {
+	s.test('should filter out event values', a => {
 		const source = cold('--0--1--2--3--4--|');
 		const subs = '^                !';
 		const expected = '-----1-----3-----|';
@@ -11,7 +11,7 @@ export default suite('filter', test => {
 		expectLog(a, source.pipe(filter(x => +x % 2 === 1)), expected);
 		a.equal(source.subscriptions, subs);
 	});
-	test('filter', a => {
+	s.test('filter', a => {
 		const A = new Observable<number>(s => {
 			[1, 2, 3, 4, 5, 6].forEach(s.next, s);
 		});

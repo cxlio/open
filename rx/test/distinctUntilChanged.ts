@@ -1,51 +1,51 @@
 import { cold, expectLog } from './util.js';
 import { distinctUntilChanged, of } from '../index.js';
-import { suite } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
-export default suite('distinctUntilChanged', test => {
-	test('should distinguish between values', a => {
+export default spec('distinctUntilChanged', s => {
+	s.test('should distinguish between values', a => {
 		const e1 = cold('-1--2-2----1-3-|');
 		const expected = '-1--2------1-3-|';
 
 		expectLog(a, e1.pipe(distinctUntilChanged()), expected);
 	});
 
-	test('should handle no emissions', a => {
+	s.test('should handle no emissions', a => {
 		const e1 = cold('-----|');
 		const expected = '-----|';
 
 		expectLog(a, e1.pipe(distinctUntilChanged()), expected);
 	});
 
-	test('should handle identical consecutive values', a => {
+	s.test('should handle identical consecutive values', a => {
 		const e1 = cold('-1--1--1--|');
 		const expected = '-1--------|';
 
 		expectLog(a, e1.pipe(distinctUntilChanged()), expected);
 	});
 
-	test('should handle a single emission', a => {
+	s.test('should handle a single emission', a => {
 		const e1 = cold('---5|');
 		const expected = '---5|';
 
 		expectLog(a, e1.pipe(distinctUntilChanged()), expected);
 	});
 
-	test('should distinguish between undefined and null', a => {
+	s.test('should distinguish between undefined and null', a => {
 		const e1 = of(undefined, null);
 		const expected = '(undefinednull|)';
 
 		expectLog(a, e1.pipe(distinctUntilChanged()), expected);
 	});
 
-	test('should work with an empty Observable', a => {
+	s.test('should work with an empty Observable', a => {
 		const e1 = cold('|');
 		const expected = '|';
 
 		expectLog(a, e1.pipe(distinctUntilChanged()), expected);
 	});
 
-	test('should reset comparison on subscription', a => {
+	s.test('should reset comparison on subscription', a => {
 		const e1 = cold('-(1|)');
 		const expected = '-(1|)';
 

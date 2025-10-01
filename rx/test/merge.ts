@@ -1,23 +1,23 @@
 import { cold, expectLog } from './util.js';
 import { Observable, merge, of } from '../index.js';
-import { suite } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
-export default suite('merge', test => {
-	test('should return itself when try to merge single observable', a => {
+export default spec('merge', s => {
+	s.test('should return itself when try to merge single observable', a => {
 		const e1 = of('a');
 		const result = merge(e1);
 
 		a.equal(e1, result);
 	});
 
-	test('should merge different types', a => {
+	s.test('should merge different types', a => {
 		const e1 = of(1);
 		const e2 = of('2');
 
 		a.ok(merge(e1, e2));
 	});
 
-	test('should merge cold and cold', a => {
+	s.test('should merge cold and cold', a => {
 		const e1 = cold('---a-----b-----c----|');
 		const e2 = cold('------x-----y-----z----|');
 		const expected = '---a--x--b--y--c--z----|';
@@ -25,14 +25,14 @@ export default suite('merge', test => {
 		expectLog(a, merge(e1, e2), expected);
 	});
 
-	test('should merge empty and empty', a => {
+	s.test('should merge empty and empty', a => {
 		const e1 = cold('|');
 		const e2 = cold('|');
 
 		expectLog(a, merge(e1, e2), '|');
 	});
 
-	test('should merge parallel emissions', a => {
+	s.test('should merge parallel emissions', a => {
 		const e1 = cold('---a----b----c----|');
 		const e2 = cold('---x----y----z----|');
 		const expected = '---(ax)----(by)----(cz)----|';
@@ -40,14 +40,14 @@ export default suite('merge', test => {
 		expectLog(a, merge(e1, e2), expected);
 	});
 
-	test('should merge empty and throw', a => {
+	s.test('should merge empty and throw', a => {
 		const e1 = cold('|');
 		const e2 = cold('#');
 
 		expectLog(a, merge(e1, e2), '#');
 	});
 
-	test('should merge hot and error', async a => {
+	s.test('should merge hot and error', async a => {
 		const e1 = cold('--a--b--c--|');
 		const e1subs = '^      !';
 		const e2 = cold('-------#');
@@ -60,14 +60,14 @@ export default suite('merge', test => {
 		a.equal(e2.subscriptions, e2subs);
 	});
 
-	test('should merge empty and non-empty', a => {
+	s.test('should merge empty and non-empty', a => {
 		const e1 = cold('|');
 		const e2 = cold('---a--b--|');
 		const expected = '---a--b--|';
 
 		expectLog(a, merge(e1, e2), expected);
 	});
-	test('should merge synchronous streams', a => {
+	s.test('should merge synchronous streams', a => {
 		const e1 = of(1);
 		const e2 = of(2);
 		const e3 = of(3);
@@ -82,7 +82,7 @@ export default suite('merge', test => {
 		});
 	});
 
-	test('should merge delayed emissions', a => {
+	s.test('should merge delayed emissions', a => {
 		const e1 = cold('----a|');
 		const e2 = cold('-------b|');
 		const expected = '----a--b|';
@@ -90,14 +90,14 @@ export default suite('merge', test => {
 		expectLog(a, merge(e1, e2), expected);
 	});
 
-	test('should handle completion order', a => {
+	s.test('should handle completion order', a => {
 		const e1 = cold('---a--|');
 		const e2 = cold('---b-------|');
 		const expected = '---(ab)-------|';
 
 		expectLog(a, merge(e1, e2), expected);
 	});
-	test('should merge multiple observables', a => {
+	s.test('should merge multiple observables', a => {
 		const e1 = cold('---a-----|');
 		const e2 = cold('------b--|');
 		const e3 = cold('---x---y-|');
@@ -106,7 +106,7 @@ export default suite('merge', test => {
 		expectLog(a, merge(e1, e2, e3), expected);
 	});
 
-	test('type inference with heterogeneous types', a => {
+	s.test('type inference with heterogeneous types', a => {
 		const e1 = of<number>(1);
 		const e2 = of<string>('2');
 		const e3 = of<boolean>(true);

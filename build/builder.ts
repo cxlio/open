@@ -3,8 +3,8 @@ import { existsSync, utimesSync, writeFileSync } from 'fs';
 import { SpawnOptions, spawn, execSync } from 'child_process';
 import { createRequire } from 'module';
 
-import { Logger, colors, sh, log, operation } from '@cxl/program';
-import { Observable } from '@cxl/rx';
+import { Logger, colors, sh, log, operation } from '../program/index.js';
+import { Observable } from '../rx/index.js';
 import { BASEDIR, readPackage } from './package.js';
 
 export interface Output {

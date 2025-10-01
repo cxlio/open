@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { zip, from } from '../index.js';
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
 export default spec('zip', it => {
 	it.should('combine a source with a second', a => {

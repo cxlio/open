@@ -7,7 +7,7 @@
 	"homepage": "https://cxlio.github.io/cxl/core",
 	"scripts": {
 		"build": "node ../dist/build",
-		"test": "npm run build && cd ../dist/core && node ../tester  --node"
+		"test": "npm run build test"
 	},
 	"dependencies": {
 		"@cxl/rx": "1.0.0"

@@ -1,4 +1,4 @@
-import { subject, toPromise } from '@cxl/rx';
+import { subject, toPromise } from '../rx/index.js';
 
 declare function __cxlRunner(msg: RunnerCommand): Promise<Result>;
 

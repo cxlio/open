@@ -14,7 +14,7 @@ import {
 	throwError,
 	cancel,
 } from '../index.js';
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
 export default spec('catchError', it => {
 	it.should('catch error and replace with a cold Observable', a => {

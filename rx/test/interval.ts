@@ -1,5 +1,5 @@
 import { interval } from '../index.js';
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 import { mockSetInterval } from './util.js';
 
 declare const setTimeout: (fn: (a?: unknown) => unknown, n?: number) => number;

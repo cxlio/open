@@ -1,8 +1,8 @@
 import { Browser, CoverageEntry, Page, HTTPRequest } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import { readFile, writeFile, mkdir } from 'fs/promises';
-import { resolve, join } from 'path';
-import type { FigureData, RunnerCommand, Test, Result } from '@cxl/spec';
+import { resolve, join, relative } from 'path';
+import type { FigureData, RunnerCommand, Test, Result } from '../spec/index.js';
 import type { SpecRunner } from './index.js';
 import type { PNG } from 'pngjs';
 
@@ -114,7 +114,6 @@ async function createPage(
 	page.on('console', msg => handleConsole(msg, app));
 	page.on('pageerror', msg => app.log(msg));
 	page.on('requestfailed', req => {
-		// A detailed error message
 		app.log(
 			`requestfailed: ${req.method()} ${req.url()} ${req.failure()
 				?.errorText}`,
@@ -122,12 +121,12 @@ async function createPage(
 	});
 	page.exposeFunction('__cxlRunner', cxlRunner);
 
-	if (!app.firefox) await startTracing(page);
+	await startTracing(page);
 
-	if (app.vfsRoot) {
+	/*if (app.vfsRoot) {
 		await page.setRequestInterception(true);
 		virtualFileServer(app, page);
-	}
+	}*/
 
 	if (app.browserUrl) await goto(app, page, app.browserUrl);
 
@@ -144,7 +143,7 @@ async function createPage(
 	return { suite, coverage };
 }
 
-function virtualFileServer(app: SpecRunner, page: Page) {
+/*function virtualFileServer(app: SpecRunner, page: Page) {
 	const root = resolve(app.vfsRoot ?? process.cwd());
 	app.log(`Starting virtual file server on "${root}"`);
 
@@ -185,32 +184,22 @@ function virtualFileServer(app: SpecRunner, page: Page) {
 		console.log('vfs: ' + url);
 		return handle(req, url);
 	});
-}
+}*/
 
-function getCxlPath(pathname: string) {
-	const [, , lib, file] = pathname.split('/');
-	const actualFile = file
-		? `${file}${file.endsWith('js') ? '' : '.js'}`
-		: 'index.js';
-	return `../../node_modules/@cxl/${lib}/mjs/${actualFile}`;
-}
-
-function goto(app: SpecRunner, page: Page, url: string) {
-	app.log(`Navigating to ${url}`);
+function goto(_app: SpecRunner, page: Page, url: string) {
 	return page.goto(url);
 }
 
 async function mjsRunner(page: Page, sources: Output[], app: SpecRunner) {
 	const entry = sources[0].path;
-	app.log(`Running in mjs mode`);
+	const cwd = app.vfsRoot ?? process.cwd();
 	await page.setRequestInterception(true);
 	page.on('request', async (req: HTTPRequest) => {
 		try {
 			const url = new URL(req.url());
 			if (req.method() === 'GET' && url.hostname === 'cxl-tester') {
-				const pathname = url.pathname.startsWith('/@cxl/')
-					? getCxlPath(url.pathname)
-					: join(process.cwd(), url.pathname);
+				const pathname = join(cwd, url.pathname);
+				console.log(pathname);
 				const body =
 					url.pathname === '/'
 						? ''
@@ -235,18 +224,12 @@ async function mjsRunner(page: Page, sources: Output[], app: SpecRunner) {
 			}
 		} catch (e) {
 			app.log(`Error handling request ${req.method()} ${req.url()}`);
-			req.continue();
+			req.respond({
+				status: 500,
+			});
 		}
 	});
 	await goto(app, page, 'https://cxl-tester');
-	await page.addScriptTag({
-		type: 'importmap',
-		content: `{
-    "imports": {
-		"@cxl/": "https://cxl-tester/@cxl/"
-    }
-  }`,
-	});
 
 	return page.evaluate(
 		`(async entry => {
@@ -411,13 +394,14 @@ async function handleFigureRequest(
 }
 
 export default async function runPuppeteer(app: SpecRunner) {
-	const entryFile = app.entryFile;
+	const entryFile = app.vfsRoot
+		? `./${relative(app.vfsRoot, app.entryFile)}`
+		: app.entryFile;
 	const args = [
 		'--no-sandbox',
 		'--disable-setuid-sandbox',
 		'--disable-gpu',
 		'--font-render-hinting=none',
-		//'--disable-dev-shm-usage',
 		'--disable-font-subpixel-positioning',
 		'--animation-duration-scale=0',
 		'--force-device-scale-factor=1', // avoid DPI scaling differences
@@ -436,20 +420,18 @@ export default async function runPuppeteer(app: SpecRunner) {
 	if (app.disableSecurity) args.push('--disable-web-security');
 
 	const browser = await puppeteer.launch({
-		// product: app.firefox ? 'firefox' : 'chrome',
 		headless: true,
 		args,
 		timeout: 5000,
 	});
-	app.log(`Puppeteer ${await browser.version()}`);
+	try {
+		app.log(`Puppeteer ${await browser.version()}`);
 
-	app.log(`Entry file: ${entryFile}`);
-	const source = await readFile(entryFile, 'utf8');
-	const sources = [{ path: entryFile, source }];
-
-	const { suite, coverage } = await createPage(app, browser, sources, 0);
-
-	await browser.close();
-
-	return generateReport(suite, coverage);
+		const source = await readFile(app.entryFile, 'utf8');
+		const sources = [{ path: entryFile, source }];
+		const { suite, coverage } = await createPage(app, browser, sources, 0);
+		return generateReport(suite, coverage);
+	} finally {
+		await browser.close();
+	}
 }

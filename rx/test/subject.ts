@@ -1,8 +1,8 @@
 import { Subject, subject, Subscriber } from '../index.js';
-import { suite } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
-export default suite('Subject', test => {
-	test('Subject#constructor', function (a) {
+export default spec('Subject', s => {
+	s.test('Subject#constructor', function (a) {
 		const s = subject();
 		let c = 1;
 		s.subscribe(function (b) {
@@ -17,7 +17,7 @@ export default suite('Subject', test => {
 		s.next(c);
 	});
 
-	test('error', function (a) {
+	s.test('error', function (a) {
 		const subject = new Subject();
 		let c = 1;
 		subject.subscribe({
@@ -35,7 +35,7 @@ export default suite('Subject', test => {
 		subject.error(c);
 	});
 
-	test('complete', a => {
+	s.test('complete', a => {
 		const subject = new Subject(),
 			done = a.async();
 		let c = 1;
@@ -52,7 +52,7 @@ export default suite('Subject', test => {
 		subject.next(c);
 	});
 
-	test('subscribe', it => {
+	s.test('subscribe', it => {
 		it.should('clean out unsubscribed subscribers', a => {
 			class DebugSubject extends Subject<unknown> {
 				observers = new Set<Subscriber<unknown>>();

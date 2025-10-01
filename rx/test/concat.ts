@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { Observable, concat, of } from '../index.js';
-import { spec } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
 export default spec('concat', it => {
 	it.should(' emit elements from multiple sources', a => {

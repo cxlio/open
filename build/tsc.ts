@@ -1,5 +1,5 @@
 import { relative } from 'path';
-import { Observable, Subscriber } from '@cxl/rx';
+import { Observable, Subscriber } from '../rx/index.js';
 import type {
 	BuilderProgram,
 	BuildOptions,
@@ -80,10 +80,12 @@ export function tsbuild(
 	let project: InvalidatedProject<any> | undefined;
 
 	function writeFile(name: string, source: string) {
-		if (!name.startsWith(outputDir))
-			throw new Error(`File ${name} is outside of outDir`);
-		name = relative(outputDir, name);
-		subs.next({ path: name, source: Buffer.from(source) });
+		if (name.startsWith(outputDir)) {
+			name = relative(outputDir, name);
+			subs.next({ path: name, source: Buffer.from(source) });
+		} else {
+			console.warn(`File "${name}" is outside of outDir. Ignoring.`);
+		}
 	}
 
 	while ((project = builder.getNextInvalidatedProject())) {

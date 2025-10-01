@@ -1,5 +1,5 @@
-import { spec } from '@cxl/spec';
-import { parseParameters /*, parseParametersArray*/ } from './index.js';
+import { spec } from '../spec/index.js';
+import { parseParameters } from './index.js';
 
 export default spec('program', s => {
 	s.test('parseParameters', a => {

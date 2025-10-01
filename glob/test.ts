@@ -1,4 +1,4 @@
-import { TestApi, spec } from '@cxl/spec';
+import { TestApi, spec } from '../spec/index.js';
 import { globToRegex } from './index.js';
 
 export default spec('glob', s => {
@@ -7,8 +7,8 @@ export default spec('glob', s => {
 		a.ok(
 			regex.test(term),
 			`${JSON.stringify(term)} should match glob ${JSON.stringify(
-				glob
-			)} (${regex.source})`
+				glob,
+			)} (${regex.source})`,
 		);
 	}
 	function isNotMatch(a: TestApi, term: string, glob: string | string[]) {
@@ -17,15 +17,8 @@ export default spec('glob', s => {
 			!regex.test(term),
 			`"${term}" should not match glob ${JSON.stringify(glob)} (${
 				regex.source
-			})`
+			})`,
 		);
-		/*const negated = globToRegex(`!(${glob})`);
-		a.ok(
-			negated.test(term),
-			`"${term}" should match glob ${JSON.stringify(`!(${glob})`)} (${
-				negated.source
-			})`
-		);*/
 	}
 
 	function match(list: string[], glob: string) {
@@ -175,7 +168,7 @@ export default spec('glob', s => {
 				isMatch(a, 'a/.c.md', 'a/.c.md');
 				isMatch(a, 'a/b/c/.xyz.md', 'a/b/c/.*.md');
 				isMatch(a, 'a/b/c/d.a.md', 'a/b/c/*.md');
-			}
+			},
 		);
 	});
 	s.test('should match zero or more directories', a => {
@@ -370,7 +363,7 @@ export default spec('glob', s => {
 				isMatch(a, 'a/b.txt', 'a{,/**/,/}*.txt');
 				isMatch(a, 'a/x/y.txt', 'a{,/**/}*.txt');
 				isNotMatch(a, 'a/x/y/z', 'a{,/**/}*.txt');
-			}
+			},
 		);
 
 		a.test('should support braces with globstars and empty elements', a => {
@@ -467,7 +460,7 @@ export default spec('glob', s => {
 				isMatch(a, 'z.js', 'z*');
 				isNotMatch(a, 'zzjs', 'z*.js');
 				isNotMatch(a, 'zzjs', '*z.js');
-			}
+			},
 		);
 
 		a.test('should match anything except slashes and leading dots', a => {
@@ -525,7 +518,7 @@ export default spec('glob', s => {
 				isMatch(a, 'a.b', '*.b');
 				isMatch(a, 'a.b', 'a.*');
 				isMatch(a, 'a.b', 'a.b');
-			}
+			},
 		);
 
 		a.test('should support multiple stars in a segment', a => {
@@ -573,7 +566,7 @@ export default spec('glob', s => {
 				isMatch(a, 'aaa', '*');
 				isMatch(a, 'ab', '*');
 				isMatch(a, 'ab', 'ab');
-			}
+			},
 		);
 
 		a.test(
@@ -603,7 +596,7 @@ export default spec('glob', s => {
 				isNotMatch(a, 'abcd', ['d']);
 				isNotMatch(a, 'abcd', ['f']);
 				isNotMatch(a, 'ef', ['/*']);
-			}
+			},
 		);
 
 		a.test('should match a path segment for each single star', a => {
@@ -705,7 +698,7 @@ export default spec('glob', s => {
 				isMatch(a, 'a/a/a', '*/**/a');
 				isMatch(a, 'a/a/a/a', '*/**/a');
 				isMatch(a, 'a/a/a/a/a', '*/**/a');
-			}
+			},
 		);
 
 		a.test(
@@ -728,7 +721,7 @@ export default spec('glob', s => {
 				isMatch(a, 'a/', '*{,/}');
 				isMatch(a, 'a/a', '*/*');
 				isMatch(a, 'a/a', 'a/*');
-			}
+			},
 		);
 
 		a.test('should work with file extensions', a => {
@@ -757,7 +750,7 @@ export default spec('glob', s => {
 			a => {
 				isNotMatch(a, 'foo/baz/bar', 'foo**bar');
 				isMatch(a, 'foobazbar', 'foo**bar');
-			}
+			},
 		);
 
 		a.test('should match slashes when defined in braces', a => {
@@ -866,7 +859,7 @@ export default spec('glob', s => {
 				isMatch(a, 'foo!.md', 'foo!.md');
 				isMatch(a, 'foo!bar.md', '*!*.md');
 				isMatch(a, 'foobar.md', '*b*.md');
-			}
+			},
 		);
 
 		a.test('should treat non-leading "!" as literal characters', a => {
@@ -889,7 +882,7 @@ export default spec('glob', s => {
 				isMatch(a, 'b/a', '!a/b');
 				isMatch(a, 'b/b', '!a/b');
 				isMatch(a, 'b/c', '!a/b');
-			}
+			},
 		);
 
 		a.test('should support multiple leading ! to toggle negation', a => {
@@ -1510,7 +1503,7 @@ export default spec('glob', s => {
 				isNotMatch(a, 'd', '[a-c]b*');
 				isNotMatch(a, 'dd', '[a-c]b*');
 				isNotMatch(a, 'de', '[a-c]b*');
-			}
+			},
 		);
 
 		a.test('should support character classes', a => {
@@ -1924,7 +1917,7 @@ export default spec('glob', s => {
 					'?*?',
 					'?*?*?',
 				]);
-			}
+			},
 		);
 
 		a.test('should support consecutive stars and question marks', a => {
@@ -1989,7 +1982,7 @@ export default spec('glob', s => {
 			a.equalValues(match(fixtures, '???'), ['aaa']);
 			a.equalValues(
 				match(['a/', '/a/', '/a/b/', '/a/b/c/', '/a/b/c/d/'], '??'),
-				[]
+				[],
 			);
 			a.equalValues(match(['a/b/c.md'], 'a/?/c.md'), ['a/b/c.md']);
 			a.equalValues(match(['a/bb/c.md'], 'a/?/c.md'), []);
@@ -2129,19 +2122,19 @@ export default spec('glob', s => {
 			isNotMatch(
 				a,
 				'-adobe-courier-bold-o-normal--12-120-75-75-/-70-iso8859-1',
-				'-*-*-*-*-*-*-12-*-*-*-m-*-*-*'
+				'-*-*-*-*-*-*-12-*-*-*-m-*-*-*',
 			);
 			isNotMatch(
 				a,
 				'-adobe-courier-bold-o-normal--12-120-75-75-X-70-iso8859-1',
-				'-*-*-*-*-*-*-12-*-*-*-m-*-*-*'
+				'-*-*-*-*-*-*-12-*-*-*-m-*-*-*',
 			);
 			isNotMatch(a, 'ab/cXd/efXg/hi', '*X*i');
 			isNotMatch(a, 'ab/cXd/efXg/hi', '*Xg*i');
 			isNotMatch(
 				a,
 				'abcd/abcdefg/abcdefghijk/abcdefghijklmnop.txtz',
-				'**/*a*b*g*n*t'
+				'**/*a*b*g*n*t',
 			);
 			isNotMatch(a, 'foo', '*/*/*');
 			isNotMatch(a, 'foo', 'fo');
@@ -2158,19 +2151,19 @@ export default spec('glob', s => {
 			isNotMatch(
 				a,
 				'XXX/adobe/courier/bold/o/normal//12/120/75/75/X/70/iso8859/1',
-				'XXX/*/*/*/*/*/*/12/*/*/*/m/*/*/*'
+				'XXX/*/*/*/*/*/*/12/*/*/*/m/*/*/*',
 			);
 			isMatch(
 				a,
 				'-adobe-courier-bold-o-normal--12-120-75-75-m-70-iso8859-1',
-				'-*-*-*-*-*-*-12-*-*-*-m-*-*-*'
+				'-*-*-*-*-*-*-12-*-*-*-m-*-*-*',
 			);
 			isMatch(a, 'ab/cXd/efXg/hi', '**/*X*/**/*i');
 			isMatch(a, 'ab/cXd/efXg/hi', '*/*X*/*/*i');
 			isMatch(
 				a,
 				'abcd/abcdefg/abcdefghijk/abcdefghijklmnop.txt',
-				'**/*a*b*g*n*t'
+				'**/*a*b*g*n*t',
 			);
 			isMatch(a, 'abcXdefXghi', '*X*i');
 			isMatch(a, 'foo', 'foo');
@@ -2413,19 +2406,19 @@ export default spec('glob', s => {
 		isNotMatch(
 			a,
 			'-adobe-courier-bold-o-normal--12-120-75-75-/-70-iso8859-1',
-			'-*-*-*-*-*-*-12-*-*-*-m-*-*-*'
+			'-*-*-*-*-*-*-12-*-*-*-m-*-*-*',
 		);
 
 		isMatch(
 			a,
 			'-adobe-courier-bold-o-normal--12-120-75-75-m-70-iso8859-1',
-			'-*-*-*-*-*-*-12-*-*-*-m-*-*-*'
+			'-*-*-*-*-*-*-12-*-*-*-m-*-*-*',
 		);
 
 		isNotMatch(
 			a,
 			'-adobe-courier-bold-o-normal--12-120-75-75-X-70-iso8859-1',
-			'-*-*-*-*-*-*-12-*-*-*-m-*-*-*'
+			'-*-*-*-*-*-*-12-*-*-*-m-*-*-*',
 		);
 
 		isMatch(a, '/dev/udp/129.22.8.102/45', '/dev\\/@(tcp|udp)\\/*\\/*');
@@ -2875,13 +2868,13 @@ export default spec('glob', s => {
 		isMatch(
 			a,
 			'abcd/abcdefg/abcdefghijk/abcdefghijklmnop.txt',
-			'**/*a*b*g*n*t'
+			'**/*a*b*g*n*t',
 		);
 
 		isNotMatch(
 			a,
 			'abcd/abcdefg/abcdefghijk/abcdefghijklmnop.txtz',
-			'**/*a*b*g*n*t'
+			'**/*a*b*g*n*t',
 		);
 
 		isMatch(a, 'abcdef', '(a+|b)*');
@@ -3681,7 +3674,7 @@ export default spec('glob', s => {
 		isNotMatch(
 			a,
 			'XXX/adobe/courier/bold/o/normal//12/120/75/75/X/70/iso8859/1',
-			'XXX/*/*/*/*/*/*/12/*/*/*/m/*/*/*'
+			'XXX/*/*/*/*/*/*/12/*/*/*/m/*/*/*',
 		);
 
 		isMatch(a, 'z', '*(z)');

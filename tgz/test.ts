@@ -1,4 +1,4 @@
-import { spec } from '@cxl/spec';
+import { spec } from '../spec/index.js';
 import tgz, { untarStream, untar } from './index.js';
 
 const decode = (buffer: Uint8Array) => new TextDecoder().decode(buffer);

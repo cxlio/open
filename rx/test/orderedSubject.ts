@@ -1,13 +1,13 @@
 import { OrderedSubject } from '../index.js';
-import { suite } from '@cxl/spec';
+import { spec } from '../../spec/index.js';
 
-export default suite('OrderedSubject', test => {
-	test('OrderedSubject#constructor', function (a) {
+export default spec('OrderedSubject', s => {
+	s.test('OrderedSubject#constructor', function (a) {
 		const orderedSubject = new OrderedSubject<number>();
 		a.ok(orderedSubject instanceof OrderedSubject);
 	});
 
-	test('OrderedSubject emits values in order', function (a) {
+	s.test('OrderedSubject emits values in order', function (a) {
 		const orderedSubject = new OrderedSubject<number>();
 		const results: number[] = [];
 
@@ -19,7 +19,7 @@ export default suite('OrderedSubject', test => {
 		a.equalValues(results, [1, 2, 3]);
 	});
 
-	test('OrderedSubject handles nested emissions', function (a) {
+	s.test('OrderedSubject handles nested emissions', function (a) {
 		const orderedSubject = new OrderedSubject<number>();
 		const results: number[] = [];
 
@@ -37,7 +37,7 @@ export default suite('OrderedSubject', test => {
 		a.equalValues(results, [1, 2, 4, 3]);
 	});
 
-	test('OrderedSubject with multiple subscribers', function (a) {
+	s.test('OrderedSubject with multiple subscribers', function (a) {
 		const orderedSubject = new OrderedSubject<number>();
 		const results1: number[] = [];
 		const results2: number[] = [];
@@ -52,25 +52,28 @@ export default suite('OrderedSubject', test => {
 		a.equalValues(results2, [1, 2, 3]);
 	});
 
-	test('OrderedSubject handles queue when subscriber unsubscribes', function (a) {
-		const orderedSubject = new OrderedSubject<number>();
-		const results: number[] = [];
+	s.test(
+		'OrderedSubject handles queue when subscriber unsubscribes',
+		function (a) {
+			const orderedSubject = new OrderedSubject<number>();
+			const results: number[] = [];
 
-		const subscription = orderedSubject.subscribe(value => {
-			results.push(value);
-			if (value === 2) {
-				subscription.unsubscribe();
-			}
-		});
-		orderedSubject.next(1);
-		orderedSubject.next(2);
-		orderedSubject.next(3);
-		orderedSubject.next(4);
+			const subscription = orderedSubject.subscribe(value => {
+				results.push(value);
+				if (value === 2) {
+					subscription.unsubscribe();
+				}
+			});
+			orderedSubject.next(1);
+			orderedSubject.next(2);
+			orderedSubject.next(3);
+			orderedSubject.next(4);
 
-		a.equalValues(results, [1, 2]);
-	});
+			a.equalValues(results, [1, 2]);
+		},
+	);
 
-	test('OrderedSubject processes queued values after completion', a => {
+	s.test('OrderedSubject processes queued values after completion', a => {
 		const orderedSubject = new OrderedSubject<number>();
 		const results: number[] = [];
 		const done = a.async();

@@ -1,12 +1,12 @@
 {
 	"name": "@cxl/rx",
-	"description": "@cxl/rx is a lightweight reactive programming library focused on usability, performance, and type safety.",
-	"version": "1.0.0-beta.1",
+	"description": "A lightweight reactive programming library focused on usability, performance, and type safety.",
+	"version": "1.0.0",
 	"license": "Apache-2.0",
 	"type": "module",
 	"scripts": {
-		"build": "node ../scripts/build.js",
-		"test": "node ../scripts/build.js test"
+		"build": "node ../dist/build",
+		"test": "node ../dist/build test"
 	},
 	"bugs": "https://github.com/cxlio/open/issues",
 	"repository": {

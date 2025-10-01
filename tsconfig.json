@@ -11,7 +11,8 @@
 		"noUnusedParameters": true,
 		"composite": true,
 		"skipLibCheck": true,
-		"typeRoots": [],
+		"typeRoots": ["./node_modules/@types"],
+		"types": [],
 		"paths": {
 			"@cxl/*": ["./*"]
 		}

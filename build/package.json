@@ -1,0 +1,32 @@
+{
+	"name": "@cxl/build",
+	"version": "1.0.0",
+	"bin": {
+		"cxl-build": "index.js"
+	},
+	"description": "A flexible build system that executes configurable build tasks producing output files, with logging and shell command support.",
+	"license": "GPL-3.0",
+	"main": "index.js",
+	"type": "module",
+	"scripts": {
+		"build": "./build.sh",
+		"test": "npm run build && cd ../dist/build && node ../tester  --node"
+	},
+	"files": ["index.js", "LICENSE.md"],
+	"dependencies": {
+		"@eslint/js": "^9.30.1",
+		"esbuild": "*",
+		"typescript": "^5.9.2",
+		"@cxl/rx": "~0.8.0",
+		"@cxl/source": "~0.0.2",
+		"@cxl/program": "~0.0.3",
+		"typescript-eslint": "^8.39.0"
+	},
+	"bugs": "https://github.com/cxlio/cxl/issues",
+	"homepage": "https://cxlio.github.io/cxl/build",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cxlio/cxl.git",
+		"directory": "build"
+	}
+}

@@ -1,0 +1,20 @@
+{
+	"name": "@cxl/spec",
+	"version": "1.0.0",
+	"description": "This library provides a comprehensive testing framework tailored for browser environments, offering utilities for defining tests, assertions, DOM manipulations, event handling, mocking, spying, and accessibility checks.",
+	"license": "Apache-2.0",
+	"dependencies": {
+		"@cxl/rx": "1.0.0"
+	},
+	"scripts": {
+		"build": "node ../dist/build",
+		"test": "npm run build && cd ../dist/spec && node ../tester  --node"
+	},
+	"bugs": "https://github.com/cxlio/open/issues",
+	"homepage": "https://cxlio.github.io/open/spec",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cxlio/open.git",
+		"directory": "spec"
+	}
+}

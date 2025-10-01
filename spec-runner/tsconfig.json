@@ -1,0 +1,20 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"outDir": "../dist/spec-runner",
+		"types": ["node"]
+	},
+	"type": "module",
+	"files": [
+		"index.ts",
+		"report.ts",
+		"runner-node.ts",
+		"runner-puppeteer.ts",
+		"report-stdout.ts"
+	],
+	"references": [
+		{ "path": "../rx" },
+		{ "path": "../spec" },
+		{ "path": "../program" }
+	]
+}

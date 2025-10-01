@@ -1,0 +1,17 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"outDir": "../dist/build"
+	},
+	"files": [
+		"test.ts"
+	],
+	"references": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../spec"
+		}
+	]
+}

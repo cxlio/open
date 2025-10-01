@@ -7,8 +7,8 @@
 	"homepage": "https://github.com/cxlio/open/tgz",
 	"type": "module",
 	"scripts": {
-		"build": "node ../scripts/build.js",
-		"test": "node ../scripts/build.js test"
+		"build": "node ../dist/build",
+		"test": "npm run build test"
 	},
 	"dependencies": {}
 }

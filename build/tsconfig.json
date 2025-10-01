@@ -1,0 +1,15 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"outDir": "../dist/build",
+		"allowSyntheticDefaultImports": true,
+		"types": ["node"]
+	},
+	"references": [
+		{ "path": "../rx" },
+		{ "path": "../program" },
+		{ "path": "../spec-runner" }
+	],
+	"include": ["*.ts"],
+	"exclude": ["test.ts"]
+}

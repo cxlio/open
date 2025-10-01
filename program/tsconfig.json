@@ -1,0 +1,10 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"outDir": "../dist/program",
+		"typeRoots": ["../node_modules/@types"],
+		"types": ["node"]
+	},
+	"files": ["index.ts"],
+	"references": []
+}

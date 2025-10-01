@@ -1,0 +1,26 @@
+{
+	"name": "@cxl/spec-runner",
+	"version": "0.3.0",
+	"bin": {
+		"cxl-spec": "index.js"
+	},
+	"description": "Test runner tool",
+	"license": "GPL-3.0",
+	"type": "module",
+	"scripts": {
+		"build": "node ../dist/build",
+		"test": "npm run build test"
+	},
+	"dependencies": {
+		"puppeteer": "^23.3.0",
+		"source-map": "^0.7.3",
+		"pngjs": "^6.0.0"
+	},
+	"bugs": "https://github.com/cxlio/open/issues",
+	"homepage": "https://cxlio.github.io/open/spec-runner",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cxlio/open.git",
+		"directory": "spec-runner"
+	}
+}

@@ -4,6 +4,14 @@
 	},
 	"watch": {
 		"rules": {
+			"build": {
+				"files": ["build/**/*"],
+				"tasks": "cd build && npm run build"
+			},
+			"core": {
+				"files": ["core/*"],
+				"tasks": "cd core && npm run build"
+			},
 			"rx": {
 				"files": ["rx/**/*"],
 				"tasks": "cd rx && npm run build"
@@ -16,13 +24,17 @@
 				"files": ["tgz/**/*"],
 				"tasks": "cd tgz && npm run build"
 			},
-			"component": {
-				"files": ["component/**/*"],
-				"tasks": "cd component && npm run build"
-			},
 			"keyboard": {
 				"files": ["keyboard/**/*"],
 				"tasks": "cd keyboard && npm run build"
+			},
+			"spec": {
+				"files": ["spec/**/*"],
+				"tasks": "npm run build --prefix spec"
+			},
+			"spec-runner": {
+				"files": ["spec-runner/*"],
+				"tasks": "npm run build --prefix spec-runner"
 			}
 		}
 	}

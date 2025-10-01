@@ -28,7 +28,7 @@ function handleEslintResult(results: ESLint.LintResult[]) {
 	return result;
 }
 
-export function eslint(options?: any) {
+export function eslint(options?: ESLint.Options) {
 	return new Observable<Output>(subs => {
 		const { ESLint } = resolveRequire<typeof import('eslint')>('eslint');
 		appLog(`eslint ${ESLint.version}`);

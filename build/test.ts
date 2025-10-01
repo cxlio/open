@@ -1,4 +1,4 @@
-import { spec } from '@cxl/spec';
+import { spec } from '../spec/index.js';
 import { exec } from './index.js';
 
 export default spec('build', s => {

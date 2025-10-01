@@ -194,12 +194,12 @@ async function mjsRunner(page: Page, sources: Output[], app: SpecRunner) {
 	const entry = sources[0].path;
 	const cwd = app.vfsRoot ?? process.cwd();
 	await page.setRequestInterception(true);
+
 	page.on('request', async (req: HTTPRequest) => {
 		try {
 			const url = new URL(req.url());
 			if (req.method() === 'GET' && url.hostname === 'cxl-tester') {
 				const pathname = join(cwd, url.pathname);
-				console.log(pathname);
 				const body =
 					url.pathname === '/'
 						? ''

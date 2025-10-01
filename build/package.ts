@@ -21,9 +21,10 @@ const LICENSE_MAP: Record<License, string> = {
 	UNLICENSED: '',
 };
 
-function verifyFields(fields: string[], pkg: any, pkgPath: string) {
+function verifyFields(fields: string[], pkg: Package, pkgPath: string) {
 	for (const f of fields)
-		if (!pkg[f]) throw new Error(`Field "${f}" missing in "${pkgPath}"`);
+		if (!pkg[f as keyof Package])
+			throw new Error(`Field "${f}" missing in "${pkgPath}"`);
 }
 
 export function esbuild(options: esbuildApi.BuildOptions) {
@@ -55,7 +56,7 @@ export function readPackage(base: string = BASEDIR): Package {
 	if (!PACKAGE.private) verifyFields(['license'], PACKAGE, pkg);
 	return PACKAGE;
 }
-function packageJson(p: any) {
+function packageJson(p: Package) {
 	return of({
 		path: 'package.json',
 		source: Buffer.from(

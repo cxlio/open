@@ -8,6 +8,7 @@
 	"files": [
 		"index.ts",
 		"report.ts",
+		"runner.ts",
 		"runner-node.ts",
 		"runner-puppeteer.ts",
 		"report-stdout.ts"

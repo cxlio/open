@@ -32,6 +32,8 @@ export interface Package {
 	bundledDependecies?: Dependencies;
 	type?: string;
 	scripts?: Record<string, string>;
+	exports?: Record<string, string>;
+	bundledDependencies: Dependencies;
 
 	tsgo?: boolean;
 }
@@ -72,7 +74,7 @@ export async function testPackage(dir: string, distDir: string) {
 	}
 }
 
-export async function publishNpm(dir: string, distDir = `dist/${dir}`) {
+export async function publishNpm(dir: string, distDir: string) {
 	const branch = await getBranch(process.cwd());
 	const mainBranch = await getMainBranch(process.cwd());
 	if (branch !== mainBranch)

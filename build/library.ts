@@ -2,6 +2,8 @@ import { join } from 'path';
 import { readFileSync } from 'fs';
 
 import { EMPTY, fromAsync } from '../rx/index.js';
+import { run as runSpec } from '../spec-runner/runner.js';
+import printReportV2 from '../spec-runner/report-stdout.js';
 
 import { BuildConfiguration, build, exec } from './builder.js';
 import { pkg, readme, esbuild } from './package.js';
@@ -19,7 +21,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	const outputDir = tsconfigFile?.compilerOptions?.outDir;
 	const pkgDir = join(outputDir, 'package');
 	const pkgJson = JSON.parse(readFileSync('package.json', 'utf8')) as Package;
-	const isBrowser = pkgJson.browser;
+	const isBrowser = !!pkgJson.browser;
 
 	return build(
 		{
@@ -36,14 +38,21 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			target: 'test',
 			outputDir,
 			tasks: [
-				exec(
-					`node ../spec-runner ${
-						isBrowser ? '' : '--node'
-					} --vfsRoot=".."`,
-					{
-						cwd: outputDir,
-					},
-				),
+				fromAsync(async () => {
+					try {
+						process.chdir(outputDir);
+						const report = await runSpec({
+							node: !isBrowser,
+							mjs: isBrowser,
+							vfsRoot: '..',
+							entryFile: './test.js',
+							log: console.log.bind(console),
+						});
+						printReportV2(report);
+					} finally {
+						process.chdir(cwd);
+					}
+				}).ignoreElements(),
 			],
 		},
 		{
@@ -67,6 +76,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					],
 					platform: isBrowser ? 'browser' : 'node',
 					outdir: pkgDir,
+					packages: isBrowser ? undefined : 'external',
 				}),
 			],
 		},
@@ -75,7 +85,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			outputDir,
 			tasks: [
 				fromAsync(async () => {
-					await publishNpm('.', outputDir);
+					await publishNpm('.', pkgDir);
 				}).ignoreElements(),
 			],
 		},

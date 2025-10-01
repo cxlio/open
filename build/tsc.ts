@@ -77,7 +77,7 @@ export function tsbuild(
 ) {
 	const { outputDir, builder } = getBuilder(tsconfig, defaultOptions);
 
-	let project: InvalidatedProject<any> | undefined;
+	let project: InvalidatedProject<BuilderProgram> | undefined;
 
 	function writeFile(name: string, source: string) {
 		if (name.startsWith(outputDir)) {
@@ -122,7 +122,9 @@ export function parseTsConfig(tsconfig: string) {
 	} catch (e) {
 		if (e instanceof Error) throw e;
 		const msg =
-			(e as any)?.message || (e as any)?.messageText || 'Unknown Error';
+			(e as { message?: string })?.message ||
+			(e as { messageText?: string })?.messageText ||
+			'Unknown Error';
 		throw new Error(msg);
 	}
 

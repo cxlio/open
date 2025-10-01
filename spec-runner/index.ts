@@ -9,8 +9,8 @@ import {
 	parseArgv,
 } from '../program/index.js';
 
-import runNode from './runner-node.js';
-import runPuppeteer from './runner-puppeteer.js';
+import { run } from './runner.js';
+
 import printReportV2 from './report-stdout.js';
 
 export type SpecRunnerOptions = ParametersResult<typeof parameters>;
@@ -66,7 +66,7 @@ const start = program({}, async ({ log }) => {
 		log(`"${args.startServer}" started. PID: ${server.pid}`);
 	}
 
-	const report = await (args.node ? runNode(config) : runPuppeteer(config));
+	const report = await run(config);
 
 	try {
 		if (server && !server.killed) {

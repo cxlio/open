@@ -1,6 +1,6 @@
 import { sh } from '../program/index.js';
 import { readFile } from 'fs/promises';
-import { checkBranchClean, getBranch } from './git.js';
+import { checkBranchClean, getBranch, getMainBranch } from './git.js';
 import { resolve } from 'path';
 
 export type License =
@@ -74,12 +74,14 @@ export async function testPackage(dir: string, distDir: string) {
 
 export async function publishNpm(dir: string, distDir = `dist/${dir}`) {
 	const branch = await getBranch(process.cwd());
-	if (branch !== 'master') throw `Active branch "${branch}" is not master`;
+	const mainBranch = await getMainBranch(process.cwd());
+	if (branch !== mainBranch)
+		throw `Active branch "${branch}" is not main branch`;
 
 	const pkg = await readPackage(`${dir}/package.json`);
 	const pkgName = pkg.name.split('/')[1];
 
-	await checkBranchClean('master');
+	await checkBranchClean(mainBranch);
 	const info = await getPackageInfo(pkg.name);
 
 	if (info.versions.includes(pkg.version)) {

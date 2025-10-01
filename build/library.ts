@@ -1,7 +1,7 @@
 import { join } from 'path';
 import { readFileSync } from 'fs';
 
-import { EMPTY } from '../rx/index.js';
+import { EMPTY, fromAsync } from '../rx/index.js';
 
 import { BuildConfiguration, build, exec } from './builder.js';
 import { pkg, readme, esbuild } from './package.js';
@@ -9,7 +9,7 @@ import { file } from './file.js';
 import { eslint } from './lint.js';
 import { tsconfig } from './tsc.js';
 
-import type { Package } from './npm.js';
+import { Package, publishNpm } from './npm.js';
 
 export function buildLibrary(...extra: BuildConfiguration[]) {
 	const cwd = process.cwd();
@@ -65,8 +65,18 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 							in: join(outputDir, 'index.js'),
 						},
 					],
+					platform: isBrowser ? 'browser' : 'node',
 					outdir: pkgDir,
 				}),
+			],
+		},
+		{
+			target: 'publish',
+			outputDir,
+			tasks: [
+				fromAsync(async () => {
+					await publishNpm('.', outputDir);
+				}).ignoreElements(),
 			],
 		},
 		...extra,

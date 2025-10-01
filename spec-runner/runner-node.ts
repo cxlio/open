@@ -1,7 +1,7 @@
 import { resolve } from 'path';
 import * as inspector from 'inspector';
 
-import type { Test } from '../spec/index.js';
+import type { Test, JsonResult } from '../spec/index.js';
 import type { SpecRunner } from './index.js';
 
 import { Coverage, generateReport } from './report.js';
@@ -14,7 +14,10 @@ function post(session: inspector.Session, msg: string, params = {}) {
 	});
 }
 
-async function recordCoverage(session: inspector.Session, cb: Function) {
+async function recordCoverage(
+	session: inspector.Session,
+	cb: () => Promise<JsonResult>,
+) {
 	await post(session, 'Profiler.enable');
 	await post(session, 'Profiler.startPreciseCoverage', { detailed: true });
 	const result = await cb();

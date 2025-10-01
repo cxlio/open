@@ -1,17 +1,17 @@
-# @cxl/tester 
+# @cxl/spec-runner 
 	
-[![npm version](https://badge.fury.io/js/%40cxl%2Ftester.svg)](https://badge.fury.io/js/%40cxl%2Ftester)
+[![npm version](https://badge.fury.io/js/%40cxl%2Fspec-runner.svg)](https://badge.fury.io/js/%40cxl%2Fspec-runner)
 
 Test runner tool
 
 ## Project Details
 
--   Branch Version: [0.3.0](https://npmjs.com/package/@cxl/tester/v/0.3.0)
+-   Branch Version: [0.3.0](https://npmjs.com/package/@cxl/spec-runner/v/0.3.0)
 -   License: GPL-3.0
--   Documentation: [Link](https://cxlio.github.io/cxl/tester)
--   Report Issues: [Github](https://github.com/cxlio/cxl/issues)
+-   Documentation: [Link](https://cxlio.github.io/open/spec-runner)
+-   Report Issues: [Github](https://github.com/cxlio/open/issues)
 
 ## Installation
 
-	npm install @cxl/tester
+	npm install @cxl/spec-runner
 

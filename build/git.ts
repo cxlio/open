@@ -12,10 +12,16 @@ export async function checkBranchClean(branch: string) {
 	}
 }
 
-export async function checkBranchUpToDate(branch = 'master') {
+export async function checkBranchUpToDate(branch: string) {
 	try {
 		await sh(`git diff origin/${branch} ${branch} --quiet`);
 	} catch (e) {
 		throw new Error('Branch has not been merged with origin');
 	}
+}
+
+export async function getMainBranch(cwd: string) {
+	return await sh(`git symbolic-ref --short refs/remotes/origin/HEAD`, {
+		cwd,
+	});
 }

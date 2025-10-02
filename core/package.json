@@ -5,6 +5,7 @@
 	"bugs": "https://github.com/cxlio/open/issues",
 	"license": "SEE LICENSE IN LICENSE.md",
 	"homepage": "https://cxlio.github.io/cxl/core",
+	"browser": "index.bundle.js",
 	"scripts": {
 		"build": "node ../dist/build",
 		"test": "npm run build test"

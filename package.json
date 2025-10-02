@@ -17,7 +17,8 @@
 	"type": "module",
 	"bugs": "https://github.com/cxlio/open/issues",
 	"scripts": {
-		"build": "./scripts/build.sh"
+		"build": "./scripts/build.sh package docs",
+		"test": "./scripts/build.sh test"
 	},
 	"repository": {
 		"type": "git",

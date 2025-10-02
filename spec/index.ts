@@ -725,7 +725,6 @@ export class Test {
 		let syncCompleteNeeded = true;
 		this.completed = false;
 		this.promise = undefined;
-		this.events = subject<TestEvent>();
 		const testApi = new TestApi(this);
 
 		try {

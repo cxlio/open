@@ -6,7 +6,6 @@
 	},
 	"description": "A flexible build system that executes configurable build tasks producing output files, with logging and shell command support.",
 	"license": "GPL-3.0",
-	"main": "index.bundle.js",
 	"type": "module",
 	"scripts": {
 		"build": "./build.sh",

@@ -7,6 +7,6 @@ for dir in */; do
   [ -d "$dir" ] || continue
   if [ -f "$dir/package.json" ]; then
     echo "Building ${dir%/}..."
-    (cd "$dir" && npm run build package docs)
+    (cd "$dir" && npm run build $@)
   fi
 done

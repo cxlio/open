@@ -4,7 +4,7 @@
 	"bin": {
 		"cxl-spec": "index.js"
 	},
-	"description": "Test runner tool",
+	"description": "A test runner CLI that supports node and browser testing, baseline updates, coverage control, virtual file server, and custom server integration, with reporting and debugging support.",
 	"license": "GPL-3.0",
 	"type": "module",
 	"scripts": {

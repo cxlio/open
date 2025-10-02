@@ -7,7 +7,7 @@ import printReportV2 from '../spec-runner/report-stdout.js';
 
 import { BuildConfiguration, build, exec } from './builder.js';
 import { pkg, readme, esbuild } from './package.js';
-import { file } from './file.js';
+import { copyDir, file } from './file.js';
 import { eslint } from './lint.js';
 import { tsconfig } from './tsc.js';
 
@@ -21,7 +21,17 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	const outputDir = tsconfigFile?.compilerOptions?.outDir;
 	const pkgDir = join(outputDir, 'package');
 	const pkgJson = JSON.parse(readFileSync('package.json', 'utf8')) as Package;
+	const rootPkg = JSON.parse(
+		readFileSync('../package.json', 'utf8'),
+	) as Package;
 	const isBrowser = !!pkgJson.browser;
+	let importmap: string | undefined = undefined;
+
+	if (isBrowser && rootPkg.devDependencies) {
+		const map: Record<string, string> = {};
+		for (const name in rootPkg.devDependencies) map[name] = `/${name}`;
+		importmap = JSON.stringify({ imports: map });
+	}
 
 	return build(
 		{
@@ -31,7 +41,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					() => EMPTY,
 				),
 				tsconfig('tsconfig.test.json'),
-				pkg(),
+				pkg('index.js'),
 			],
 		},
 		{
@@ -46,6 +56,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 							mjs: isBrowser,
 							vfsRoot: '..',
 							entryFile: './test.js',
+							importmap,
 							log: console.log.bind(console),
 						});
 						printReportV2(report);
@@ -66,7 +77,8 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			tasks: [
 				file('README.md', 'README.md'),
 				file('LICENSE.md', 'LICENSE.md').catchError(() => EMPTY),
-				file(join(outputDir, 'package.json'), 'package.json'),
+				pkg('index.bundle.js'),
+				copyDir(outputDir, pkgDir, '*.d.ts'),
 				esbuild({
 					entryPoints: [
 						{

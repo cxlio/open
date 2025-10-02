@@ -56,7 +56,7 @@ export function readPackage(base: string = BASEDIR): Package {
 	if (!PACKAGE.private) verifyFields(['license'], PACKAGE, pkg);
 	return PACKAGE;
 }
-function packageJson(p: Package) {
+function packageJson(p: Package, main?: string) {
 	return of({
 		path: 'package.json',
 		source: Buffer.from(
@@ -74,7 +74,7 @@ function packageJson(p: Package) {
 						'LICENSE.md',
 						'*.md',
 					],
-					main: p.main || 'index.js',
+					main: main ?? p.main ?? 'index.js',
 					exports: p.exports,
 					browser: p.browser,
 					homepage: p.homepage,
@@ -146,12 +146,12 @@ ${extra}`),
 	});
 }
 
-export function pkg() {
+export function pkg(main: string) {
 	return defer(() => {
 		const p = readPackage();
 		const licenseId = p.license;
 
-		const output: Observable<Output>[] = [packageJson(p)];
+		const output: Observable<Output>[] = [packageJson(p, main)];
 
 		if (licenseId) output.push(license(licenseId));
 		return merge(...output);

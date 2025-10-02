@@ -2,6 +2,8 @@ import { Browser, CoverageEntry, Page, HTTPRequest } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { resolve, join, relative } from 'path';
+import { createRequire } from 'module';
+
 import type { FigureData, RunnerCommand, Test, Result } from '../spec/index.js';
 import type { SpecRunner } from './index.js';
 import type { PNG } from 'pngjs';
@@ -193,13 +195,25 @@ function goto(_app: SpecRunner, page: Page, url: string) {
 async function mjsRunner(page: Page, sources: Output[], app: SpecRunner) {
 	const entry = sources[0].path;
 	const cwd = app.vfsRoot ?? process.cwd();
+	const require = createRequire(process.cwd());
 	await page.setRequestInterception(true);
+
+	function findRequestPath(path: string) {
+		let result: string;
+		try {
+			result = require.resolve(path.slice(1));
+			if (result) return result;
+		} catch (e) {
+			/* ignore */
+		}
+		return join(cwd, path);
+	}
 
 	page.on('request', async (req: HTTPRequest) => {
 		try {
 			const url = new URL(req.url());
 			if (req.method() === 'GET' && url.hostname === 'cxl-tester') {
-				const pathname = join(cwd, url.pathname);
+				const pathname = findRequestPath(url.pathname);
 				const body =
 					url.pathname === '/'
 						? ''
@@ -215,7 +229,7 @@ async function mjsRunner(page: Page, sources: Output[], app: SpecRunner) {
 				req.respond({
 					status: 200,
 					contentType: pathname.endsWith('.js')
-						? 'application/javascript'
+						? 'text/javascript'
 						: 'text/plain',
 					body,
 				});
@@ -230,6 +244,13 @@ async function mjsRunner(page: Page, sources: Output[], app: SpecRunner) {
 		}
 	});
 	await goto(app, page, 'https://cxl-tester');
+
+	if (app.importmap) {
+		await page.addScriptTag({
+			type: 'importmap',
+			content: app.importmap,
+		});
+	}
 
 	return page.evaluate(
 		`(async entry => {

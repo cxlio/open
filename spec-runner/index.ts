@@ -17,6 +17,7 @@ export type SpecRunnerOptions = ParametersResult<typeof parameters>;
 
 export type SpecRunner = Omit<SpecRunnerOptions, '$'> & {
 	entryFile: string;
+	importmap?: string;
 	log: Logger;
 };
 

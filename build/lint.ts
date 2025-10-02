@@ -30,21 +30,27 @@ function handleEslintResult(results: ESLint.LintResult[]) {
 
 export function eslint(options?: ESLint.Options) {
 	return new Observable<Output>(subs => {
-		const { ESLint } = resolveRequire<typeof import('eslint')>('eslint');
-		appLog(`eslint ${ESLint.version}`);
+		(async () => {
+			const { ESLint } =
+				resolveRequire<typeof import('eslint')>('eslint');
+			appLog(`eslint ${ESLint.version}`);
 
-		const linter = new ESLint({
-			cache: true,
-			cwd: process.cwd(),
-			overrideConfigFile: join(import.meta.dirname, 'eslint-config.js'),
-			...options,
-		});
-		linter
-			.lintFiles(['**/*.ts?(x)'])
-			.then(handleEslintResult)
-			.then(
-				() => subs.complete(),
-				e => subs.error(e),
-			);
+			const linter = new ESLint({
+				cache: true,
+				cwd: process.cwd(),
+				overrideConfigFile: join(
+					import.meta.dirname,
+					'eslint-config.js',
+				),
+				...options,
+			});
+			linter
+				.lintFiles(['**/*.ts?(x)'])
+				.then(handleEslintResult)
+				.then(
+					() => subs.complete(),
+					e => subs.error(e),
+				);
+		})();
 	});
 }

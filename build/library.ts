@@ -1,7 +1,7 @@
-import { join } from 'path';
+import { basename, join } from 'path';
 import { readFileSync } from 'fs';
 
-import { EMPTY, fromAsync } from '../rx/index.js';
+import { EMPTY, fromAsync, observable } from '../rx/index.js';
 import { run as runSpec } from '../spec-runner/runner.js';
 import printReportV2 from '../spec-runner/report-stdout.js';
 
@@ -13,25 +13,53 @@ import { tsconfig } from './tsc.js';
 
 import { Package, publishNpm } from './npm.js';
 
+import { buildDocs } from '@cxl/3doc/render.js';
+
+function collectDependencies(
+	deps: Package['dependencies'],
+	map: Record<string, string> = {},
+) {
+	for (const name in deps) map[name] = `/${name}`;
+	return map;
+}
+
 export function buildLibrary(...extra: BuildConfiguration[]) {
 	const cwd = process.cwd();
 	const tsconfigFile = JSON.parse(
 		readFileSync(cwd + '/tsconfig.json', 'utf8'),
 	);
 	const outputDir = tsconfigFile?.compilerOptions?.outDir;
+	const appId = basename(outputDir);
 	const pkgDir = join(outputDir, 'package');
 	const pkgJson = JSON.parse(readFileSync('package.json', 'utf8')) as Package;
 	const rootPkg = JSON.parse(
 		readFileSync('../package.json', 'utf8'),
 	) as Package;
 	const isBrowser = !!pkgJson.browser;
+	const pkgMain = pkgJson.exports?.['.'] ?? 'index.bundle.js';
+
 	let importmap: string | undefined = undefined;
 
-	if (isBrowser && rootPkg.devDependencies) {
+	if (isBrowser) {
 		const map: Record<string, string> = {};
-		for (const name in rootPkg.devDependencies) map[name] = `/${name}`;
+
+		if (rootPkg.devDependencies)
+			collectDependencies(rootPkg.devDependencies, map);
+		if (pkgJson.dependencies)
+			collectDependencies(pkgJson.dependencies, map);
 		importmap = JSON.stringify({ imports: map });
 	}
+
+	const entryPoints = pkgJson.exports
+		? Object.values(pkgJson.exports).flatMap(val => {
+				return val ? [join(outputDir, val)] : [];
+		  })
+		: [
+				{
+					out: 'index.bundle',
+					in: join(outputDir, 'index.js'),
+				},
+		  ];
 
 	return build(
 		{
@@ -53,7 +81,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 						process.chdir(outputDir);
 						const report = await runSpec({
 							node: !isBrowser,
-							mjs: isBrowser,
+							mjs: true,
 							vfsRoot: '..',
 							entryFile: './test.js',
 							importmap,
@@ -67,6 +95,31 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			],
 		},
 		{
+			target: 'docs',
+			outputDir: `../docs/${appId}`,
+			tasks: [
+				observable(subs => {
+					buildDocs(
+						{
+							$: [],
+							clean: true,
+							summary: true,
+							noHtml: true,
+							markdown: true,
+							cxlExtensions: true,
+							outputDir: `../docs/${appId}`,
+						},
+						file => {
+							subs.next({
+								path: file.name,
+								source: Buffer.from(file.content),
+							});
+						},
+					).then(() => subs.complete());
+				}),
+			],
+		},
+		{
 			target: 'package',
 			outputDir: '.',
 			tasks: [readme(), eslint(), exec(`rm -rf ${pkgDir}`)],
@@ -77,15 +130,10 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			tasks: [
 				file('README.md', 'README.md'),
 				file('LICENSE.md', 'LICENSE.md').catchError(() => EMPTY),
-				pkg('index.bundle.js'),
+				pkg(pkgMain),
 				copyDir(outputDir, pkgDir, '*.d.ts'),
 				esbuild({
-					entryPoints: [
-						{
-							out: 'index.bundle',
-							in: join(outputDir, 'index.js'),
-						},
-					],
+					entryPoints,
 					platform: isBrowser ? 'browser' : 'node',
 					outdir: pkgDir,
 					packages: isBrowser ? undefined : 'external',

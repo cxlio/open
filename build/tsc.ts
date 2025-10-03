@@ -78,9 +78,10 @@ export function tsbuild(
 	const { outputDir, builder } = getBuilder(tsconfig, defaultOptions);
 
 	let project: InvalidatedProject<BuilderProgram> | undefined;
+	let outDir = '';
 
 	function writeFile(name: string, source: string) {
-		if (name.startsWith(outputDir)) {
+		if (outDir && name.startsWith(outDir)) {
 			name = relative(outputDir, name);
 			subs.next({ path: name, source: Buffer.from(source) });
 		} else {
@@ -89,15 +90,16 @@ export function tsbuild(
 	}
 
 	while ((project = builder.getNextInvalidatedProject())) {
-		const status = project.done(undefined, writeFile);
-
 		if (project.kind === ts.InvalidatedProjectKind.Build) {
 			const program = project.getProgram();
+			outDir = project.getCompilerOptions().outDir ?? '';
 			if (program) {
 				const diagnostics = buildDiagnostics(program);
 				if (diagnostics.length) printDiagnostics(diagnostics);
 			}
 		}
+
+		const status = project.done(undefined, writeFile);
 
 		if (status !== ts.ExitStatus.Success)
 			throw `${project.project}: Typescript compilation failed`;

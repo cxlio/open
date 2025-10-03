@@ -1,0 +1,22 @@
+{
+	"name": "@cxl/ui",
+	"version": "5.1.0",
+	"description": "High-performance Web Components",
+	"bugs": "https://github.com/cxlio/open/issues",
+	"license": "SEE LICENSE IN LICENSE.md",
+	"homepage": "https://cxlio.github.io/open/ui",
+	"browser": "index.bundle.js",
+	"scripts": {
+		"build": "cp ../rx/index.ts rx.ts && node ../dist/build",
+		"test": "npm run build test"
+	},
+	"exports": {
+		".": "./index.js",
+		"./*.js": "./*.js"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cxlio/open.git",
+		"directory": "ui"
+	}
+}

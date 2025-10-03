@@ -16,10 +16,14 @@ import {
 	be,
 	observable,
 	of,
+	theme,
 } from './index.js';
 import { TestApi, spec } from '../spec/index.js';
+import { testAllComponents } from './test-util.js';
 
 export default spec('core', a => {
+	theme.disableAnimations = true;
+
 	function getId() {
 		return `cxl-test-${crypto.randomUUID()}`;
 	}
@@ -757,5 +761,10 @@ export default spec('core', a => {
 			a.ok(instance instanceof TestComponent);
 			a.equal(instance.childNodes.length, 1); // All invalid children should be ignored
 		});
+	});
+
+	testAllComponents({
+		a,
+		prefix: 'c-',
 	});
 });

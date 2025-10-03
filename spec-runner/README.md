@@ -2,7 +2,7 @@
 	
 [![npm version](https://badge.fury.io/js/%40cxl%2Fspec-runner.svg)](https://badge.fury.io/js/%40cxl%2Fspec-runner)
 
-Test runner tool
+A test runner CLI that supports node and browser testing, baseline updates, coverage control, virtual file server, and custom server integration, with reporting and debugging support.
 
 ## Project Details
 

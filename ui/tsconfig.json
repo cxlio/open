@@ -1,10 +1,9 @@
 {
 	"extends": "../tsconfig.json",
 	"compilerOptions": {
-		"outDir": "../dist/core",
+		"outDir": "../dist/ui",
 		"lib": ["dom", "es2023", "dom.iterable"]
 	},
 	"include": ["*.ts"],
-	"exclude": ["test.ts"],
-	"references": [{ "path": "../rx" }]
+	"exclude": ["test.ts", "test-util.ts"]
 }

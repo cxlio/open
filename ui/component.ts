@@ -11,10 +11,10 @@ import {
 	of,
 	merge,
 	tap,
-} from '../rx/index.js';
-import { raf } from './dom.js';
+} from './rx.js';
+import { CustomEventMap, raf, onAttributeMutation } from './dom.js';
 
-declare module '../rx/index.js' {
+declare module './rx.js' {
 	interface Observable<T> {
 		log(): Observable<T>;
 		raf(fn?: (val: T) => void): Observable<T>;
@@ -76,6 +76,10 @@ type NativeType<T> = {
 } & {
 	children?: NativeChildren;
 };
+
+export type VoidMessage = {
+	[K in keyof CustomEventMap]: CustomEventMap[K] extends void ? K : never;
+}[keyof CustomEventMap];
 
 export type ComponentConstructor<T extends Component = Component> = {
 	observedAttributes?: string[];
@@ -648,6 +652,62 @@ function renderAttributes<T extends HTMLElement>(
 			host[attr as keyof T] = value as T['children'] &
 				T[Exclude<keyof T, 'children' | '$'>];
 	}
+}
+
+function isObservedAttribute<T extends HTMLElement>(el: T, attr: keyof T) {
+	return (el.constructor as typeof Component).observedAttributes?.includes(
+		attr as string,
+	);
+}
+
+export function getAttribute<T extends Element, K extends AttributeName<T>>(
+	el: T,
+	name: K,
+) {
+	const observer =
+		el instanceof Component && isObservedAttribute(el, name)
+			? attributeChanged(el, name)
+			: onAttributeMutation(el, [name]).map(() => el[name]);
+
+	return merge<Observable<T[K]>[]>(
+		observer,
+		defer(() => of(el[name])),
+	);
+}
+
+export function message<K extends VoidMessage>(el: Element, event: K): void;
+export function message<K extends keyof CustomEventMap>(
+	el: Element,
+	event: K,
+	detail: CustomEventMap[K],
+): void;
+export function message<K extends keyof CustomEventMap>(
+	el: Element,
+	event: K,
+	detail?: CustomEventMap[K],
+) {
+	for (let p = el.parentElement; p; p = p.parentElement)
+		if ((p as Component)[bindings]?.message(event, detail)) return;
+
+	//el.dispatchEvent(new CustomEvent(event, { detail, bubbles: true }));
+}
+
+export function onMessage<K extends keyof CustomEventMap>(
+	el: Component,
+	event: K,
+	stopPropagation = true,
+): Observable<CustomEventMap[K]> {
+	return new Observable<CustomEventMap[K]>(subscriber => {
+		const handler = {
+			type: event,
+			next: subscriber.next as (x: unknown) => void,
+			stopPropagation,
+		};
+		el[bindings].addMessageHandler(handler);
+		subscriber.signal.subscribe(() =>
+			el[bindings].removeMessageHandler(handler),
+		);
+	});
 }
 
 /**

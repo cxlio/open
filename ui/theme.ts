@@ -1,6 +1,12 @@
-import { Observable, be, ref, fromAsync } from '../rx/index.js';
-import { storage } from './storage.js';
-import { Component, cssSymbol, getShadow } from './component.js';
+import { Observable, be, ref, fromAsync } from './rx.js';
+import { storage } from './util.js';
+import {
+	Component,
+	attribute,
+	cssSymbol,
+	getShadow,
+	setAttribute,
+} from './component.js';
 import { onResize } from './dom.js';
 
 type ArrayElement<ArrayType extends readonly unknown[]> =
@@ -14,6 +20,7 @@ export interface SvgIconAttributes {
 	fill?: boolean;
 }
 export type Elevation = 0 | 1 | 2 | 3 | 4 | 5;
+export type Size = ArrayElement<typeof SizeValues>;
 
 export type Theme = typeof theme;
 export type SurfaceColorKey = ArrayElement<typeof surfaceColors>;
@@ -83,6 +90,7 @@ export interface ThemeBase {
 	override?: Record<string, string>;
 }
 
+export const SizeValues = [-2, -1, 0, 1, 2, 3, 4, 5] as const;
 export const TypographyValues = [
 	'display-large',
 	'display-medium',
@@ -423,6 +431,57 @@ export function breakpoint(el: HTMLElement): Observable<BreakpointKey> {
 		}
 		return newClass;
 	});
+}
+
+function colorCss(selector = '') {
+	return Object.entries(ColorStyles)
+		.map(([key, value]) => `:host([color=${key}]) ${selector}{ ${value} }`)
+		.join('');
+}
+
+export function colorAttribute<
+	T extends Component,
+	K extends Extract<keyof T, string>,
+>(name: K, defaultColor?: SurfaceColorValue, selector = '') {
+	return cssAttribute<T, K>(
+		name,
+		`
+		${defaultColor ? `:host ${selector} { ${ColorStyles[defaultColor]} }` : ''}
+		:host${defaultColor ? '' : '([color])'} ${selector} {
+			color: var(--cxl-color-on-surface);
+			background-color: var(--cxl-color-surface);
+		}
+		:host([color=transparent]) ${selector}{
+			color: inherit;
+			background-color: transparent;
+		}
+		${colorCss(selector)}
+	`,
+	);
+}
+
+export function cssAttribute<
+	T extends Component,
+	K extends Extract<keyof T, string>,
+>(name: K, styles: string) {
+	const el = css(styles);
+	return attribute<T, K>(name, {
+		persist: setAttribute,
+		render: host => el(host),
+	});
+}
+
+export function sizeAttribute<
+	T extends Component,
+	K extends Extract<keyof T, string>,
+>(name: K, fn: (size: Size) => string) {
+	return cssAttribute<T, K>(
+		name,
+		SizeValues.map(val => {
+			const css = fn(val);
+			return val === 0 ? `:host ${css}` : `:host([size="${val}"]) ${css}`;
+		}).join(''),
+	);
 }
 
 function removeTheme() {

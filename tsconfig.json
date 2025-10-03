@@ -12,7 +12,10 @@
 		"composite": true,
 		"skipLibCheck": true,
 		"typeRoots": ["./node_modules/@types"],
-		"types": []
+		"types": [],
+		"paths": {
+			"@cxl/rx": ["./rx"]
+		}
 	},
 	"files": []
 }

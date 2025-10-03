@@ -35,6 +35,10 @@
 			"spec-runner": {
 				"files": ["spec-runner/*"],
 				"tasks": "npm run build --prefix spec-runner"
+			},
+			"ui": {
+				"files": ["ui/*"],
+				"tasks": "npm run build --prefix ui"
 			}
 		}
 	}

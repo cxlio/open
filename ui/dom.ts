@@ -7,7 +7,7 @@ import {
 	operator,
 	merge,
 	combineLatest,
-} from '../rx/index.js';
+} from './rx.js';
 
 export interface CustomEventMap {
 	core: unknown;

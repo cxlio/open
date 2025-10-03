@@ -4,6 +4,7 @@
 	"version": "0.0.0",
 	"homepage": "https://github.com/cxlio/open/tree/main",
 	"devDependencies": {
+		"@cxl/3doc": "^1.0.0",
 		"@eslint/js": "^9.36.0",
 		"@types/node": "^24.0.3",
 		"@types/pngjs": "^3.4.2",

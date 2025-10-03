@@ -5,5 +5,7 @@ export { Package } from './npm.js';
 export { buildLibrary } from './library.js';
 export { Task, build, exec, shell } from './builder.js';
 
-import { buildLibrary } from './library.js';
-if (import.meta.main) await buildLibrary();
+if (import.meta.main) {
+	const { buildLibrary } = await import('./library.js');
+	await buildLibrary();
+}

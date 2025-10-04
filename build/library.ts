@@ -37,6 +37,10 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	) as Package;
 	const isBrowser = !!pkgJson.browser;
 	const pkgMain = pkgJson.exports?.['.'] ?? 'index.bundle.js';
+	const external =
+		isBrowser && pkgJson.dependencies
+			? Object.keys(pkgJson.dependencies)
+			: undefined;
 
 	let importmap: string | undefined = undefined;
 
@@ -104,9 +108,9 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 							$: [],
 							clean: true,
 							summary: true,
-							noHtml: true,
 							markdown: true,
 							cxlExtensions: true,
+							debug: true,
 							outputDir: `../docs/${appId}`,
 						},
 						file => {
@@ -122,10 +126,15 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 		{
 			target: 'package',
 			outputDir: '.',
-			tasks: [readme(), eslint(), exec(`rm -rf ${pkgDir}`)],
+			tasks: [readme(), eslint() /*, exec(`rm -rf ${pkgDir}`)*/],
 		},
 		{
-			target: 'package',
+			//target: 'package',
+			outputDir: '.',
+			tasks: [exec(`rm -rf ${pkgDir}`)],
+		},
+		{
+			//target: 'package',
 			outputDir: pkgDir,
 			tasks: [
 				file('README.md', 'README.md'),
@@ -136,7 +145,8 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					entryPoints,
 					platform: isBrowser ? 'browser' : 'node',
 					outdir: pkgDir,
-					packages: isBrowser ? undefined : 'external',
+					external,
+					packages: isBrowser ? 'bundle' : 'external',
 				}),
 			],
 		},

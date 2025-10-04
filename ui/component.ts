@@ -675,6 +675,23 @@ export function getAttribute<T extends Element, K extends AttributeName<T>>(
 	);
 }
 
+export function numberAttribute<
+	T extends Component,
+	K extends Extract<keyof T, string>,
+>(name: K, min?: number, max?: number) {
+	return attribute<T, K>(name, {
+		parse(n) {
+			if (n === 'Infinity' || n === 'infinity') return Infinity as T[K];
+
+			let r = n === undefined ? undefined : Number(n);
+			if (min !== undefined && (r === undefined || r < min || isNaN(r)))
+				r = min;
+			if (max !== undefined && r !== undefined && r > max) r = max;
+			return r as T[K];
+		},
+	});
+}
+
 export function message<K extends VoidMessage>(el: Element, event: K): void;
 export function message<K extends keyof CustomEventMap>(
 	el: Element,

@@ -90,6 +90,7 @@ export interface ThemeBase {
 	override?: Record<string, string>;
 }
 
+export const displayContents = css(':host{display:contents}');
 export const SizeValues = [-2, -1, 0, 1, 2, 3, 4, 5] as const;
 export const TypographyValues = [
 	'display-large',

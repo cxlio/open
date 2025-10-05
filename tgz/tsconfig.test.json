@@ -1,9 +1,14 @@
 {
-	"extends": "../tsconfig.json",
-	"compilerOptions": {
-		"outDir": "../dist/tgz",
-		"types": ["node"]
-	},
-	"files": ["test.ts"],
-	"references": [{ "path": "." }, { "path": "../spec" }]
+	"extends": "./tsconfig.json",
+	"files": [
+		"test.ts"
+	],
+	"references": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../spec"
+		}
+	]
 }

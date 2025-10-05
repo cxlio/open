@@ -10,5 +10,10 @@
 		"build": "node ../dist/build",
 		"test": "npm run build test"
 	},
-	"dependencies": {}
+	"dependencies": {},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cxlio/open.git",
+		"directory": "tgz"
+	}
 }

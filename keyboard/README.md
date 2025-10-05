@@ -7,7 +7,7 @@ Keyboard Handling Library
 ## Project Details
 
 -   Branch Version: [1.1.0](https://npmjs.com/package/@cxl/keyboard/v/1.1.0)
--   License: UNLICENSED
+-   License: GPL-3.0
 -   Documentation: [Link](https://cxlio.github.io/open/keyboard)
 -   Report Issues: [Github](https://github.com/cxlio/open/issues)
 

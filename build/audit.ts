@@ -75,7 +75,7 @@ async function fixDependencies({ projectPath, rootPkg }: LintData) {
 	if (oldPackage !== newPackage) await fs.writeFile(pkgPath, newPackage);
 }
 
-async function fixTsconfig({ projectPath, baseDir, name }: LintData) {
+async function fixTsconfig({ projectPath, name }: LintData) {
 	const pkgPath = `${projectPath}/package.json`;
 	const pkg = await readJson<Package>(pkgPath);
 	let tsconfig = await readJson<Tsconfig | false>(
@@ -83,8 +83,8 @@ async function fixTsconfig({ projectPath, baseDir, name }: LintData) {
 		false,
 	);
 	const oldPackage = JSON.stringify(pkg, null, '\t');
-	const depProp = pkg.browser ? 'devDependencies' : 'dependencies';
-	const notDepProp = pkg.browser ? 'dependencies' : 'devDependencies';
+	//const depProp = pkg.browser ? 'devDependencies' : 'dependencies';
+	//const notDepProp = pkg.browser ? 'dependencies' : 'devDependencies';
 
 	if (!tsconfig) {
 		tsconfig = {
@@ -101,7 +101,7 @@ async function fixTsconfig({ projectPath, baseDir, name }: LintData) {
 		);
 	}
 
-	if (tsconfig.references)
+	/*if (tsconfig.references)
 		for (const ref of tsconfig.references) {
 			const refName = /^\.\.\/([^/]+)/.exec(ref.path)?.[1];
 			if (refName) {
@@ -121,7 +121,7 @@ async function fixTsconfig({ projectPath, baseDir, name }: LintData) {
 				if (pkg[notDepProp]?.[refName])
 					delete pkg[notDepProp]?.[refName];
 			}
-		}
+		}*/
 
 	const newPackage = JSON.stringify(pkg, null, '\t');
 
@@ -131,13 +131,14 @@ async function fixTsconfig({ projectPath, baseDir, name }: LintData) {
 async function fixTest({ projectPath, name }: LintData) {
 	const path = `${projectPath}/tsconfig.test.json`;
 	const testPath = `${projectPath}/test.ts`;
+	let hasChanged = false;
 
 	if (!(await exists(path))) {
 		await fs.writeFile(
 			path,
 			`{
 	"extends": "./tsconfig.json",
-	"files": ["test.ts"],
+	"include": ["test.ts"],
 	"references": [{ "path": "." }, { "path": "../spec" }]
 }
 `,
@@ -152,6 +153,14 @@ async function fixTest({ projectPath, name }: LintData) {
 
 	if (!tsconfig.extends || tsconfig.extends !== './tsconfig.json') {
 		tsconfig.extends = './tsconfig.json';
+		hasChanged = true;
+	}
+	if (tsconfig.compilerOptions) {
+		delete tsconfig.compilerOptions;
+		hasChanged = true;
+	}
+
+	if (hasChanged) {
 		await fs.writeFile(
 			`${projectPath}/tsconfig.test.json`,
 			JSON.stringify(tsconfig, null, '\t'),
@@ -269,11 +278,11 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 		),
 		rule(
 			!pkg.browser || pkg.browser === browser,
-			`Package "browser" property should be set`,
+			`Package "browser" property should be "${browser}"`,
 		),
 		rule(
 			pkg.bugs === rootPkg.bugs,
-			`Package "bugs" property must match root package`,
+			`Package "bugs" property must match root package "${rootPkg.bugs}"`,
 		),
 		rule(
 			pkg?.scripts?.test === testScript,
@@ -310,7 +319,7 @@ async function lintTest({ projectPath }: LintData) {
 			),
 			rule(
 				tsconfig?.extends === './tsconfig.json',
-				'tsconfig.test.json extends should match base tsconfig.json',
+				'tsconfig.test.json extends should be "./tsconfig.json"',
 			),
 			rule(
 				!!(
@@ -318,6 +327,10 @@ async function lintTest({ projectPath }: LintData) {
 					(await exists(`${projectPath}/test.tsx`))
 				),
 				`Missing "test.ts" file.`,
+			),
+			rule(
+				!tsconfig.compilerOptions,
+				`tsconfig.test.json should not have compilerOptions`,
 			),
 		],
 	};
@@ -355,7 +368,7 @@ async function lintDependencies({ name, rootPkg, pkg }: LintData) {
 	};
 }
 
-async function lintTsconfig({ projectPath, pkg, name }: LintData) {
+async function lintTsconfig({ projectPath, name }: LintData) {
 	const tsconfig = await readJson<Tsconfig | null>(
 		`${projectPath}/tsconfig.json`,
 		null,
@@ -371,10 +384,10 @@ async function lintTsconfig({ projectPath, pkg, name }: LintData) {
 			'tsconfig.json should have a valid outDir compiler option',
 		),
 	];
-	const references = tsconfig?.references;
-	const depProp = pkg.browser ? 'devDependencies' : 'dependencies';
+	//const references = tsconfig?.references;
+	//const depProp = pkg.browser ? 'devDependencies' : 'dependencies';
 
-	if (references)
+	/*if (references)
 		for (const ref of references) {
 			const refName = /^\.\.\/([^/]+)/.exec(ref.path)?.[1];
 
@@ -387,7 +400,7 @@ async function lintTsconfig({ projectPath, pkg, name }: LintData) {
 					),
 				);
 			}
-		}
+		}*/
 
 	return {
 		id: 'tsconfig',
@@ -489,6 +502,5 @@ export default async function () {
 
 	for (const fix of fixes) await fix();
 
-	if (hasErrors)
-		throw new Error('Lint errors detected, please check logs for details.');
+	if (hasErrors) throw new Error('Errors detected, check logs for details.');
 }

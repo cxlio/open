@@ -1,8 +1,5 @@
 {
 	"extends": "./tsconfig.json",
-	"compilerOptions": {
-		"outDir": "../dist/rx"
-	},
 	"references": [
 		{
 			"path": "tsconfig.json"
@@ -11,5 +8,8 @@
 			"path": "../spec"
 		}
 	],
-	"include": ["test.ts", "test/*.ts"]
+	"include": [
+		"test.ts",
+		"test/*.ts"
+	]
 }

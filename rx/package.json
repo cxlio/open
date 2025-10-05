@@ -6,7 +6,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "node ../dist/build",
-		"test": "node ../dist/build test"
+		"test": "npm run build test"
 	},
 	"bugs": "https://github.com/cxlio/open/issues",
 	"repository": {

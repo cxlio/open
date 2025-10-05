@@ -12,8 +12,7 @@
 		"test": "npm run build test"
 	},
 	"dependencies": {
-		"puppeteer": "^23.3.0",
-		"source-map": "^0.7.3",
+		"puppeteer": "^24.22.3",
 		"pngjs": "^6.0.0"
 	},
 	"bugs": "https://github.com/cxlio/open/issues",

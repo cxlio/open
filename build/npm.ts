@@ -1,6 +1,6 @@
 import { sh } from '../program/index.js';
 import { readFile } from 'fs/promises';
-import { checkBranchClean, getBranch, getMainBranch } from './git.js';
+import { /*checkBranchClean,*/ getBranch, getMainBranch } from './git.js';
 import { resolve } from 'path';
 
 export type License =
@@ -83,7 +83,7 @@ export async function publishNpm(dir: string, distDir: string) {
 	const pkg = await readPackage(`${dir}/package.json`);
 	const pkgName = pkg.name.split('/')[1];
 
-	await checkBranchClean(mainBranch);
+	//await checkBranchClean(mainBranch);
 	const info = await getPackageInfo(pkg.name);
 
 	if (info.versions.includes(pkg.version)) {

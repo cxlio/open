@@ -1,9 +1,9 @@
 {
 	"name": "@cxl/program",
-	"version": "0.0.3",
-	"bugs": "https://github.com/cxlio/cxl/issues",
-	"homepage": "https://cxlio.github.io/cxl/program",
-	"description": "CLI Utilities",
+	"version": "1.0.0",
+	"bugs": "https://github.com/cxlio/open/issues",
+	"homepage": "https://cxlio.github.io/open/program",
+	"description": "Utility module providing command-line parameter parsing, colorized console output, JSON file reading, directory creation, child process execution, and high-resolution operation timing for Node.js programs.",
 	"type": "module",
 	"scripts": {
 		"build": "node ../dist/build",
@@ -13,7 +13,7 @@
 	"license": "GPL-3.0",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/cxlio/cxl.git",
+		"url": "https://github.com/cxlio/open.git",
 		"directory": "program"
 	}
 }

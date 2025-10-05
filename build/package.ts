@@ -14,9 +14,9 @@ export const BASEDIR = execSync(`npm prefix`, { cwd: SCRIPTDIR })
 	.trim();
 
 const LICENSE_MAP: Record<License, string> = {
-	'GPL-3.0': 'license-GPL-3.0.txt',
-	'GPL-3.0-only': 'license-GPL-3.0.txt',
-	'Apache-2.0': 'license-Apache-2.0.txt',
+	'GPL-3.0': 'license-GPL-3.0.md',
+	'GPL-3.0-only': 'license-GPL-3.0.md',
+	'Apache-2.0': 'license-Apache-2.0.md',
 	'SEE LICENSE IN LICENSE.md': '',
 	UNLICENSED: '',
 };

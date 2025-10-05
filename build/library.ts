@@ -10,6 +10,7 @@ import { pkg, readme, esbuild } from './package.js';
 import { copyDir, file } from './file.js';
 import { eslint } from './lint.js';
 import { tsconfig } from './tsc.js';
+import audit from './audit.js';
 
 import { Package, publishNpm } from './npm.js';
 
@@ -37,10 +38,9 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	) as Package;
 	const isBrowser = !!pkgJson.browser;
 	const pkgMain = pkgJson.exports?.['.'] ?? 'index.bundle.js';
-	const external =
-		isBrowser && pkgJson.dependencies
-			? Object.keys(pkgJson.dependencies)
-			: undefined;
+	const external = pkgJson.dependencies
+		? Object.keys(pkgJson.dependencies)
+		: undefined;
 
 	let importmap: string | undefined = undefined;
 
@@ -99,6 +99,11 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			],
 		},
 		{
+			target: 'audit',
+			outputDir,
+			tasks: [fromAsync(audit).ignoreElements()],
+		},
+		{
 			target: 'docs',
 			outputDir: `../docs/${appId}`,
 			tasks: [
@@ -126,15 +131,10 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 		{
 			target: 'package',
 			outputDir: '.',
-			tasks: [readme(), eslint() /*, exec(`rm -rf ${pkgDir}`)*/],
+			tasks: [readme(), eslint(), exec(`rm -rf ${pkgDir}`)],
 		},
 		{
-			//target: 'package',
-			outputDir: '.',
-			tasks: [exec(`rm -rf ${pkgDir}`)],
-		},
-		{
-			//target: 'package',
+			target: 'package',
 			outputDir: pkgDir,
 			tasks: [
 				file('README.md', 'README.md'),
@@ -146,7 +146,6 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					platform: isBrowser ? 'browser' : 'node',
 					outdir: pkgDir,
 					external,
-					packages: isBrowser ? 'bundle' : 'external',
 				}),
 			],
 		},

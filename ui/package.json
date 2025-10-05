@@ -1,11 +1,11 @@
 {
 	"name": "@cxl/ui",
-	"version": "5.1.0",
+	"version": "6.0.0-beta.1",
 	"description": "High-performance Web Components",
 	"bugs": "https://github.com/cxlio/open/issues",
 	"license": "SEE LICENSE IN LICENSE.md",
 	"homepage": "https://cxlio.github.io/open/ui",
-	"browser": "index.bundle.js",
+	"browser": "./index.js",
 	"scripts": {
 		"build": "cp ../rx/index.ts rx.ts && node ../dist/build",
 		"test": "npm run build test"

@@ -11,14 +11,13 @@
 		"esbuild": "^0.25.10",
 		"pngjs": "^6.0.0",
 		"puppeteer": "^24.22.3",
-		"source-map": "^0.7.3",
 		"typescript": "^5.9.2",
 		"typescript-eslint": "^8.45.0"
 	},
 	"type": "module",
 	"bugs": "https://github.com/cxlio/open/issues",
 	"scripts": {
-		"build": "./scripts/build.sh package docs",
+		"build": "./scripts/build.sh audit package docs",
 		"test": "./scripts/build.sh test"
 	},
 	"repository": {

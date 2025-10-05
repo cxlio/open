@@ -21,7 +21,9 @@ export async function checkBranchUpToDate(branch: string) {
 }
 
 export async function getMainBranch(cwd: string) {
-	return await sh(`git symbolic-ref --short refs/remotes/origin/HEAD`, {
-		cwd,
-	});
+	return (
+		await sh(`git remote show origin`, {
+			cwd,
+		})
+	).match(/HEAD branch:\s+(\S+)/)?.[1];
 }

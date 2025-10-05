@@ -1,5 +1,3 @@
-import { subject, toPromise } from '../rx/index.js';
-
 declare function __cxlRunner(msg: RunnerCommand): Promise<Result>;
 
 type EventType =
@@ -102,6 +100,70 @@ let actionId = 0;
 
 const setTimeout = globalThis.setTimeout;
 const clearTimeout = globalThis.clearTimeout;
+
+export function subject<T>() {
+	let subscribers: Array<{
+		next?: (val: T) => void;
+		complete?: () => void;
+	}> = [];
+	let completeCalled = false;
+
+	return {
+		next(val: T) {
+			if (completeCalled) return;
+			subscribers.forEach(sub => sub.next?.(val));
+		},
+		subscribe(
+			observer:
+				| {
+						next?: (val: T) => void;
+						complete?: () => void;
+				  }
+				| ((val: T) => void),
+		) {
+			if (completeCalled) return { unsubscribe() {} };
+			let subObj: { next?: (val: T) => void; complete?: () => void };
+			if (typeof observer === 'function') {
+				subObj = { next: observer };
+			} else {
+				subObj = observer;
+			}
+			subscribers.push(subObj);
+			return {
+				unsubscribe() {
+					subscribers = subscribers.filter(f => f !== subObj);
+				},
+			};
+		},
+		complete() {
+			if (completeCalled) return;
+			completeCalled = true;
+			subscribers.forEach(sub => sub.complete && sub.complete());
+			subscribers = [];
+		},
+		first(): Promise<T> {
+			return new Promise(resolve => {
+				const subscription = this.subscribe(val => {
+					resolve(val);
+					subscription.unsubscribe();
+				});
+			});
+		},
+	};
+}
+
+export function toPromise<T>(
+	input: Promise<T> | { first: () => Promise<T> },
+): Promise<T> {
+	if (typeof (input as any).then === 'function') {
+		return input as Promise<T>;
+	} else if (typeof (input as any).first === 'function') {
+		return (input as any).first();
+	}
+	throw new Error(
+		'toPromise: input must be a Promise or observable-like with first()',
+	);
+}
 
 function inspect(val: unknown) {
 	if (typeof val === 'string') return '"' + val + '"';

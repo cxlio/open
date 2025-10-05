@@ -6,7 +6,7 @@ A flexible build system that executes configurable build tasks producing output 
 
 ## Project Details
 
--   Branch Version: [1.0.0-beta.1](https://npmjs.com/package/@cxl/build/v/1.0.0-beta.1)
+-   Branch Version: [1.0.0-beta.4](https://npmjs.com/package/@cxl/build/v/1.0.0-beta.4)
 -   License: GPL-3.0
 -   Documentation: [Link](https://cxlio.github.io/cxl/build)
 -   Report Issues: [Github](https://github.com/cxlio/cxl/issues)

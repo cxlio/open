@@ -74,15 +74,19 @@ export class AppbarContextual extends Component {
 		ariaLabel: content.get('core.close'),
 		$: el => onAction(el).tap(() => (this.open = false)),
 	});
-}
 
-component(AppbarContextual, {
-	tagName: 'c-appbar-contextual',
-	init: [attribute('name'), styleAttribute('open'), styleAttribute('size')],
-	augment: [
-		$ => $.backIcon,
-		...AppbarLayout,
-		css(`		
+	static {
+		component(AppbarContextual, {
+			tagName: 'c-appbar-contextual',
+			init: [
+				attribute('name'),
+				styleAttribute('open'),
+				styleAttribute('size'),
+			],
+			augment: [
+				$ => $.backIcon,
+				...AppbarLayout,
+				css(`		
 :host {
 	display: none;
 	flex-grow: 1;
@@ -93,9 +97,11 @@ component(AppbarContextual, {
 :host([open]) { display: flex }
 :host(:dir(rtl)) .icon { scale: -1 1; }
 `),
-		$ =>
-			attributeChanged($, 'open').tap(v => {
-				if (!v) $.dispatchEvent(new Event('close'));
-			}),
-	],
-});
+				$ =>
+					attributeChanged($, 'open').tap(v => {
+						if (!v) $.dispatchEvent(new Event('close'));
+					}),
+			],
+		});
+	}
+}

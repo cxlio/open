@@ -6,7 +6,7 @@ High-performance Web Components
 
 ## Project Details
 
--   Branch Version: [6.0.0-beta.1](https://npmjs.com/package/@cxl/ui/v/6.0.0-beta.1)
+-   Branch Version: [6.0.0-beta.2](https://npmjs.com/package/@cxl/ui/v/6.0.0-beta.2)
 -   License: SEE LICENSE IN LICENSE.md
 -   Documentation: [Link](https://cxlio.github.io/open/ui)
 -   Report Issues: [Github](https://github.com/cxlio/open/issues)

@@ -4,6 +4,7 @@ import {
 	attribute,
 	styleAttribute,
 	attributeChanged,
+	internals,
 	property,
 	event,
 	get,
@@ -22,8 +23,6 @@ import { content } from './locale.js';
 import type { AriaProperties, AriaProperty } from './a11y.js';
 
 export type InputWithValue = Input & { inputValue?: string };
-
-export const internals = Symbol('internals');
 
 export function updateEvent(
 	$: Component & { value?: unknown; checked?: unknown },
@@ -124,8 +123,6 @@ export abstract class Input extends Component {
 	 */
 	readonly defaultValue: unknown;
 
-	[internals] = this.attachInternals?.();
-
 	/**
 	 * Getter and setter for the input's value. The specific data type and behavior depend on the child component.
 	 */
@@ -201,17 +198,17 @@ export abstract class Input extends Component {
 	}
 
 	get labels() {
-		return this[internals].labels;
+		return internals(this).labels;
 	}
 
 	/** Getter for the input's validity state. */
 	get validity(): ValidityState | null {
-		return this[internals]?.validity || null;
+		return internals(this)?.validity || null;
 	}
 
 	/** Getter for the input's validation message */
 	get validationMessage(): string {
-		return this[internals]?.validationMessage || '';
+		return internals(this)?.validationMessage || '';
 	}
 
 	/**
@@ -220,7 +217,7 @@ export abstract class Input extends Component {
 	 * Returns true if the input is valid, false otherwise.
 	 */
 	reportValidity() {
-		return this[internals]?.reportValidity() ?? true;
+		return internals(this)?.reportValidity() ?? true;
 	}
 
 	/**
@@ -229,7 +226,7 @@ export abstract class Input extends Component {
 	 * Returns true if the input satisfies all validation rules, or false otherwise.
 	 */
 	checkValidity() {
-		return this[internals]?.checkValidity() ?? true;
+		return internals(this)?.checkValidity() ?? true;
 	}
 
 	/**
@@ -285,7 +282,7 @@ export abstract class Input extends Component {
 	}
 
 	protected applyValidity(invalid: boolean, msg?: string) {
-		this[internals]?.setValidity({ customError: invalid }, msg);
+		internals(this)?.setValidity({ customError: invalid }, msg);
 	}
 
 	protected formDisabledCallback(disabled: boolean) {
@@ -293,6 +290,6 @@ export abstract class Input extends Component {
 	}
 
 	protected setFormValue(val: unknown) {
-		this[internals]?.setFormValue?.(val as string);
+		internals(this)?.setFormValue?.(val as string);
 	}
 }

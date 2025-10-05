@@ -10,6 +10,7 @@
 		"build": "cp ../rx/index.ts rx.ts && node ../dist/build",
 		"test": "npm run build test"
 	},
+	"sideEffects": false,
 	"exports": {
 		".": "./index.js",
 		"./*.js": "./*.js"

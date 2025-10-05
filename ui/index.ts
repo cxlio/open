@@ -16,6 +16,7 @@ export * from './focusable.js';
 export * from './iframe.js';
 export * from './icon.js';
 export * from './icon-button.js';
+export * from './input.js';
 export * from './item.js';
 export * from './nav-item.js';
 export * from './navbar-toggle.js';

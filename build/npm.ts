@@ -30,6 +30,7 @@ export interface Package {
 	devDependencies?: Dependencies;
 	peerDependencies?: Dependencies;
 	bundledDependecies?: Dependencies;
+	sideEffects?: boolean;
 	type?: string;
 	scripts?: Record<string, string>;
 	exports?: Record<string, string>;

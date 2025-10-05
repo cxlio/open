@@ -80,6 +80,7 @@ function packageJson(p: Package, main?: string) {
 					homepage: p.homepage,
 					bugs: p.bugs,
 					bin: p.bin,
+					sideEffects: p.sideEffects,
 					repository: p.repository,
 					dependencies: p.dependencies,
 					peerDependencies: p.peerDependencies,

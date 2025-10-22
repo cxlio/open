@@ -356,14 +356,32 @@ export function component<T extends Component>(
 	if (tagName) registerComponent(tagName, ctor as new () => T);
 }
 
-/**
- * This function augments a Component class with additional functionality or rendering logic.
- */
-export function augment<T extends Component>(
-	ctor: ComponentConstructor<T>,
-	...augs: Augmentation<T>[]
+export function Augment(): (ctor: new () => Component) => void;
+export function Augment<T extends Component>(
+	...augs: [string | Augmentation<T> | void, ...Augmentation<T>[]]
+): (ctor: new () => Component) => void;
+export function Augment<T extends Component>(
+	...augs: [string | Augmentation<T> | void, ...Augmentation<T>[]]
 ) {
-	doAugment(ctor, augs);
+	return (ctor: new () => Component) => {
+		let newAugs: Augmentation<T>[], tagName: string | undefined;
+
+		if (augs && typeof augs[0] === 'string') {
+			tagName = augs[0];
+			newAugs = augs.slice(1) as unknown as Augmentation<T>[];
+		} else {
+			newAugs = augs as unknown as Augmentation<T>[];
+		}
+
+		pushRender(ctor, node => {
+			for (const d of newAugs) {
+				const result = d(node);
+				if (result && result !== node) appendShadow(node, result);
+			}
+		});
+		// Next line needs to be last to prevent early component upgrade
+		if (tagName) registerComponent(tagName, ctor);
+	};
 }
 
 /**

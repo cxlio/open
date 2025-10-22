@@ -14,8 +14,6 @@ import audit from './audit.js';
 
 import { Package, publishNpm } from './npm.js';
 
-import { buildDocs } from '@cxl/3doc/render.js';
-
 function collectDependencies(
 	deps: Package['dependencies'],
 	map: Record<string, string> = {},
@@ -108,23 +106,25 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			outputDir: `../docs/${appId}`,
 			tasks: [
 				observable(subs => {
-					buildDocs(
-						{
-							$: [],
-							clean: true,
-							summary: true,
-							markdown: true,
-							cxlExtensions: true,
-							debug: true,
-							outputDir: `../docs/${appId}`,
-						},
-						file => {
-							subs.next({
-								path: file.name,
-								source: Buffer.from(file.content),
-							});
-						},
-					).then(() => subs.complete());
+					import('@cxl/3doc/render.js').then(({ buildDocs }) =>
+						buildDocs(
+							{
+								$: [],
+								clean: true,
+								summary: true,
+								markdown: true,
+								cxlExtensions: true,
+								debug: true,
+								outputDir: `../docs/${appId}`,
+							},
+							file => {
+								subs.next({
+									path: file.name,
+									source: Buffer.from(file.content),
+								});
+							},
+						).then(() => subs.complete()),
+					);
 				}),
 			],
 		},

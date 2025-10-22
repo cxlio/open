@@ -53,7 +53,8 @@ async function openPage(browser: Browser) {
 async function createPage(
 	app: SpecRunner,
 	browser: Browser,
-	sources: Output[],
+	entry: string,
+	sources: Map<string, Output>,
 	concurrency: number,
 ) {
 	const page = await openPage(browser);
@@ -135,7 +136,7 @@ async function createPage(
 	// Prevent unexpected focus behavior
 	await page.bringToFront();
 
-	const suite = await mjsRunner(page, sources, app);
+	const suite = await mjsRunner(page, entry, sources, app);
 	if (!suite) throw new Error('Invalid suite');
 
 	const coverage = app.ignoreCoverage
@@ -145,56 +146,18 @@ async function createPage(
 	return { suite, coverage };
 }
 
-/*function virtualFileServer(app: SpecRunner, page: Page) {
-	const root = resolve(app.vfsRoot ?? process.cwd());
-	app.log(`Starting virtual file server on "${root}"`);
-
-	async function handle(req: HTTPRequest, url: URL) {
-		let body: string | Buffer = '';
-		let status = 200;
-		try {
-			body =
-				url.pathname === '/'
-					? ''
-					: await readFile(join(root, url.pathname));
-		} catch (e) {
-			if (
-				e &&
-				typeof e === 'object' &&
-				'code' in e &&
-				e.code === 'ENOENT'
-			)
-				status = 404;
-		}
-		app.log(`[vfs] ${url.pathname} ${status}`);
-
-		req.respond({
-			headers: {
-				'Access-Control-Allow-Origin': '*',
-			},
-			status,
-			contentType: url.pathname.endsWith('.js')
-				? 'application/javascript'
-				: 'text/plain',
-			body,
-		});
-	}
-
-	page.on('request', req => {
-		const url = new URL(req.url());
-		if (url.origin !== 'http://localhost:9999') return;
-		console.log('vfs: ' + url);
-		return handle(req, url);
-	});
-}*/
-
 function goto(_app: SpecRunner, page: Page, url: string) {
 	return page.goto(url);
 }
 
-async function mjsRunner(page: Page, sources: Output[], app: SpecRunner) {
-	const entry = sources[0].path;
-	const cwd = app.vfsRoot ?? process.cwd();
+async function mjsRunner(
+	page: Page,
+	entry: string,
+	sources: Map<string, Output>,
+	app: SpecRunner,
+) {
+	const cwd =
+		app.vfsRoot !== undefined ? resolve(app.vfsRoot) : process.cwd();
 	const require = createRequire(process.cwd());
 	await page.setRequestInterception(true);
 
@@ -218,11 +181,8 @@ async function mjsRunner(page: Page, sources: Output[], app: SpecRunner) {
 					url.pathname === '/'
 						? ''
 						: await readFile(pathname, 'utf8');
-				if (
-					pathname.endsWith('.js') &&
-					!sources.find(s => s.source === body)
-				)
-					sources.push({
+				if (pathname.endsWith('.js') && !sources.get(pathname))
+					sources.set(pathname, {
 						path: pathname,
 						source: body,
 					});
@@ -287,11 +247,16 @@ function generateRanges(entry: CoverageEntry) {
 
 async function generateCoverage(
 	page: Page,
-	sources: Output[],
+	sources: Map<string, Output>,
 ): Promise<TestCoverage[]> {
 	const coverage = await page.coverage.stopJSCoverage();
 	return coverage.map(entry => {
-		const sourceFile = sources.find(src => entry.text.includes(src.source));
+		let sourceFile;
+		for (const [, f] of sources)
+			if (entry.text.includes(f.source)) {
+				sourceFile = f;
+				break;
+			}
 		return {
 			url: sourceFile?.path ? resolve(sourceFile?.path) : entry.url,
 			functions: [
@@ -415,9 +380,11 @@ async function handleFigureRequest(
 }
 
 export default async function runPuppeteer(app: SpecRunner) {
-	const entryFile = app.vfsRoot
-		? `./${relative(app.vfsRoot, app.entryFile)}`
-		: app.entryFile;
+	const entryFile = resolve(
+		app.vfsRoot
+			? `./${relative(app.vfsRoot, app.entryFile)}`
+			: app.entryFile,
+	);
 	const args = [
 		'--no-sandbox',
 		'--disable-setuid-sandbox',
@@ -449,8 +416,15 @@ export default async function runPuppeteer(app: SpecRunner) {
 		app.log(`Puppeteer ${await browser.version()}`);
 
 		const source = await readFile(app.entryFile, 'utf8');
-		const sources = [{ path: entryFile, source }];
-		const { suite, coverage } = await createPage(app, browser, sources, 0);
+		const sources = new Map<string, Output>();
+		sources.set(resolve(entryFile), { path: entryFile, source });
+		const { suite, coverage } = await createPage(
+			app,
+			browser,
+			entryFile,
+			sources,
+			0,
+		);
 		return generateReport(suite, coverage);
 	} finally {
 		await browser.close();

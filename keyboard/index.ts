@@ -68,8 +68,10 @@ export interface KeyboardLayout {
 }
 
 interface InternalKeyboardLayout extends KeyboardLayout {
-	/** An array of characters that appear when a key is pressed with the 'Shift' key. */
 	modKey: 'metaKey' | 'ctrlKey';
+
+	altName: 'option' | 'alt';
+	modName: 'meta' | 'cmd';
 }
 
 const navigator =
@@ -160,7 +162,10 @@ export const KeyboardLayoutData: Record<string, KeyboardLayout> = {
  * This conversion provides a consistent way to describe key combinations as strings, essential for handling
  * and processing keyboard shortcuts or sequences in the application.
  */
-function keyboardEventToString(ev: Key, { translate }: InternalKeyboardLayout) {
+function keyboardEventToString(
+	ev: Key,
+	{ translate, altName, modName }: InternalKeyboardLayout,
+) {
 	const key = ev.key;
 	if (
 		!key ||
@@ -175,9 +180,9 @@ function keyboardEventToString(ev: Key, { translate }: InternalKeyboardLayout) {
 	const ch = translate(ev);
 	let result;
 	if (ev.ctrlKey) result = 'ctrl';
-	if (ev.altKey) result = result ? result + '+alt' : 'alt';
+	if (ev.altKey) result = result ? result + '+' + altName : altName;
 	if (ev.shiftKey) result = result ? result + '+shift' : 'shift';
-	if (ev.metaKey) result = result ? result + '+meta' : 'meta';
+	if (ev.metaKey) result = result ? result + '+' + modName : modName;
 
 	return result ? result + '+' + ch : ch;
 }
@@ -305,8 +310,11 @@ function _parseKey(
 }
 
 function augmentLayout(layout: KeyboardLayout): InternalKeyboardLayout {
+	const isMac = IS_MAC.test(navigator.platform);
 	return {
-		modKey: IS_MAC.test(navigator.platform) ? 'metaKey' : 'ctrlKey',
+		modKey: isMac ? 'metaKey' : 'ctrlKey',
+		altName: isMac ? 'option' : 'alt',
+		modName: isMac ? 'cmd' : 'meta',
 		...layout,
 	};
 }

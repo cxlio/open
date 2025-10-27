@@ -84,9 +84,10 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 						const report = await runSpec({
 							node: !isBrowser,
 							mjs: true,
-							vfsRoot: '..',
+							vfsRoot: '../..',
 							entryFile: './test.js',
 							importmap,
+							sources: new Map(),
 							log: console.log.bind(console),
 						});
 						printReportV2(report);

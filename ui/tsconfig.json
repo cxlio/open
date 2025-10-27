@@ -1,9 +1,0 @@
-{
-	"extends": "../tsconfig.json",
-	"compilerOptions": {
-		"outDir": "../dist/ui",
-		"lib": ["dom", "es2023", "dom.iterable"]
-	},
-	"include": ["*.ts"],
-	"exclude": ["test.ts", "test-util.ts"]
-}

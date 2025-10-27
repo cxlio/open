@@ -1,7 +1,7 @@
 import { Browser, CoverageEntry, Page, HTTPRequest } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import { readFile, writeFile, mkdir } from 'fs/promises';
-import { resolve, join, relative } from 'path';
+import { resolve, relative, join, extname } from 'path';
 import { createRequire } from 'module';
 
 import type { FigureData, RunnerCommand, Test, Result } from '../spec/index.js';
@@ -9,11 +9,6 @@ import type { SpecRunner } from './index.js';
 import type { PNG } from 'pngjs';
 
 import { TestCoverage, generateReport } from './report.js';
-
-interface Output {
-	path: string;
-	source: string;
-}
 
 async function startTracing(page: Page) {
 	await Promise.all([
@@ -53,12 +48,8 @@ async function openPage(browser: Browser) {
 async function createPage(
 	app: SpecRunner,
 	browser: Browser,
-	entry: string,
-	sources: Map<string, Output>,
 	concurrency: number,
 ) {
-	const page = await openPage(browser);
-
 	function cxlRunner(cmd: RunnerCommand): Promise<Result> | Result {
 		const type = cmd.type;
 		if (type === 'figure') {
@@ -114,6 +105,11 @@ async function createPage(
 		};
 	}
 
+	const page = await openPage(browser);
+	const entryFile = app.vfsRoot
+		? `./${relative(app.vfsRoot, app.entryFile)}`
+		: app.entryFile;
+
 	page.on('console', msg => handleConsole(msg, app));
 	page.on('pageerror', msg => app.log(msg));
 	page.on('requestfailed', req => {
@@ -126,71 +122,62 @@ async function createPage(
 
 	await startTracing(page);
 
-	/*if (app.vfsRoot) {
-		await page.setRequestInterception(true);
-		virtualFileServer(app, page);
-	}*/
-
 	if (app.browserUrl) await goto(app, page, app.browserUrl);
 
 	// Prevent unexpected focus behavior
 	await page.bringToFront();
 
-	const suite = await mjsRunner(page, entry, sources, app);
+	const suite = await mjsRunner(page, app, entryFile);
 	if (!suite) throw new Error('Invalid suite');
 
 	const coverage = app.ignoreCoverage
 		? undefined
-		: await generateCoverage(page, sources);
-
+		: await generateCoverage(page, app);
 	return { suite, coverage };
 }
 
-function goto(_app: SpecRunner, page: Page, url: string) {
-	return page.goto(url);
-}
-
-async function mjsRunner(
-	page: Page,
-	entry: string,
-	sources: Map<string, Output>,
-	app: SpecRunner,
-) {
-	const cwd =
-		app.vfsRoot !== undefined ? resolve(app.vfsRoot) : process.cwd();
-	const require = createRequire(process.cwd());
-	await page.setRequestInterception(true);
+function virtualFileServer(page: Page, app: SpecRunner) {
+	const cwd = app.vfsRoot ? resolve(app.vfsRoot) : process.cwd();
+	const require = createRequire(cwd + '/');
 
 	function findRequestPath(path: string) {
-		let result: string;
 		try {
-			result = require.resolve(path.slice(1));
-			if (result) return result;
+			const result = require.resolve(path.slice(1));
+			if (result) return relative(cwd, result);
 		} catch (e) {
 			/* ignore */
 		}
-		return join(cwd, path);
+		return path;
 	}
 
 	page.on('request', async (req: HTTPRequest) => {
 		try {
 			const url = new URL(req.url());
 			if (req.method() === 'GET' && url.hostname === 'cxl-tester') {
+				if (url.pathname === '/' || url.pathname === '/favicon.ico')
+					return req.respond({ status: 200, body: '' });
+
 				const pathname = findRequestPath(url.pathname);
-				const body =
-					url.pathname === '/'
-						? ''
-						: await readFile(pathname, 'utf8');
-				if (pathname.endsWith('.js') && !sources.get(pathname))
-					sources.set(pathname, {
+				if (pathname !== url.pathname)
+					return req.respond({
+						status: 301,
+						headers: {
+							location: '/' + pathname,
+						},
+					});
+
+				const body = await readFile(join(cwd, pathname), 'utf8');
+				const ext = extname(pathname);
+				if (ext === '.js' && !app.sources.has(url.href))
+					app.sources.set(url.href, {
 						path: pathname,
 						source: body,
 					});
+
 				req.respond({
 					status: 200,
-					contentType: pathname.endsWith('.js')
-						? 'text/javascript'
-						: 'text/plain',
+					contentType:
+						ext === '.js' ? 'text/javascript' : 'text/plain',
 					body,
 				});
 			} else {
@@ -203,6 +190,17 @@ async function mjsRunner(
 			});
 		}
 	});
+}
+
+function goto(_app: SpecRunner, page: Page, url: string) {
+	return page.goto(url);
+}
+
+async function mjsRunner(page: Page, app: SpecRunner, entry: string) {
+	await page.setRequestInterception(true);
+
+	virtualFileServer(page, app);
+
 	await goto(app, page, 'https://cxl-tester');
 
 	if (app.importmap) {
@@ -247,26 +245,23 @@ function generateRanges(entry: CoverageEntry) {
 
 async function generateCoverage(
 	page: Page,
-	sources: Map<string, Output>,
+	app: SpecRunner,
 ): Promise<TestCoverage[]> {
 	const coverage = await page.coverage.stopJSCoverage();
-	return coverage.map(entry => {
-		let sourceFile;
-		for (const [, f] of sources)
-			if (entry.text.includes(f.source)) {
-				sourceFile = f;
-				break;
-			}
-		return {
-			url: sourceFile?.path ? resolve(sourceFile?.path) : entry.url,
-			functions: [
-				{
-					functionName: '',
-					ranges: generateRanges(entry),
-					isBlockCoverage: true,
-				},
-			],
-		};
+	return coverage.flatMap(entry => {
+		const sourceFile = app.sources.get(entry.url);
+		return sourceFile
+			? {
+					url: sourceFile.path,
+					functions: [
+						{
+							functionName: '',
+							ranges: generateRanges(entry),
+							isBlockCoverage: true,
+						},
+					],
+			  }
+			: [];
 	});
 }
 
@@ -380,11 +375,6 @@ async function handleFigureRequest(
 }
 
 export default async function runPuppeteer(app: SpecRunner) {
-	const entryFile = resolve(
-		app.vfsRoot
-			? `./${relative(app.vfsRoot, app.entryFile)}`
-			: app.entryFile,
-	);
 	const args = [
 		'--no-sandbox',
 		'--disable-setuid-sandbox',
@@ -415,16 +405,7 @@ export default async function runPuppeteer(app: SpecRunner) {
 	try {
 		app.log(`Puppeteer ${await browser.version()}`);
 
-		const source = await readFile(app.entryFile, 'utf8');
-		const sources = new Map<string, Output>();
-		sources.set(resolve(entryFile), { path: entryFile, source });
-		const { suite, coverage } = await createPage(
-			app,
-			browser,
-			entryFile,
-			sources,
-			0,
-		);
+		const { suite, coverage } = await createPage(app, browser, 0);
 		return generateReport(suite, coverage);
 	} finally {
 		await browser.close();

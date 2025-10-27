@@ -18,8 +18,14 @@ export type SpecRunnerOptions = ParametersResult<typeof parameters>;
 export type SpecRunner = Omit<SpecRunnerOptions, '$'> & {
 	entryFile: string;
 	importmap?: string;
+	sources: Map<string, Output>;
 	log: Logger;
 };
+
+export interface Output {
+	path: string;
+	source: string;
+}
 
 const parameters = {
 	node: { type: 'boolean', help: 'Run tests in node mode.' },
@@ -59,6 +65,7 @@ const start = program({}, async ({ log }) => {
 		node: false,
 		log,
 		reportPath: 'test-report.json',
+		sources: new Map(),
 		...args,
 	};
 

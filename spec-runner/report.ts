@@ -1,5 +1,3 @@
-import { relative } from 'path';
-
 import type { JsonResult, FigureData } from '../spec/index.js';
 
 export interface TestResult {
@@ -64,7 +62,6 @@ function calculateCoverage(coverage: TestCoverage[]) {
 				const len = range.endOffset - range.startOffset;
 				blockTotal += len;
 				if (range.count) blockCovered += len;
-				// else blockCovered -= len;
 			}
 		}
 
@@ -80,16 +77,13 @@ function calculateCoverage(coverage: TestCoverage[]) {
 }
 
 async function generateCoverageReport(coverage: Coverage) {
-	const cwd = process.cwd();
 	const filtered: TestCoverage[] = [];
 	const ignoreRegex = /\/node_modules\//;
 	for (const script of coverage) {
-		const url = script.url.replace(/^file:\/\//, '');
-		if (url.startsWith(cwd) && !ignoreRegex.test(url)) {
-			const relativeUrl = relative(cwd, url);
-
+		const url = script.url;
+		if (!ignoreRegex.test(url)) {
 			filtered.push({
-				url: relativeUrl,
+				url: url,
 				functions: script.functions,
 			});
 		}

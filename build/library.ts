@@ -1,7 +1,7 @@
 import { basename, join } from 'path';
 import { readFileSync } from 'fs';
 
-import { EMPTY, fromAsync, observable } from '../rx/index.js';
+import { EMPTY, fromAsync, observable, of } from '../rx/index.js';
 import { run as runSpec } from '../spec-runner/runner.js';
 import printReportV2 from '../spec-runner/report-stdout.js';
 
@@ -14,12 +14,57 @@ import audit from './audit.js';
 
 import { Package, publishNpm } from './npm.js';
 
+let browserRunner: string;
+
 function collectDependencies(
 	deps: Package['dependencies'],
 	map: Record<string, string> = {},
 ) {
 	for (const name in deps) map[name] = `/${name}`;
 	return map;
+}
+
+function getDependencies(rootPkg: Package, pkgJson: Package) {
+	const map: Record<string, string> = {};
+	if (rootPkg.devDependencies)
+		collectDependencies(rootPkg.devDependencies, map);
+	if (pkgJson.dependencies) collectDependencies(pkgJson.dependencies, map);
+	return map;
+}
+
+function generateImportMap(rootPkg: Package, pkgJson: Package) {
+	const map = getDependencies(rootPkg, pkgJson);
+	return JSON.stringify({ imports: map });
+}
+
+function generateTestImportMap(rootPkg: Package, pkgJson: Package) {
+	const map = getDependencies(rootPkg, pkgJson);
+
+	for (const key in map) {
+		map[`${key}/`] = `../../node_modules${map[key]}/`;
+	}
+	map['@cxl/spec'] = '../../node_modules/@cxl/spec/index.bundle.js';
+
+	return JSON.stringify({ imports: map });
+}
+
+function generateEsmTestFile(
+	dirName: string,
+	pkgName: string,
+	testFile: string,
+	importmap: string,
+) {
+	return Buffer.from(`<!DOCTYPE html>
+<title>${pkgName} Test Suite</title>
+<script type="importmap">${importmap}</script>
+<script type="module">
+	import suite from '${testFile}';
+	${(browserRunner ??= readFileSync(
+		join(import.meta.dirname, 'spec-browser.js'),
+		'utf8',
+	))}
+	browserRunner.run([suite], '../../${dirName}/spec');
+</script>`);
 }
 
 export function buildLibrary(...extra: BuildConfiguration[]) {
@@ -34,34 +79,31 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	const rootPkg = JSON.parse(
 		readFileSync('../package.json', 'utf8'),
 	) as Package;
+
 	const isBrowser = !!pkgJson.browser;
-	const pkgMain = pkgJson.exports?.['.'] ?? 'index.bundle.js';
-	const external = pkgJson.dependencies
-		? Object.keys(pkgJson.dependencies)
-		: undefined;
+	// If pkgJson browser points to './index.bundle.js' a bundle file will be created.
+	const needsBundle =
+		pkgJson.browser === './index.bundle.js' && pkgJson.exports;
 
-	let importmap: string | undefined = undefined;
+	// "main" is used mainly by CDNs, bundlers will prefer to use the "exports" config.
+	const pkgMain =
+		pkgJson.browser ?? pkgJson.exports?.['.'] ?? './index.bundle.js';
+	const external = [
+		...Object.keys(pkgJson.dependencies ?? {}),
+		...Object.keys(pkgJson.peerDependencies ?? {}),
+	];
 
-	if (isBrowser) {
-		const map: Record<string, string> = {};
-
-		if (rootPkg.devDependencies)
-			collectDependencies(rootPkg.devDependencies, map);
-		if (pkgJson.dependencies)
-			collectDependencies(pkgJson.dependencies, map);
-		importmap = JSON.stringify({ imports: map });
-	}
-
+	const bundleEntryPoint = [
+		{
+			out: 'index.bundle',
+			in: join(outputDir, 'index.js'),
+		},
+	];
 	const entryPoints = pkgJson.exports
 		? Object.values(pkgJson.exports).flatMap(val => {
 				return val ? [join(outputDir, val)] : [];
 		  })
-		: [
-				{
-					out: 'index.bundle',
-					in: join(outputDir, 'index.js'),
-				},
-		  ];
+		: bundleEntryPoint;
 
 	return build(
 		{
@@ -69,6 +111,17 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			tasks: [
 				file('test-screenshot.html', 'test-screenshot.html').catchError(
 					() => EMPTY,
+				),
+				file('test.html', 'test.html').catchError(() =>
+					of({
+						path: 'test.html',
+						source: generateEsmTestFile(
+							appId,
+							pkgJson.name,
+							'./test.js',
+							generateTestImportMap(rootPkg, pkgJson),
+						),
+					}),
 				),
 				tsconfig('tsconfig.test.json'),
 				pkg('index.js'),
@@ -86,7 +139,9 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 							mjs: true,
 							vfsRoot: '../..',
 							entryFile: './test.js',
-							importmap,
+							importmap: isBrowser
+								? generateImportMap(rootPkg, pkgJson)
+								: undefined,
 							sources: new Map(),
 							log: console.log.bind(console),
 						});
@@ -148,6 +203,16 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					outdir: pkgDir,
 					external,
 				}),
+				...(needsBundle
+					? [
+							esbuild({
+								entryPoints: bundleEntryPoint,
+								platform: 'browser',
+								outdir: pkgDir,
+								external,
+							}),
+					  ]
+					: []),
 			],
 		},
 		{

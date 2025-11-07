@@ -15,7 +15,6 @@ async function startTracing(page: Page) {
 		page.coverage.startJSCoverage({
 			reportAnonymousScripts: true,
 		}),
-		//page.tracing.start({ path: 'trace.json' }),
 	]);
 }
 

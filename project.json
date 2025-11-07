@@ -32,6 +32,10 @@
 				"files": ["spec/**/*"],
 				"tasks": "npm run build --prefix spec"
 			},
+			"spec-browser": {
+				"files": ["spec-browser/*"],
+				"tasks": "npm run build --prefix spec-browser"
+			},
 			"spec-runner": {
 				"files": ["spec-runner/*"],
 				"tasks": "npm run build --prefix spec-runner"

@@ -1,0 +1,10 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"outDir": "../dist/spec-browser",
+		"lib": ["dom", "es2023"]
+	},
+	"type": "module",
+	"files": ["index.ts"],
+	"references": [{ "path": "../spec-runner" }]
+}

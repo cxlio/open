@@ -1,0 +1,25 @@
+{
+	"name": "@cxl/spec-runner",
+	"version": "0.4.0",
+	"bin": {
+		"cxl-spec": "index.js"
+	},
+	"description": "A test runner CLI that supports node and browser testing, baseline updates, coverage control, virtual file server, and custom server integration, with reporting and debugging support.",
+	"license": "GPL-3.0",
+	"type": "module",
+	"scripts": {
+		"build": "node ../dist/build",
+		"test": "npm run build test"
+	},
+	"dependencies": {
+		"puppeteer": "^24.22.3",
+		"pngjs": "^6.0.0"
+	},
+	"bugs": "https://github.com/cxlio/open/issues",
+	"homepage": "https://cxlio.github.io/open/spec-runner",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/cxlio/open.git",
+		"directory": "spec-runner"
+	}
+}

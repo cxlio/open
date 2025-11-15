@@ -83,8 +83,6 @@ async function fixTsconfig({ projectPath, name }: LintData) {
 		false,
 	);
 	const oldPackage = JSON.stringify(pkg, null, '\t');
-	//const depProp = pkg.browser ? 'devDependencies' : 'dependencies';
-	//const notDepProp = pkg.browser ? 'dependencies' : 'devDependencies';
 
 	if (!tsconfig) {
 		tsconfig = {
@@ -199,10 +197,8 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 		? 'cxl-build'
 		: 'node ../dist/build';
 	const testScript = `npm run build test`;
-	const browser = pkg.exports?.['.'] ?? 'index.bundle.js';
+	const browser = 'index.bundle.js';
 
-	/*if (!(pkg.name === `${rootPkg.name}${dir}`))
-		pkg.name = `${rootPkg.name}${dir}`;*/
 	if (!pkg.scripts) pkg.scripts = {};
 	if (!pkg.scripts.test) pkg.scripts.test = testScript;
 	if (!pkg.scripts.build) pkg.scripts.build = builder;
@@ -236,7 +232,7 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 		rule(field in pkg, `Field "${field}" required in package.json`),
 	);
 
-	const browser = pkg.exports?.['.'] ?? 'index.bundle.js';
+	const browser = 'index.bundle.js';
 
 	if (pkg.scripts) {
 		const scripts = pkg.scripts;

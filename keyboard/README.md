@@ -2,7 +2,7 @@
 	
 [![npm version](https://badge.fury.io/js/%40cxl%2Fkeyboard.svg)](https://badge.fury.io/js/%40cxl%2Fkeyboard)
 
-Keyboard Handling Library
+Lightweight module for handling keyboard input on HTML elements with customizable layouts and configurable key sequence timing. Provides utilities to parse, normalize, and translate key events into standardized string representations, with support for modifier keys and platform-specific conventions.
 
 ## Project Details
 

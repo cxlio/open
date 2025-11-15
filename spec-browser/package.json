@@ -4,7 +4,7 @@
 	"description": "Browser test runner and HTML reporter for spec tests. Renders results, error stacks, and supports click-to-run test re-execution.",
 	"license": "GPL-3.0",
 	"type": "module",
-	"browser": "index.bundle.js",
+	"browser": "./index.bundle.js",
 	"scripts": {
 		"build": "node ../dist/build",
 		"test": "npm run build test"

@@ -1,4 +1,3 @@
-///<amd-module name="@cxl/keyboard"/>
 interface Key {
 	ctrlKey: boolean;
 	altKey: boolean;

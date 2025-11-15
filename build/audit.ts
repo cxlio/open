@@ -197,7 +197,7 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 		? 'cxl-build'
 		: 'node ../dist/build';
 	const testScript = `npm run build test`;
-	const browser = 'index.bundle.js';
+	const browser = './index.bundle.js';
 
 	if (!pkg.scripts) pkg.scripts = {};
 	if (!pkg.scripts.test) pkg.scripts.test = testScript;
@@ -232,7 +232,7 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 		rule(field in pkg, `Field "${field}" required in package.json`),
 	);
 
-	const browser = 'index.bundle.js';
+	const browser = './index.bundle.js';
 
 	if (pkg.scripts) {
 		const scripts = pkg.scripts;

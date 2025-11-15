@@ -5,7 +5,7 @@
 	"homepage": "https://cxlio.github.io/open/keyboard",
 	"browser": "index.bundle.js",
 	"license": "GPL-3.0",
-	"description": "Keyboard Handling Library",
+	"description": "Lightweight module for handling keyboard input on HTML elements with customizable layouts and configurable key sequence timing. Provides utilities to parse, normalize, and translate key events into standardized string representations, with support for modifier keys and platform-specific conventions.",
 	"type": "module",
 	"scripts": {
 		"build": "node ../dist/build",

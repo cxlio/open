@@ -1,10 +1,11 @@
 {
 	"private": true,
 	"name": "@cxl/",
+	"description": "Monorepo of Typescript libraries and tools.",
 	"version": "0.0.0",
 	"homepage": "https://github.com/cxlio/open/tree/main",
 	"devDependencies": {
-		"@cxl/3doc": "^1.0.0",
+		"@cxl/3doc": "file:../3doc/dist/3doc/package",
 		"@eslint/js": "^9.36.0",
 		"@types/node": "^24.0.3",
 		"@types/pngjs": "^3.4.2",
@@ -17,8 +18,7 @@
 	"type": "module",
 	"bugs": "https://github.com/cxlio/open/issues",
 	"scripts": {
-		"build": "./scripts/build.sh audit package docs",
-		"test": "./scripts/build.sh test"
+		"build": "npm run build --prefix build && node ./dist/build/index.js"
 	},
 	"repository": {
 		"type": "git",

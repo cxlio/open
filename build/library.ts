@@ -170,7 +170,6 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 								summary: true,
 								markdown: true,
 								cxlExtensions: true,
-								debug: true,
 								outputDir: `../docs/${appId}`,
 							},
 							file => {

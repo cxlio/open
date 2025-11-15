@@ -5,7 +5,14 @@ export { Package } from './npm.js';
 export { buildLibrary } from './library.js';
 export { Task, build, exec, shell } from './builder.js';
 
+import { existsSync } from 'fs';
+
 if (import.meta.main) {
-	const { buildLibrary } = await import('./library.js');
-	await buildLibrary();
+	if (existsSync('./project.json')) {
+		const { buildRoot } = await import('./root.js');
+		await buildRoot();
+	} else {
+		const { buildLibrary } = await import('./library.js');
+		await buildLibrary();
+	}
 }

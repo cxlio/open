@@ -67,10 +67,11 @@ async function renderPackage(dir: string) {
 	const version = latestVersion
 		? `[${latestVersion}](${npmLink(pkg.name, latestVersion)})`
 		: `${pkg.version}`;
+	const homepage = pkg.homepage
+		? new URL(pkg.version, pkg.homepage + '/').href
+		: '';
 
 	return `| ${pkg.name.padEnd(20)} | ${version} | ${pkg.license.padEnd(
 		10,
-	)} | ${pkg.description} | ${
-		pkg.homepage ? `[Docs](${path.join(pkg.homepage, pkg.version)}/)` : ''
-	} |\n`;
+	)} | ${pkg.description} | ${homepage ? `[Docs](${homepage}/)` : ''} |\n`;
 }

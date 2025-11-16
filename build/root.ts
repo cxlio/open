@@ -71,6 +71,6 @@ async function renderPackage(dir: string) {
 	return `| ${pkg.name.padEnd(20)} | ${version} | ${pkg.license.padEnd(
 		10,
 	)} | ${pkg.description} | ${
-		pkg.homepage ? `[Docs](${pkg.homepage}/${pkg.version}/)` : ''
+		pkg.homepage ? `[Docs](${path.join(pkg.homepage, pkg.version)}/)` : ''
 	} |\n`;
 }

@@ -3,7 +3,7 @@
 	"name": "@cxl/",
 	"description": "Monorepo of Typescript libraries and tools.",
 	"version": "0.0.0",
-	"homepage": "https://github.com/cxlio/open/tree/main",
+	"homepage": "https://cxlio.github.io/docs/",
 	"devDependencies": {
 		"@cxl/3doc": "file:../3doc/dist/3doc/package",
 		"@eslint/js": "^9.36.0",

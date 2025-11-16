@@ -198,11 +198,12 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 		: 'node ../dist/build';
 	const testScript = `npm run build test`;
 	const browser = './index.bundle.js';
+	const homepage = path.join(rootPkg.homepage, name);
 
 	if (!pkg.scripts) pkg.scripts = {};
 	if (!pkg.scripts.test) pkg.scripts.test = testScript;
 	if (!pkg.scripts.build) pkg.scripts.build = builder;
-	if (!pkg.homepage) pkg.homepage = `${rootPkg.homepage}/${name}`;
+	if (!pkg.homepage || pkg.homepage !== homepage) pkg.homepage = homepage;
 
 	if (!pkg.license) pkg.license = 'GPL-3.0';
 	if (!pkg.bugs || pkg.bugs !== rootPkg.bugs)
@@ -263,6 +264,10 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 		rule(
 			!!pkg.browser || !pkg.devDependencies,
 			`Package should not have devDependencies.`,
+		),
+		rule(
+			pkg.homepage === path.join(rootPkg.homepage, name),
+			'Package should inherit homepage field from root package.json',
 		),
 		rule(
 			!pkg.browser || !pkg.dependencies,

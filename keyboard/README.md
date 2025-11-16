@@ -8,7 +8,7 @@ Lightweight module for handling keyboard input on HTML elements with customizabl
 
 -   Branch Version: [1.1.0](https://npmjs.com/package/@cxl/keyboard/v/1.1.0)
 -   License: GPL-3.0
--   Documentation: [Link](https://cxlio.github.io/open/keyboard)
+-   Documentation: [Link](https:/cxlio.github.io/docs/keyboard)
 -   Report Issues: [Github](https://github.com/cxlio/open/issues)
 
 ## Installation

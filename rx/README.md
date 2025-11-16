@@ -8,7 +8,7 @@ A lightweight reactive programming library focused on usability, performance, an
 
 -   Branch Version: [1.0.0](https://npmjs.com/package/@cxl/rx/v/1.0.0)
 -   License: Apache-2.0
--   Documentation: [Link](https://cxlio.github.io/open/rx)
+-   Documentation: [Link](https:/cxlio.github.io/docs/rx)
 -   Report Issues: [Github](https://github.com/cxlio/open/issues)
 
 ## Installation

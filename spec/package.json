@@ -9,7 +9,7 @@
 		"test": "npm run build test"
 	},
 	"bugs": "https://github.com/cxlio/open/issues",
-	"homepage": "https://cxlio.github.io/open/spec",
+	"homepage": "https:/cxlio.github.io/docs/spec",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/cxlio/open.git",

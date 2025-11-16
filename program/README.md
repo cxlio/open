@@ -8,7 +8,7 @@ Utility module providing command-line parameter parsing, colorized console outpu
 
 -   Branch Version: [1.0.0](https://npmjs.com/package/@cxl/program/v/1.0.0)
 -   License: GPL-3.0
--   Documentation: [Link](https://cxlio.github.io/open/program)
+-   Documentation: [Link](https:/cxlio.github.io/docs/program)
 -   Report Issues: [Github](https://github.com/cxlio/open/issues)
 
 ## Installation

@@ -8,7 +8,7 @@ Lightweight, efficient tool for extracting files from gzip-compressed tarballs.
 
 -   Branch Version: [0.1.0](https://npmjs.com/package/@cxl/tgz/v/0.1.0)
 -   License: GPL-3.0
--   Documentation: [Link](https://github.com/cxlio/open/tgz)
+-   Documentation: [Link](https:/cxlio.github.io/docs/tgz)
 -   Report Issues: [Github](https://github.com/cxlio/open/issues)
 
 ## Installation

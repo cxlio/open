@@ -34,6 +34,10 @@ function getDependencies(rootPkg: Package, pkgJson: Package) {
 
 function generateImportMap(rootPkg: Package, pkgJson: Package) {
 	const map = getDependencies(rootPkg, pkgJson);
+	for (const key in map) {
+		map[`${key}/`] = `/${key}/`;
+	}
+
 	return JSON.stringify({ imports: map });
 }
 
@@ -159,7 +163,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 		},
 		{
 			target: 'docs',
-			outputDir: `../docs/${appId}`,
+			outputDir: `../docs/${pkgJson.name}`,
 			tasks: [
 				observable(subs => {
 					import('@cxl/3doc/render.js').then(({ buildDocs }) =>
@@ -170,7 +174,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 								summary: true,
 								markdown: true,
 								cxlExtensions: true,
-								outputDir: `../docs/${appId}`,
+								outputDir: `../docs/${pkgJson.name}`,
 							},
 							file => {
 								subs.next({

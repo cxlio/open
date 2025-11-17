@@ -23,5 +23,6 @@
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/cxlio/open.git"
-	}
+	},
+	"docs": "https://cxlio.github.io/docs"
 }

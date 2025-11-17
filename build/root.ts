@@ -2,16 +2,17 @@ import fs from 'fs/promises';
 import path from 'path';
 
 import { sh } from '../program/index.js';
-import { getLatestVersion, readPackage } from './npm.js';
+import { Package, getLatestVersion, readPackage } from './npm.js';
 
 export async function buildRoot() {
 	const dirs = await fs.readdir('.');
 	const result = [];
+	const pkg = await readPackage('./package.json');
+
 	for (const dir of dirs) {
-		result.push(await renderPackage(dir));
+		result.push(await renderPackage(dir, pkg));
 	}
 
-	const pkg = await readPackage('./package.json');
 	const content = `${pkg.description}
 
 ## Packages
@@ -55,7 +56,7 @@ function npmLink(pkgName: string, version: string) {
 	return `https://npmjs.com/package/${pkgName}/v/${version}`;
 }
 
-async function renderPackage(dir: string) {
+async function renderPackage(dir: string, rootPkg: Package) {
 	const pkg = await readPkg(dir);
 	if (!pkg) return '';
 
@@ -63,12 +64,14 @@ async function renderPackage(dir: string) {
 
 	await sh(`npm run build audit test package docs --prefix ${dir}`);
 
-	const latestVersion = await getLatestVersion(pkg.name).catch(() => '');
+	const latestVersion =
+		(await getLatestVersion(pkg.name, 'beta').catch(() => '')) ||
+		(await getLatestVersion(pkg.name).catch(() => ''));
 	const version = latestVersion
 		? `[${latestVersion}](${npmLink(pkg.name, latestVersion)})`
 		: `${pkg.version}`;
-	const homepage = pkg.homepage
-		? new URL(pkg.version, pkg.homepage + '/').href
+	const homepage = rootPkg.docs
+		? new URL(`${pkg.name}/${pkg.version}`, rootPkg.docs + '/').href
 		: '';
 
 	return `| ${pkg.name.padEnd(20)} | ${version} | ${pkg.license.padEnd(

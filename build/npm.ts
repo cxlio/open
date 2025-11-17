@@ -36,7 +36,7 @@ export interface Package {
 	exports?: Record<string, string>;
 	bundledDependencies: Dependencies;
 
-	tsgo?: boolean;
+	docs?: string;
 }
 
 export interface PackageInfo extends Package {

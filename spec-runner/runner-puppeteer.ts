@@ -3,6 +3,7 @@ import * as puppeteer from 'puppeteer';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { resolve, relative, join, extname } from 'path';
 import { createRequire } from 'module';
+import { resolveImport } from './resolve.js';
 
 import type { FigureData, RunnerCommand, Test, Result } from '../spec/index.js';
 import type { SpecRunner } from './index.js';
@@ -138,12 +139,16 @@ async function createPage(
 function virtualFileServer(page: Page, app: SpecRunner) {
 	const cwd = app.vfsRoot ? resolve(app.vfsRoot) : process.cwd();
 	const require = createRequire(cwd + '/');
-
 	function findRequestPath(path: string) {
 		try {
-			const result = require.resolve(path.slice(1));
-			if (result) return relative(cwd, result);
+			const mod = path.slice(1);
+			const result =
+				resolveImport(mod, `${cwd}/`) || require.resolve(path.slice(1));
+			if (result) {
+				return relative(cwd, result);
+			}
 		} catch (e) {
+			//console.log(e);
 			/* ignore */
 		}
 		return path;

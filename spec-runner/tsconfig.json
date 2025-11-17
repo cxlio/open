@@ -11,7 +11,8 @@
 		"runner.ts",
 		"runner-node.ts",
 		"runner-puppeteer.ts",
-		"report-stdout.ts"
+		"report-stdout.ts",
+		"resolve.ts"
 	],
 	"references": [
 		{ "path": "../rx" },

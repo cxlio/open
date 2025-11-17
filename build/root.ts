@@ -70,11 +70,13 @@ async function renderPackage(dir: string, rootPkg: Package) {
 	const version = latestVersion
 		? `[${latestVersion}](${npmLink(pkg.name, latestVersion)})`
 		: `${pkg.version}`;
-	const homepage = rootPkg.docs
-		? new URL(`${pkg.name}/${pkg.version}`, rootPkg.docs + '/').href
-		: '';
+	const homepage =
+		pkg.docs ??
+		(rootPkg.docs
+			? new URL(`${pkg.name}/${pkg.version}/`, rootPkg.docs + '/').href
+			: '');
 
 	return `| ${pkg.name.padEnd(20)} | ${version} | ${pkg.license.padEnd(
 		10,
-	)} | ${pkg.description} | ${homepage ? `[Docs](${homepage}/)` : ''} |\n`;
+	)} | ${pkg.description} | ${homepage ? `[Docs](${homepage})` : ''} |\n`;
 }

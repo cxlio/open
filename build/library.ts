@@ -150,6 +150,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 							log: console.log.bind(console),
 						});
 						printReportV2(report);
+						if (!report.success) throw new Error('Tests failed');
 					} finally {
 						process.chdir(cwd);
 					}

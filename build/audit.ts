@@ -222,6 +222,7 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 			directory: name,
 		};
 	}
+	pkg.type = 'module';
 
 	if (pkg.scripts.test !== testScript) pkg.scripts.test = testScript;
 
@@ -301,6 +302,7 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 			typeof pkg.repository !== 'string',
 			'"repository" must be an object',
 		),
+		rule(pkg.type === 'module', 'Package "type" must be "module".'),
 	);
 
 	return {

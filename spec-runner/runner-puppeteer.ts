@@ -2,7 +2,7 @@ import { Browser, CoverageEntry, Page, HTTPRequest } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { resolve, relative, join, extname } from 'path';
-import { createRequire } from 'module';
+//import { createRequire } from 'module';
 import { resolveImport } from './resolve.js';
 
 import type { FigureData, RunnerCommand, Test, Result } from '../spec/index.js';
@@ -138,17 +138,17 @@ async function createPage(
 
 function virtualFileServer(page: Page, app: SpecRunner) {
 	const cwd = app.vfsRoot ? resolve(app.vfsRoot) : process.cwd();
-	const require = createRequire(cwd + '/');
+	//const require = createRequire(cwd + '/');
 	function findRequestPath(path: string) {
 		try {
 			const mod = path.slice(1);
-			const result =
-				resolveImport(mod, `${cwd}/`) || require.resolve(path.slice(1));
+			const result = resolveImport(mod, `${cwd}/`); // || require.resolve(path.slice(1));
+			console.log(`Resolved: ${mod} -> ${result || path}`);
 			if (result) {
 				return relative(cwd, result);
 			}
 		} catch (e) {
-			//console.log(e);
+			console.log(e);
 			/* ignore */
 		}
 		return path;
@@ -392,6 +392,7 @@ export default async function runPuppeteer(app: SpecRunner) {
 		'--hide-scrollbars', // makes scrollbars not appear in screenshots
 		'--blink-settings=imagesEnabled=true', // ensure images always render
 		'--enable-font-antialiasing',
+		'--ignore-certificate-errors',
 		'--disable-features=Translate,BackForwardCache,ColorPicker,SharedArrayBuffer,InterestCohort,NotificationIndicator,Prerender2',
 		'--disable-background-timer-throttling',
 		'--disable-backgrounding-occluded-windows',

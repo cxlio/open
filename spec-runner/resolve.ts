@@ -2,7 +2,11 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 export function resolveImport(specifier: string, baseDir: string) {
-	const [pkg, ...rest] = specifier.split('/');
+	const match = specifier.split('/');
+	const isNs = match[0].startsWith('@');
+	const pkg = isNs ? `${match[0]}/${match[1]}` : match[0];
+	const rest = match.slice(isNs ? 2 : 1);
+
 	const sub = rest.length ? './' + rest.join('/') : '.';
 
 	const pkgDir = join(baseDir, 'node_modules', pkg);
@@ -16,7 +20,13 @@ export function resolveImport(specifier: string, baseDir: string) {
 	}
 
 	const exportsMap = pkgJson.exports;
-	if (!exportsMap) return;
+	if (!exportsMap) {
+		if (sub === '.') {
+			const entry = pkgJson.module || pkgJson.main || 'index.js';
+			return join(pkgDir, entry);
+		}
+		return join(pkgDir, sub);
+	}
 
 	// direct string export (only allowed for ".")
 	if (typeof exportsMap === 'string') {

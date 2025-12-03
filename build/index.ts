@@ -3,7 +3,19 @@ export { basename, file, files, concatFile, copyDir, zip } from './file.js';
 export { pkg, readme, esbuild } from './package.js';
 export { Package } from './npm.js';
 export { buildLibrary } from './library.js';
-export { Task, build, exec, shell } from './builder.js';
+export {
+	BuildConfiguration,
+	Output,
+	Task,
+	build,
+	exec,
+	shell,
+} from './builder.js';
+
+export * from './git.js';
+export * from './lint.js';
+export { tsconfig } from './tsc.js';
+export { buildDocs } from './docs.js';
 
 import { existsSync } from 'fs';
 

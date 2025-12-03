@@ -1,7 +1,7 @@
 import { basename, join } from 'path';
 import { readFileSync } from 'fs';
 
-import { EMPTY, fromAsync, observable, of } from '../rx/index.js';
+import { EMPTY, fromAsync, of } from '../rx/index.js';
 import { run as runSpec } from '../spec-runner/runner.js';
 import printReportV2 from '../spec-runner/report-stdout.js';
 
@@ -10,6 +10,7 @@ import { pkg, readme, esbuild } from './package.js';
 import { copyDir, file } from './file.js';
 import { eslint } from './lint.js';
 import { tsconfig } from './tsc.js';
+import { buildDocs } from './docs.js';
 import audit from './audit.js';
 
 import { Package, publishNpm } from './npm.js';
@@ -166,25 +167,8 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			target: 'docs',
 			outputDir: `../docs/${pkgJson.name}`,
 			tasks: [
-				observable(subs => {
-					import('@cxl/3doc/render.js').then(({ buildDocs }) =>
-						buildDocs(
-							{
-								$: [],
-								clean: true,
-								summary: true,
-								markdown: true,
-								cxlExtensions: true,
-								outputDir: `../docs/${pkgJson.name}`,
-							},
-							file => {
-								subs.next({
-									path: file.name,
-									source: Buffer.from(file.content),
-								});
-							},
-						).then(() => subs.complete()),
-					);
+				buildDocs({
+					outputDir: `../docs/${pkgJson.name}`,
 				}),
 			],
 		},

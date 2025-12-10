@@ -9,11 +9,12 @@ import { BuildConfiguration, build, exec } from './builder.js';
 import { pkg, readme, esbuild } from './package.js';
 import { copyDir, file } from './file.js';
 import { eslint } from './lint.js';
-import { tsconfig } from './tsc.js';
+import { tsconfig, parseTsConfig } from './tsc.js';
 import { buildDocs } from './docs.js';
 import audit from './audit.js';
 
 import { Package, publishNpm } from './npm.js';
+import type { ParsedCommandLine } from 'typescript';
 
 let browserRunner: string;
 
@@ -33,12 +34,35 @@ function getDependencies(rootPkg: Package, pkgJson: Package) {
 	return map;
 }
 
-function generateImportMap(rootPkg: Package, pkgJson: Package) {
+function generateImportMap(
+	rootPkg: Package & { importmap?: Record<string, string> },
+	pkgJson: Package,
+	_tsc: ParsedCommandLine,
+) {
 	const map = getDependencies(rootPkg, pkgJson);
 	for (const key in map) {
 		map[`${key}/`] = `/${key}/`;
 	}
 
+	if (rootPkg.importmap) Object.assign(map, rootPkg.importmap);
+	//const basePath = (tsc.options.pathsBasePath as string) ?? '';
+	/*const cwd = join(process.cwd(), '..');
+	const basePath = join(process.cwd(), '../..');
+	for (const [path, value] of Object.entries(tsc.options.paths ?? {})) {
+		const mapPath = path.endsWith('*')
+			? path.slice(0, path.length - 1)
+			: path;
+		const dest = 
+			value[0].endsWith('*')
+				? value[0].slice(0, value[0].length - 1)
+				: value[0];
+		map[mapPath] = join(
+			cwd,
+			dest
+		).slice(basePath.length);
+	}
+
+	console.log(cwd, map);*/
 	return JSON.stringify({ imports: map });
 }
 
@@ -91,8 +115,9 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 		pkgJson.browser === './index.bundle.js' && pkgJson.exports;
 
 	// "main" is used mainly by CDNs, bundlers will prefer to use the "exports" config.
-	const pkgMain =
-		pkgJson.browser ?? pkgJson.exports?.['.'] ?? './index.bundle.js';
+	const pkgMain = isBrowser
+		? pkgJson.browser ?? pkgJson.exports?.['.'] ?? './index.bundle.js'
+		: './index.js';
 	const external = [
 		...Object.keys(pkgJson.dependencies ?? {}),
 		...Object.keys(pkgJson.peerDependencies ?? {}),
@@ -100,7 +125,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 
 	const bundleEntryPoint = [
 		{
-			out: 'index.bundle',
+			out: isBrowser ? 'index.bundle' : 'index',
 			in: join(outputDir, 'index.js'),
 		},
 	];
@@ -109,6 +134,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				return val ? [join(outputDir, val)] : [];
 		  })
 		: bundleEntryPoint;
+	const parsedTsconfig = parseTsConfig(join(cwd, 'tsconfig.json'));
 
 	return build(
 		{
@@ -145,7 +171,11 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 							vfsRoot: '../..',
 							entryFile: './test.js',
 							importmap: isBrowser
-								? generateImportMap(rootPkg, pkgJson)
+								? generateImportMap(
+										rootPkg,
+										pkgJson,
+										parsedTsconfig,
+								  )
 								: undefined,
 							sources: new Map(),
 							log: console.log.bind(console),

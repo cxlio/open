@@ -1,4 +1,4 @@
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
 import * as inspector from 'inspector';
 
 import type { Test, JsonResult } from '../spec/index.js';
@@ -17,6 +17,7 @@ function post(session: inspector.Session, msg: string, params = {}) {
 async function recordCoverage(
 	session: inspector.Session,
 	cb: () => Promise<JsonResult>,
+	rootPath: string,
 ) {
 	await post(session, 'Profiler.enable');
 	await post(session, 'Profiler.startPreciseCoverage', { detailed: true });
@@ -24,8 +25,17 @@ async function recordCoverage(
 	const coverage = await post(session, 'Profiler.takePreciseCoverage');
 	await post(session, 'Profiler.stopPreciseCoverage');
 	await post(session, 'Profiler.disable');
+
 	return {
-		coverage: (coverage as { result: Coverage }).result,
+		coverage: (coverage as { result: Coverage }).result.flatMap(n => {
+			if (!n.url || n.url.startsWith('node:')) return [];
+			if (n.url.startsWith('file:///')) {
+				const rel = n.url.slice(7);
+				if (!rel.startsWith(rootPath)) return [];
+				n.url = rel.slice(rootPath.length + 1);
+			}
+			return [n];
+		}),
 		result,
 	};
 }
@@ -54,7 +64,11 @@ export default async function runNode(app: SpecRunner) {
 		const suite = await runSuite();
 		return generateReport(suite);
 	} else {
-		const { result, coverage } = await recordCoverage(session, runSuite);
+		const { result, coverage } = await recordCoverage(
+			session,
+			runSuite,
+			dirname(suitePath),
+		);
 		if (process.argv.includes('--inspect')) {
 			console.log('Press any key to continue');
 			await new Promise(res => process.stdin.once('data', res));

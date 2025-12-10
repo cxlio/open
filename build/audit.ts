@@ -211,8 +211,6 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 	if (!pkg.bugs || pkg.bugs !== rootPkg.bugs)
 		pkg.bugs = rootPkg.bugs || BugsUrl;
 	if (!pkg.browser && pkg.devDependencies) delete pkg.devDependencies;
-	if (pkg.browser && pkg.dependencies) delete pkg.dependencies;
-	if (pkg.peerDependencies) delete pkg.peerDependencies;
 	if (pkg.browser) pkg.browser = browser;
 	if (!pkg.repository && rootPkg.repository) {
 		if (typeof rootPkg.repository === 'string')
@@ -276,14 +274,6 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 			!!rootPkg.homepage &&
 				pkg.homepage === path.join(rootPkg.homepage, name),
 			'Package should inherit homepage field from root package.json',
-		),
-		rule(
-			!pkg.browser || !pkg.dependencies,
-			`Browser package should only have devDependencies.`,
-		),
-		rule(
-			!pkg.peerDependencies,
-			`Package should not have peerDependencies.`,
 		),
 		rule(
 			!pkg.browser || pkg.browser === browser,

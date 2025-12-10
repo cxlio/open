@@ -105,6 +105,13 @@ export function getSourceMap(out: Output): Output | undefined {
 	if (path) return { path: pathBasename(path), source: readFileSync(path) };
 }
 
-export function zip(src: string[], path: string): Observable<Output> {
-	return shell(`zip - ${src.join(' ')}`).map(source => ({ path, source }));
+export function zip(
+	src: string[],
+	path: string,
+	cwd?: string,
+): Observable<Output> {
+	return shell(`zip - ${src.join(' ')}`, { cwd }).map(source => ({
+		path,
+		source,
+	}));
 }

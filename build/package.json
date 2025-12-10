@@ -2,7 +2,7 @@
 	"name": "@cxl/build",
 	"version": "1.0.0-beta.6",
 	"bin": {
-		"cxl-build": "index.bundle.js"
+		"cxl-build": "index.js"
 	},
 	"description": "A flexible build system that executes configurable build tasks producing output files, with logging and shell command support.",
 	"license": "GPL-3.0",

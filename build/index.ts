@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 export { basename, file, files, concatFile, copyDir, zip } from './file.js';
-export { pkg, readme, esbuild } from './package.js';
+export { pkg, readme, esbuild, readPackage } from './package.js';
 export { Package } from './npm.js';
 export { buildLibrary } from './library.js';
 export {

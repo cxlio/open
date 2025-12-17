@@ -42,7 +42,10 @@ export function esbuild(options: esbuildApi.BuildOptions) {
 				},
 				...options,
 			})
-			.then(() => subs.complete());
+			.then(
+				() => subs.complete(),
+				e => subs.error(e),
+			);
 	});
 }
 
@@ -51,7 +54,7 @@ export function readPackage(base: string = BASEDIR): Package {
 
 	if (!existsSync(pkg)) throw new Error(`"${pkg}" not found`);
 
-	const PACKAGE = JSON.parse(readFileSync(pkg, 'utf8'));
+	const PACKAGE = JSON.parse(readFileSync(pkg, 'utf8')) as Package;
 	verifyFields(['name', 'version', 'description'], PACKAGE, pkg);
 	if (!PACKAGE.private) verifyFields(['license'], PACKAGE, pkg);
 	return PACKAGE;
@@ -67,7 +70,7 @@ function packageJson(p: Package, main?: string) {
 					description: p.description,
 					private: p.private,
 					license: p.license,
-					files: p.files || [
+					files: p.files ?? [
 						'*.js',
 						'*.d.ts',
 						'*.css',

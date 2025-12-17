@@ -2039,10 +2039,10 @@ const htmlElms = {
 
 function isValidRoleAttribute(
 	role: RoleMeta,
-	name: AriaAttributeName
+	name: AriaAttributeName,
 ): boolean {
 	const superClass = role.superclassRole?.find(r =>
-		isValidRoleAttribute(ariaRoles[r], name)
+		isValidRoleAttribute(ariaRoles[r], name),
 	);
 	return !!(
 		superClass ||
@@ -2086,10 +2086,10 @@ function getNodeLabel(node: Element, role?: RoleMeta) {
 export function testAccessibility(
 	node: Element,
 	root: Element | ShadowRoot = node,
-	result: Result[] = []
+	result: Result[] = [],
 ) {
-	const roleName = node.getAttribute('role') as RoleName;
-	const role: RoleMeta = ariaRoles[roleName];
+	const roleName = node.getAttribute('role') as RoleName | null;
+	const role: RoleMeta | null = roleName && ariaRoles[roleName];
 
 	function ok(success: boolean, message: string) {
 		if (!success) message += `\nNode: ${node.outerHTML}`;
@@ -2115,7 +2115,7 @@ export function testAccessibility(
 			for (const attr of role.requiredAttrs)
 				ok(
 					node.hasAttribute(attr),
-					`Element must have required attribute "${attr}"`
+					`Element must have required attribute "${attr}"`,
 				);
 	}
 
@@ -2125,7 +2125,7 @@ export function testAccessibility(
 		const isNative = node.tagName.toLowerCase() in htmlElms;
 
 		function validateAriaAttribute(name: AriaAttributeName, value: string) {
-			const attr = ariaAttrs[name] as AttributeMeta;
+			const attr = ariaAttrs[name] as AttributeMeta | undefined;
 
 			ok(!!attr, `"${name}" must be a valid aria attribute`);
 			if (!attr) return;
@@ -2133,13 +2133,13 @@ export function testAccessibility(
 			if (attr.values)
 				ok(
 					attr.values.includes(value),
-					`"${value}" must be a valid attribute value for "${name}"`
+					`"${value}" must be a valid attribute value for "${name}"`,
 				);
 
 			if (role) {
 				ok(
 					attr.global || isValidRoleAttribute(role, name),
-					`Element role must support attribute "${name}"`
+					`Element role must support attribute "${name}"`,
 				);
 			}
 
@@ -2154,7 +2154,7 @@ export function testAccessibility(
 		if (!isNative && notGlobalCount)
 			ok(
 				!!role,
-				`Custom elements must have a role set if they use aria attributes`
+				`Custom elements must have a role set if they use aria attributes`,
 			);
 	}
 

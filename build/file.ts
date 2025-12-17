@@ -7,6 +7,7 @@ import {
 	reduce,
 	tap,
 	filter,
+	fromAsync,
 } from '../rx/index.js';
 
 import { promises as fs, readFileSync } from 'fs';
@@ -18,10 +19,14 @@ import { Output, exec, shell } from './builder.js';
  * directory. Useful for streaming file paths for further processing.
  */
 export function ls(dir: string) {
-	return new Observable<string>(async subs => {
-		const files = await fs.readdir(dir);
-		for (const path of files) subs.next(resolve(dir, path));
-		subs.complete();
+	return new Observable<string>(subs => {
+		fs.readdir(dir).then(
+			files => {
+				for (const path of files) subs.next(resolve(dir, path));
+				subs.complete();
+			},
+			e => subs.error(e),
+		);
 	});
 }
 
@@ -80,12 +85,16 @@ export function files(sources: string[]) {
 	});
 }
 
-export function matchStat(fromPath: string, toPath: string) {
+export function older(fromPath: string, toPath: string) {
 	return Promise.all([fs.stat(fromPath), fs.stat(toPath)]).then(
 		([fromStat, toStat]) =>
-			fromStat.mtime.getTime() === toStat.mtime.getTime(),
+			fromStat.mtime.getTime() > toStat.mtime.getTime(),
 		() => true,
 	);
+}
+
+export function ifOlder(fromPath: string, toPath: string) {
+	return fromAsync(() => older(fromPath, toPath)).filter(v => v);
 }
 
 /**
@@ -100,7 +109,7 @@ export function copyDir(fromPath: string, toPath: string, glob = '') {
 export function getSourceMap(out: Output): Output | undefined {
 	const source = out.source.toString();
 	const match = /\/\/# sourceMappingURL=(.+)/.exec(source);
-	const path = match ? resolve(dirname(out.path), match?.[1]) : null;
+	const path = match?.[1] ? resolve(dirname(out.path), match[1]) : null;
 
 	if (path) return { path: pathBasename(path), source: readFileSync(path) };
 }

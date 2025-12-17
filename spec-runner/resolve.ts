@@ -3,8 +3,8 @@ import { join } from 'path';
 
 export function resolveImport(specifier: string, baseDir: string) {
 	const match = specifier.split('/');
-	const isNs = match[0].startsWith('@');
-	const pkg = isNs ? `${match[0]}/${match[1]}` : match[0];
+	const isNs = match[0]?.startsWith('@');
+	const pkg = isNs ? `${match[0]}/${match[1]}` : match[0] ?? '';
 	const rest = match.slice(isNs ? 2 : 1);
 
 	const sub = rest.length ? './' + rest.join('/') : '.';

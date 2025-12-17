@@ -79,7 +79,7 @@ export function Subscriber<T>(
 		get closed() {
 			return closed;
 		},
-		signal: cancel(),
+		signal: new Signal(),
 		next(val: T) {
 			if (closed) return;
 			try {
@@ -122,10 +122,7 @@ export function Subscriber<T>(
 	}
 
 	try {
-		const r = subscribe?.(result);
-		if (r) {
-			throw new Error('Unsubscribe function result is deprectaed');
-		}
+		subscribe?.(result);
 	} catch (e) {
 		error(e);
 	}
@@ -230,7 +227,7 @@ export class Observable<T, P = 'none'> {
  */
 export class Subject<T, ErrorT = unknown> extends Observable<T> {
 	closed = false;
-	signal = cancel();
+	signal = new Signal();
 
 	protected observers = new Set<Subscriber<T>>();
 
@@ -295,14 +292,14 @@ export class Subject<T, ErrorT = unknown> extends Observable<T> {
 }
 
 /**
- * `CancelSignal` is a specialized `Observable` that signals cancellation to its subscribers.
+ * A specialized `Observable` that emits only once to its subscribers.
  *
  * - Subscribers are notified when the signal is triggered via the `next` method.
  * - Once triggered, it completes all current and future subscribers immediately.
  * - Subscriptions to this signal will only emit once if the signal is already closed.
  *
  */
-export class CancelSignal extends Observable<void> {
+export class Signal extends Observable<void> {
 	closed = false;
 	protected observers = new Set<Subscriber<void>>();
 
@@ -441,9 +438,6 @@ export class EmptyError extends Error {
 	message = 'No elements in sequence';
 }
 
-export function cancel() {
-	return new CancelSignal();
-}
 /**
  * Creates an output Observable which sequentially emits all values from given Observable and then moves on to the next.
  */
@@ -452,7 +446,7 @@ export function concat<R extends Observable<unknown>[]>(
 ): CombineResult<R> {
 	return new Observable(subscriber => {
 		let index = 0;
-		let innerSignal: CancelSignal;
+		let innerSignal: Signal | undefined;
 
 		function onComplete() {
 			const next = observables[index++];
@@ -462,7 +456,7 @@ export function concat<R extends Observable<unknown>[]>(
 					next: subscriber.next,
 					error: subscriber.error,
 					complete: onComplete,
-					signal: (innerSignal = cancel()),
+					signal: (innerSignal = new Signal()),
 				});
 			} else subscriber.complete();
 		}
@@ -598,6 +592,17 @@ export function map<T, T2>(mapFn: (val: T) => T2) {
 	);
 }
 
+export function select<T, T2>(mapFn: (val: T) => T2) {
+	let lastValue: T2 | typeof Undefined = Undefined;
+	return operatorNext<T, T2>(subscriber => (val: T) => {
+		const result = mapFn(val);
+		if (result !== lastValue) {
+			lastValue = result;
+			subscriber.next(result);
+		}
+	});
+}
+
 /**
  * Applies an accumulator function over the source Observable, and returns the accumulated result when the source completes, given an optional seed value.
  */
@@ -630,6 +635,7 @@ export function reduce<T, T2>(
  *
  * The returned function has a `cancel` method that can be called to manually clear any pending debounce timer.
  */
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 export function debounceFunction<F extends (...args: any) => any>(
 	fn: F,
 	delay?: number,
@@ -719,14 +725,14 @@ export function switchMap<T, T2>(project: (val: T) => Observable<T2>) {
 		observable<T2>(subscriber => {
 			let hasSubscription = false;
 			let completed = false;
-			let signal: CancelSignal;
+			let signal: Signal | undefined;
 
 			const cleanUp = () => {
 				signal?.next();
 				hasSubscription = false;
 				if (completed) subscriber.complete();
 			};
-			const outerSignal = cancel();
+			const outerSignal = new Signal();
 
 			subscriber.signal.subscribe(() => {
 				cleanUp();
@@ -736,7 +742,7 @@ export function switchMap<T, T2>(project: (val: T) => Observable<T2>) {
 			source.subscribe({
 				next(val: T) {
 					cleanUp();
-					signal = cancel();
+					signal = new Signal();
 					hasSubscription = true;
 					project(val).subscribe({
 						next: subscriber.next,
@@ -868,7 +874,7 @@ export function first<T>() {
  * Perform a side effect for every emission on the source Observable,
  * but return an Observable that is identical to the source.
  */
-export function tap<T>(fn: (val: T) => void): Operator<T, T> {
+export function tap<T>(fn: (val: T) => unknown): Operator<T, T> {
 	return operatorNext<T, T>((subscriber: Subscriber<T>) => (val: T) => {
 		fn(val);
 		subscriber.next(val);
@@ -887,7 +893,7 @@ export function catchError<T, O extends T | never>(
 	selector: (err: unknown, source: Observable<T>) => Observable<O> | void,
 ): Operator<T, T> {
 	return operator<T, T>((subscriber, source) => {
-		let signal: CancelSignal;
+		let signal: Signal | undefined;
 		const observer = {
 			next: subscriber.next,
 			error(err: unknown) {
@@ -896,7 +902,7 @@ export function catchError<T, O extends T | never>(
 					const result = selector(err, source);
 					if (result) {
 						signal?.next();
-						signal = cancel();
+						signal = new Signal();
 						result.subscribe({ ...observer, signal });
 					}
 				} catch (err2) {
@@ -971,7 +977,7 @@ export function share<T>(): Operator<T, T> {
 		let subscriptionCount = 0;
 
 		function complete() {
-			if (--subscriptionCount === 0) subject?.signal.next();
+			if (--subscriptionCount === 0) subject.signal.next();
 		}
 
 		return observable<T>(subs => {
@@ -991,7 +997,7 @@ export function share<T>(): Operator<T, T> {
 export function publishLast<T>(): Operator<T, T> {
 	return (source: Observable<T>) => {
 		const subject = new Subject<T>();
-		let sourceSubscription: Subscription;
+		let sourceSubscription: Subscription | undefined;
 		let lastValue: T;
 		let hasEmitted = false;
 		let ready = false;
@@ -1051,17 +1057,19 @@ export function zip<T extends Observable<unknown>[]>(
 	return observables.length === 0
 		? EMPTY
 		: (new Observable<unknown>(subs => {
-				const buffer: unknown[][] = new Array(observables.length);
+				const buffer: (unknown[] | undefined)[] = new Array(
+					observables.length,
+				);
 
 				function flush() {
 					let hasNext = true;
 					while (hasNext) {
 						for (const bucket of buffer) {
-							if (bucket?.[0] === Terminator)
-								return subs.complete();
 							if (!bucket || bucket.length === 0) hasNext = false;
+							else if (bucket[0] === Terminator)
+								return subs.complete();
 						}
-						if (hasNext) subs.next(buffer.map(b => b.shift()));
+						if (hasNext) subs.next(buffer.map(b => b?.shift()));
 					}
 				}
 				observables.forEach((o, id) => {
@@ -1188,6 +1196,7 @@ export const operators = {
 	mergeMap,
 	publishLast,
 	reduce,
+	select,
 	share,
 	shareLatest,
 	switchMap,
@@ -1198,12 +1207,13 @@ export const operators = {
 } as const;
 
 for (const p in operators) {
-	/*eslint @typescript-eslint/no-explicit-any: off */
 	Observable.prototype[p as keyof typeof operators] = function (
 		this: Observable<unknown>,
 		...args: unknown[]
 	) {
+		/* eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 		return this.pipe((operators as any)[p](...args));
+		/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 	} as any;
 }
 
@@ -1238,4 +1248,5 @@ export interface Observable<T> {
 	tap(tapFn: (val: T) => void): Observable<T>;
 	ignoreElements(): Observable<never>;
 	throttleTime(number: number): Observable<T>;
+	select<T2>(mapFn: (val: T) => T2): Observable<T2>;
 }

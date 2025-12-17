@@ -156,7 +156,7 @@ function findParameter<T extends Record<string, Parameter>>(
 	shortcut: string,
 ): [keyof T, Parameter] {
 	for (const key in parameters) {
-		if (parameters[key].short === shortcut) return [key, parameters[key]];
+		if (parameters[key]?.short === shortcut) return [key, parameters[key]];
 	}
 
 	throw new Error(`Invalid parameter "${shortcut}"`);
@@ -228,7 +228,7 @@ export function parseParameters<T extends Record<string, Parameter>>(
 		else throw new Error('Invalid parameter');
 	}
 
-	return result as ParametersResult<T>;
+	return result;
 }
 
 export function parametersParser<T extends Record<string, Parameter>, R>(
@@ -291,7 +291,7 @@ export async function readJson<T>(
 	defaultValue?: T,
 ): Promise<T> {
 	try {
-		return JSON.parse(await readFile(fileName, 'utf8'));
+		return JSON.parse(await readFile(fileName, 'utf8')) as T;
 	} catch (e) {
 		if (defaultValue !== undefined) return defaultValue;
 		throw e;
@@ -306,8 +306,14 @@ export function sh(cmd: string, options: SpawnOptions = {}) {
 	return new Promise<string>((resolve, reject) => {
 		const proc = spawn(cmd, [], { shell: true, ...options });
 		let output = '';
-		proc.stdout?.on('data', data => (output += data?.toString() || ''));
-		proc.stderr?.on('data', data => (output += data?.toString() || ''));
+		proc.stdout?.on(
+			'data',
+			(data: Buffer) => (output += data.toString() || ''),
+		);
+		proc.stderr?.on(
+			'data',
+			(data: Buffer) => (output += data.toString() || ''),
+		);
 		proc.on('exit', code => {
 			if (code !== 0) reject(output);
 			else resolve(output);

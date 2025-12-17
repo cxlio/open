@@ -12,22 +12,31 @@ import type {
 } from 'typescript';
 import { Output, resolveRequire } from './builder.js';
 
+export interface TsconfigJson {
+	compilerOptions?: {
+		outDir?: string;
+	};
+	files?: string[];
+	include?: string[];
+	exclude?: string[];
+}
+
 const ts = resolveRequire<typeof import('typescript')>('typescript');
-const sys = ts.sys;
+const { readDirectory, getCurrentDirectory, fileExists, readFile } = ts.sys;
 
 const parseConfigHost: ParseConfigFileHost = {
 	useCaseSensitiveFileNames: true,
-	readDirectory: sys.readDirectory,
-	getCurrentDirectory: sys.getCurrentDirectory,
-	fileExists: sys.fileExists,
-	readFile: sys.readFile,
+	readDirectory,
+	getCurrentDirectory,
+	fileExists,
+	readFile,
 	onUnRecoverableConfigFileDiagnostic(e) {
 		throw e;
 	},
 };
 
 const diagnosticsHost: FormatDiagnosticsHost = {
-	getCurrentDirectory: sys.getCurrentDirectory,
+	getCurrentDirectory,
 	getNewLine: () => '\n',
 	getCanonicalFileName: n => n,
 };
@@ -56,10 +65,10 @@ function getBuilder(
 	tsconfig = 'tsconfig.json',
 	defaultOptions: BuildOptions = { module: ts.ModuleKind.CommonJS },
 ) {
-	const host = ts.createSolutionBuilderHost(sys);
+	const host = ts.createSolutionBuilderHost(ts.sys);
 	const options = parseTsConfig(tsconfig);
 
-	if (options.errors?.length) {
+	if (options.errors.length) {
 		printDiagnostics(options.errors);
 	}
 
@@ -124,10 +133,10 @@ export function parseTsConfig(tsconfig: string) {
 	} catch (e) {
 		if (e instanceof Error) throw e;
 		const msg =
-			(e as { message?: string })?.message ||
-			(e as { messageText?: string })?.messageText ||
-			'Unknown Error';
-		throw new Error(msg);
+			(e as { message?: string } | undefined)?.message ??
+			(e as { messageText?: string } | undefined)?.messageText;
+
+		throw new Error(msg ?? 'Unknown Error');
 	}
 
 	if (!parsed) {

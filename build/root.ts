@@ -25,7 +25,16 @@ ${result.join('')}
 	await write('README.md', content);
 }
 
-async function readPkg(dir: string) {
+type ValidatedPackage = Omit<
+	Package,
+	'description' | 'license' | 'homepage'
+> & {
+	description: string;
+	license: string;
+	homepage: string;
+};
+
+async function readPkg(dir: string): Promise<ValidatedPackage | void> {
 	const folder = path.join('.', dir);
 	const pkgPath = path.resolve(folder, './package.json');
 	let pkg;
@@ -39,11 +48,10 @@ async function readPkg(dir: string) {
 
 	if (pkg.private) return;
 
-	const valid = pkg.description && pkg.license && pkg.homepage;
+	if (pkg.description && pkg.license && pkg.homepage)
+		return pkg as ValidatedPackage;
 
-	if (!valid) throw new Error(`Invalid package: ${pkg.name}`);
-
-	return pkg;
+	throw new Error(`Invalid package: ${pkg.name}`);
 }
 
 function write(file: string, content: string) {

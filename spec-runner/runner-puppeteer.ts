@@ -1,7 +1,7 @@
 import { Browser, CoverageEntry, Page, HTTPRequest } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import { readFile, writeFile, mkdir } from 'fs/promises';
-import { resolve, relative, join, extname } from 'path';
+import { basename, resolve, relative, join, extname } from 'path';
 //import { createRequire } from 'module';
 import { resolveImport } from './resolve.js';
 
@@ -138,18 +138,19 @@ async function createPage(
 
 function virtualFileServer(page: Page, app: SpecRunner) {
 	const cwd = app.vfsRoot ? resolve(app.vfsRoot) : process.cwd();
-	//const require = createRequire(cwd + '/');
+
+	if (app.vfsRoot) app.log(`vfsRoot: ${cwd} (cwd: ${process.cwd()})`);
+
 	function findRequestPath(path: string) {
 		try {
 			const mod = path.slice(1);
-			const result = resolveImport(mod, `${cwd}/`); // || require.resolve(path.slice(1));
-			console.log(`Resolved: ${mod} -> ${result || path}`);
+			const result = resolveImport(mod, `${cwd}/`);
+
 			if (result) {
 				return relative(cwd, result);
 			}
 		} catch (e) {
 			console.log(e);
-			/* ignore */
 		}
 		return path;
 	}
@@ -189,6 +190,7 @@ function virtualFileServer(page: Page, app: SpecRunner) {
 			}
 		} catch (e) {
 			app.log(`Error handling request ${req.method()} ${req.url()}`);
+			console.error(e);
 			req.respond({
 				status: 500,
 			});
@@ -207,6 +209,8 @@ async function mjsRunner(page: Page, app: SpecRunner, entry: string) {
 
 	await goto(app, page, 'https://cxl-tester');
 
+	await page.setContent(`<base href="https://cxl-tester/${entry}">`);
+
 	if (app.importmap) {
 		await page.addScriptTag({
 			type: 'importmap',
@@ -219,7 +223,7 @@ async function mjsRunner(page: Page, app: SpecRunner, entry: string) {
 		const r = (await import(entry)).default;
 		await r.run();
 		return r.toJSON();
-	})('${entry}')`,
+	})('./${basename(entry)}')`,
 	) as Promise<Test>;
 }
 
@@ -328,9 +332,10 @@ async function handleFigureRequest(
 	app: SpecRunner,
 ): Promise<Result> {
 	const { name, domId, html } = data;
-	const baseline = (data.baseline = `${
-		app.baselinePath || 'spec'
-	}/${name}.png`);
+	const baseline = (data.baseline = join(
+		app.baselinePath ?? 'spec',
+		`${name}.png`,
+	));
 	const filename = `spec/${name}.png`;
 	const [original, buffer] = await Promise.all([
 		readFile(baseline).catch(() => undefined),

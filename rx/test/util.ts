@@ -241,7 +241,8 @@ export function mockSetTimeout(fn: (advance: (ms: number) => void) => void) {
 				cb();
 				delete timeouts[+key];
 			} else {
-				timeouts[+key].time -= ms;
+				const to = timeouts[+key];
+				if (to) to.time -= ms;
 			}
 		}
 	});

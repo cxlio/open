@@ -66,7 +66,7 @@ async function fixDependencies({ projectPath, rootPkg }: LintData) {
 
 	for (const name in pkg.dependencies) {
 		const rootValue =
-			rootPkg.devDependencies?.[name] || rootPkg.dependencies?.[name];
+			rootPkg.devDependencies?.[name] ?? rootPkg.dependencies?.[name];
 		if (rootValue && pkg.dependencies[name] !== rootValue)
 			pkg.dependencies[name] = rootValue;
 	}
@@ -148,7 +148,7 @@ async function fixTest({ projectPath, name }: LintData) {
 		(await readJson<Tsconfig | null>(
 			`${projectPath}/tsconfig.test.json`,
 			null,
-		)) || {};
+		)) ?? {};
 
 	if (!tsconfig.extends || tsconfig.extends !== './tsconfig.json') {
 		tsconfig.extends = './tsconfig.json';
@@ -201,7 +201,7 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 	const browser = './index.bundle.js';
 	const homepage = rootPkg.homepage && path.join(rootPkg.homepage, name);
 
-	if (!pkg.scripts) pkg.scripts = {};
+	pkg.scripts ??= {};
 	if (!pkg.scripts.test) pkg.scripts.test = testScript;
 	if (!pkg.scripts.build) pkg.scripts.build = builder;
 	if (homepage && (!pkg.homepage || pkg.homepage !== homepage))
@@ -259,7 +259,7 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 			`Package name should be "${rootPkg.name}${dir}".`,
 		),*/
 		rule(
-			licenses.includes(pkg.license),
+			!!pkg.license && licenses.includes(pkg.license),
 			`"${pkg.license}" is not a valid license.`,
 		),
 		rule(
@@ -284,7 +284,7 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 			`Package "bugs" property must match root package "${rootPkg.bugs}"`,
 		),
 		rule(
-			pkg?.scripts?.test === testScript,
+			pkg.scripts?.test === testScript,
 			`Valid test script in package.json`,
 		),
 		rule(!!pkg.repository, 'Package "repository" field must be set'),
@@ -318,7 +318,7 @@ async function lintTest({ projectPath }: LintData) {
 				`Missing "tsconfig.test.json" file.`,
 			),
 			rule(
-				tsconfig?.extends === './tsconfig.json',
+				tsconfig.extends === './tsconfig.json',
 				'tsconfig.test.json extends should be "./tsconfig.json"',
 			),
 			rule(
@@ -422,8 +422,8 @@ async function lintImports({ name }: LintData) {
 	let match;
 	while ((match = MATCH_REGEX.exec(imports))) {
 		const [, file, line] = match;
-		const newLine = line.replace(/'\.\.\/([^/]+)\/index\.js/, "'@cxl/$1");
-		if (newLine !== line) {
+		const newLine = line?.replace(/'\.\.\/([^/]+)\/index\.js/, "'@cxl/$1");
+		if (file && line && newLine && newLine !== line) {
 			violations.push({ file, line, newLine });
 			const contents = await fs.readFile(file, 'utf8');
 			await fs.writeFile(file, contents.replace(line, newLine));

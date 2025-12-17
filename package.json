@@ -6,14 +6,15 @@
 	"homepage": "https://cxlio.github.io/docs/",
 	"devDependencies": {
 		"@cxl/3doc": "file:../3doc/dist/3doc/package",
-		"@eslint/js": "^9.36.0",
+		"@cxl/ui": "6.0.0-beta",
+		"@eslint/js": "^9.39.1",
 		"@types/node": "^24.0.3",
 		"@types/pngjs": "^3.4.2",
 		"esbuild": "^0.25.10",
 		"pngjs": "^6.0.0",
 		"puppeteer": "^24.22.3",
-		"typescript": "^5.9.2",
-		"typescript-eslint": "^8.45.0"
+		"typescript": "^5.9.3",
+		"typescript-eslint": "^8.49.0"
 	},
 	"type": "module",
 	"bugs": "https://github.com/cxlio/open/issues",

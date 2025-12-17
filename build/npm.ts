@@ -15,14 +15,14 @@ export type Dependencies = Record<string, string>;
 export interface Package {
 	name: string;
 	version: string;
-	description: string;
-	license: License;
-	files: string[];
-	main: string;
+	description?: string;
+	license?: License;
+	files?: string[];
+	main?: string;
 	bin?: string;
 	keywords?: string[];
 	browser?: string;
-	homepage: string;
+	homepage?: string;
 	private: boolean;
 	bugs: string;
 	repository: string | { type: 'git'; url: string; directory?: string };
@@ -45,8 +45,8 @@ export interface PackageInfo extends Package {
 	time: Record<string, string>;
 }
 
-export async function readPackage(path: string): Promise<Package> {
-	return JSON.parse(await readFile(path, 'utf8'));
+export async function readPackage(path: string) {
+	return JSON.parse(await readFile(path, 'utf8')) as Package;
 }
 
 export async function getLatestVersion(
@@ -54,7 +54,7 @@ export async function getLatestVersion(
 	tag = 'latest',
 ): Promise<string | undefined> {
 	const info = await getPackageInfo(packageName);
-	return info?.['dist-tags'][tag] || undefined;
+	return info['dist-tags'][tag] ?? undefined;
 }
 
 export async function isPackageVersionPublished(
@@ -142,6 +142,8 @@ export async function publishNpm(dir: string, distDir: string) {
 	}
 }
 
-export async function getPackageInfo(name: string): Promise<PackageInfo> {
-	return JSON.parse((await sh(`npm show ${name} --json`)).trim());
+export async function getPackageInfo(name: string) {
+	return JSON.parse(
+		(await sh(`npm show ${name} --json`)).trim(),
+	) as PackageInfo;
 }

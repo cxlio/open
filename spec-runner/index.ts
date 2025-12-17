@@ -49,6 +49,7 @@ const parameters = {
 
 function startServer(cmd: string) {
 	const [bin, ...args] = cmd.split(' ');
+	if (!bin) return;
 	const proc = spawn(bin, args);
 	proc.stdout?.on('data', data => console.log(data.toString()));
 	proc.stderr?.on('data', data => console.error(data.toString()));

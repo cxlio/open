@@ -35,14 +35,14 @@ function formatTime(time: bigint) {
 	return s > 0.1 ? (s > 0.5 ? colors.red(str) : colors.yellow(str)) : str;
 }
 
-export function resolveRequire<T>(mod: string): T {
+export function resolveRequire<T>(mod: string) {
 	return require(require.resolve(mod, {
 		paths: [process.cwd(), import.meta.dirname],
-	}));
+	})) as T;
 }
 
 export async function build(...targets: BuildConfiguration[]) {
-	if (!targets) throw new Error('Invalid configuration');
+	if (!targets.length) throw new Error('Invalid configuration');
 
 	if (BASEDIR !== process.cwd()) {
 		process.chdir(BASEDIR);
@@ -88,8 +88,8 @@ export function shell(cmd: string, options: SpawnOptions = {}) {
 			shell: true,
 			...options,
 		});
-		let output: Buffer;
-		let error: Buffer;
+		let output: Buffer | undefined;
+		let error: Buffer | undefined;
 		proc.stdout?.on(
 			'data',
 			data =>
@@ -107,7 +107,7 @@ export function shell(cmd: string, options: SpawnOptions = {}) {
 		proc.on('close', code => {
 			if (code) subs.error(error || output);
 			else {
-				subs.next(output);
+				if (output) subs.next(output);
 				subs.complete();
 			}
 		});
@@ -150,7 +150,7 @@ class Build {
 			if (result.mtime) utimesSync(outFile, result.mtime, result.mtime);
 
 			const printPath = relative(process.cwd(), outFile);
-			this.log(`${printPath} ${kb((result.source || '').length)}`);
+			this.log(`${printPath} ${kb(source.length)}`);
 		});
 	}
 }

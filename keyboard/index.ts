@@ -127,26 +127,28 @@ const TranslateKey: Record<string, string | undefined> = {
 	Slash: '/',
 };
 
-export const KeyboardLayoutData: Record<string, KeyboardLayout> = {
-	'en-US': {
-		shiftMap: SHIFT_MAP,
-		/**
-		 * The `translate` method converts a `Key` event into a string representation.
-		 * Firstly, it checks the `TranslateKey` map for special keys (like arrows or space),
-		 * which have predefined string values. For keys corresponding to
-		 * alphabet letters and numbers, the method derives the letter from
-		 * the key `code`, ensuring it's lowercase for uniformity.
-		 * If none of these match, it defaults to using the `key` property,
-		 * which allows handling other miscellaneous keys gracefully.
-		 */
-		translate({ code, key }: Key) {
-			const translated = TranslateKey[code];
-			if (translated) return translated;
-			if (code.startsWith('Key')) return code.slice(3).toLowerCase();
-			if (code.startsWith('Digit')) return code.slice(5);
-			return key.toLowerCase();
-		},
+export const enUsKeyboardLayout = {
+	shiftMap: SHIFT_MAP,
+	/**
+	 * The `translate` method converts a `Key` event into a string representation.
+	 * Firstly, it checks the `TranslateKey` map for special keys (like arrows or space),
+	 * which have predefined string values. For keys corresponding to
+	 * alphabet letters and numbers, the method derives the letter from
+	 * the key `code`, ensuring it's lowercase for uniformity.
+	 * If none of these match, it defaults to using the `key` property,
+	 * which allows handling other miscellaneous keys gracefully.
+	 */
+	translate({ code, key }: Key) {
+		const translated = TranslateKey[code];
+		if (translated) return translated;
+		if (code.startsWith('Key')) return code.slice(3).toLowerCase();
+		if (code.startsWith('Digit')) return code.slice(5);
+		return key.toLowerCase();
 	},
+};
+
+export const KeyboardLayoutData: Record<string, KeyboardLayout> = {
+	'en-US': enUsKeyboardLayout,
 };
 
 /**
@@ -251,9 +253,7 @@ export function handleKeyboard({
  * It facilitates accurate  interpretation of key sequences and modifiers according to locale preferences.
  */
 function getDefaultLayout(): KeyboardLayout {
-	return (
-		KeyboardLayoutData[navigator?.language] || KeyboardLayoutData['en-US']
-	);
+	return KeyboardLayoutData[navigator.language] ?? enUsKeyboardLayout;
 }
 
 function newKey(): Key {
@@ -285,7 +285,7 @@ function _parseKey(
 	let event = newKey();
 
 	while ((match = PARSE_KEY.exec(key.toLowerCase()))) {
-		const ch = match[1];
+		const ch = match[1] ?? '';
 		if (ch === 'shift') event.shiftKey = true;
 		else if (ch === 'ctrl' || ch === 'control') event.ctrlKey = true;
 		else if (ch === 'alt' || ch === 'option') event.altKey = true;

@@ -72,7 +72,8 @@ export type RunnerCommand =
 	| {
 			type: 'testElement';
 	  }
-	| { type: 'concurrency' };
+	| { type: 'concurrency' }
+	| { type: 'run'; suites: Test[]; baselinePath?: string };
 
 export interface FigureData {
 	type: 'figure';
@@ -101,65 +102,64 @@ let actionId = 0;
 const setTimeout = globalThis.setTimeout;
 const clearTimeout = globalThis.clearTimeout;
 
-export function subject<T>() {
-	let subscribers: Array<{
+class Subject<T> {
+	subscribers: Array<{
 		next?: (val: T) => void;
 		complete?: () => void;
 	}> = [];
-	let completeCalled = false;
+	completeCalled = false;
 
-	return {
-		next(val: T) {
-			if (completeCalled) return;
-			subscribers.forEach(sub => sub.next?.(val));
-		},
-		subscribe(
-			observer:
-				| {
-						next?: (val: T) => void;
-						complete?: () => void;
-				  }
-				| ((val: T) => void),
-		) {
-			if (completeCalled) return { unsubscribe() {} };
-			let subObj: { next?: (val: T) => void; complete?: () => void };
-			if (typeof observer === 'function') {
-				subObj = { next: observer };
-			} else {
-				subObj = observer;
-			}
-			subscribers.push(subObj);
-			return {
-				unsubscribe() {
-					subscribers = subscribers.filter(f => f !== subObj);
-				},
-			};
-		},
-		complete() {
-			if (completeCalled) return;
-			completeCalled = true;
-			subscribers.forEach(sub => sub.complete && sub.complete());
-			subscribers = [];
-		},
-		first(): Promise<T> {
-			return new Promise(resolve => {
-				const subscription = this.subscribe(val => {
-					resolve(val);
-					subscription.unsubscribe();
-				});
+	next(val: T) {
+		if (this.completeCalled) return;
+		this.subscribers.forEach(sub => sub.next?.(val));
+	}
+
+	subscribe(
+		observer:
+			| {
+					next?: (val: T) => void;
+					complete?: () => void;
+			  }
+			| ((val: T) => void),
+	) {
+		if (this.completeCalled) return { unsubscribe() {} };
+		let subObj: { next?: (val: T) => void; complete?: () => void };
+		if (typeof observer === 'function') {
+			subObj = { next: observer };
+		} else {
+			subObj = observer;
+		}
+		this.subscribers.push(subObj);
+		return {
+			unsubscribe: () => {
+				this.subscribers = this.subscribers.filter(f => f !== subObj);
+			},
+		};
+	}
+
+	complete() {
+		if (this.completeCalled) return;
+		this.completeCalled = true;
+		this.subscribers.forEach(sub => sub.complete?.());
+		this.subscribers = [];
+	}
+
+	first(): Promise<T> {
+		return new Promise(resolve => {
+			const subscription = this.subscribe(val => {
+				resolve(val);
+				subscription.unsubscribe();
 			});
-		},
-	};
+		});
+	}
 }
 
-export function toPromise<T>(
+function toPromise<T>(
 	input: Promise<T> | { first: () => Promise<T> },
 ): Promise<T> {
-	if (typeof (input as any).then === 'function') {
-		return input as Promise<T>;
-	} else if (typeof (input as any).first === 'function') {
-		return (input as any).first();
-	}
+	if (input instanceof Promise) return input;
+	if (input instanceof Subject) return input.first();
+
 	throw new Error(
 		'toPromise: input must be a Promise or observable-like with first()',
 	);
@@ -586,22 +586,22 @@ export class TestApi {
 		const intervals: Record<
 			number,
 			{
-				cb: Function;
+				cb: () => void;
 				delay: number;
 				lastFired: number;
 			}
 		> = {};
 
 		this.mock(globalThis, 'setInterval', ((
-			cb: string | Function,
+			cb: string | (() => void),
 			delay = 0,
 		): number => {
-			if (typeof cb === 'string') cb = new Function(cb);
+			if (typeof cb === 'string') cb = new Function(cb) as () => void;
 			intervals[++id] = { cb, delay, lastFired: 0 };
 			return id;
 		}) as typeof globalThis.setInterval);
 		this.mock(globalThis, 'clearInterval', (id => {
-			if (id !== undefined) delete intervals[id as number];
+			if (id !== undefined) delete intervals[id];
 		}) as typeof globalThis.clearInterval);
 
 		return {
@@ -624,7 +624,7 @@ export class TestApi {
 		const timeouts: Record<number, { cb: Function; time: number }> = {};
 
 		this.mock(globalThis, 'setTimeout', ((cb: TimerHandler, time = 0) => {
-			if (typeof cb === 'string') cb = new Function(cb);
+			if (typeof cb === 'string') cb = new Function(cb) as () => void;
 			timeouts[++id] = { cb, time };
 			return id;
 		}) as typeof globalThis.setTimeout);
@@ -635,10 +635,11 @@ export class TestApi {
 			advance(ms: number) {
 				for (const [key, { cb, time }] of Object.entries(timeouts)) {
 					if (time <= ms) {
-						cb();
+						(cb as () => void)();
 						delete timeouts[+key];
 					} else {
-						timeouts[+key].time -= ms;
+						const to = timeouts[+key];
+						if (to) to.time -= ms;
 					}
 				}
 			},
@@ -668,7 +669,7 @@ export class TestApi {
 				for (const key in rafs) {
 					const cb = rafs[key];
 					delete rafs[key];
-					cb(performance.now());
+					cb?.(performance.now());
 				}
 			},
 		};
@@ -710,7 +711,7 @@ export class Test {
 	only: Test[] = [];
 	timeout = 5 * 1000;
 	domContainer?: Element;
-	events = subject<TestEvent>();
+	events = new Subject<TestEvent>();
 	completed = false;
 	runTime = 0;
 
@@ -793,11 +794,11 @@ export class Test {
 			const result = this.testFn(testApi);
 			const promise = result ? this.doTimeout(result) : this.promise;
 
-			if (!promise) this.emit('syncComplete');
+			if (!promise) await this.emit('syncComplete');
 			syncCompleteNeeded = false;
 
 			await promise;
-			if (promise && this.completed === false)
+			if (promise && (this.completed as boolean) === false)
 				throw new Error('Never completed');
 			if (this.only.length) {
 				await Promise.all(this.only.map(test => test.run()));
@@ -808,10 +809,8 @@ export class Test {
 			console.error(String(e));
 			this.pushError(e);
 		} finally {
-			if (syncCompleteNeeded) this.emit('syncComplete');
-			if (this.domContainer && this.domContainer.parentNode)
-				this.domContainer.parentNode.removeChild(this.domContainer);
-
+			if (syncCompleteNeeded) await this.emit('syncComplete');
+			this.domContainer?.parentNode?.removeChild(this.domContainer);
 			this.domContainer = undefined;
 			await this.emit('afterAll');
 			this.runTime = performance.now() - start;
@@ -835,7 +834,7 @@ export class Test {
 	protected async emit(type: EventType) {
 		const ev: TestEvent = { type, promises: [] };
 		this.events.next(ev);
-		if (ev.promises) await Promise.all(ev.promises);
+		await Promise.all(ev.promises);
 	}
 }
 
@@ -865,7 +864,7 @@ export function mockFn<A extends unknown[], B>(
 }
 
 function spyFn<T, K extends keyof FunctionsOf<T>>(object: T, method: K) {
-	const sub = subject<SpyFn<ParametersOf<T, K>, T[K]>>();
+	const sub = new Subject<SpyFn<ParametersOf<T, K>, T[K]>>();
 	const originalFn = object[method] as FunctionsOf<T>[K];
 	const spy: Spy<SpyFn<ParametersOf<T, K>, T[K]>> = {
 		destroy() {
@@ -902,7 +901,7 @@ function spyProp<T, K extends keyof T>(object: T, prop: K) {
 	let value: T[K] = object[prop];
 	let setCount = 0;
 	let getCount = 0;
-	const sub = subject<SpyProp<T[K]>>();
+	const sub = new Subject<SpyProp<T[K]>>();
 	const result: Spy<SpyProp<T[K]>> = {
 		destroy() {
 			sub.complete();

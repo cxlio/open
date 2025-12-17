@@ -1,10 +1,10 @@
 import { TestApi, spec, mockFn } from '../spec/index.js';
 import {
 	KeyboardLayout,
-	KeyboardLayoutData,
 	normalize,
 	parseKey,
 	handleKeyboard,
+	enUsKeyboardLayout,
 } from './index.js';
 
 export default spec('keyboard', s => {
@@ -26,7 +26,7 @@ export default spec('keyboard', s => {
 
 		it.should('parse mod key', a => {
 			const layout: KeyboardLayout = {
-				...KeyboardLayoutData['en-US'],
+				...enUsKeyboardLayout,
 				modKey: 'ctrlKey',
 			};
 			a.equal(normalize('mod+x', layout), 'ctrl+x');
@@ -77,19 +77,24 @@ export default spec('keyboard', s => {
 		});*/
 	});
 	s.test('parseKey', it => {
-		it.should('correctly parse simple keys without modifiers', a => {
-			const result = parseKey('a');
-			a.equal(result.length, 1);
-			a.equal(result[0].key, 'a');
-			a.equal(result[0].shiftKey, false);
-			a.equal(result[0].ctrlKey, false);
-			a.equal(result[0].altKey, false);
-			a.equal(result[0].metaKey, false);
-		});
+		it.should(
+			'correctly parse simple keys without modifiers',
+			(a: TestApi) => {
+				const result = parseKey('a');
+				a.equal(result.length, 1);
+				a.assert(result[0]);
+				a.equal(result[0].key, 'a');
+				a.equal(result[0].shiftKey, false);
+				a.equal(result[0].ctrlKey, false);
+				a.equal(result[0].altKey, false);
+				a.equal(result[0].metaKey, false);
+			},
+		);
 
-		it.should('correctly parse modifier keys', a => {
+		it.should('correctly parse modifier keys', (a: TestApi) => {
 			const result = parseKey('shift+b');
 			a.equal(result.length, 1);
+			a.assert(result[0]);
 			a.equal(result[0].key, 'b');
 			a.equal(result[0].shiftKey, true);
 			a.equal(result[0].ctrlKey, false);
@@ -97,71 +102,83 @@ export default spec('keyboard', s => {
 			a.equal(result[0].metaKey, false);
 		});
 
-		it.should('correctly parse multiple keys with modifiers', a => {
-			const result = parseKey('ctrl+alt+del');
-			a.equal(result.length, 1);
-			a.equal(result[0].key, 'del');
-			a.equal(result[0].shiftKey, false);
-			a.equal(result[0].ctrlKey, true);
-			a.equal(result[0].altKey, true);
-			a.equal(result[0].metaKey, false);
-		});
+		it.should(
+			'correctly parse multiple keys with modifiers',
+			(a: TestApi) => {
+				const result = parseKey('ctrl+alt+del');
+				a.equal(result.length, 1);
+				a.assert(result[0]);
+				a.equal(result[0].key, 'del');
+				a.equal(result[0].shiftKey, false);
+				a.equal(result[0].ctrlKey, true);
+				a.equal(result[0].altKey, true);
+				a.equal(result[0].metaKey, false);
+			},
+		);
 
-		it.should('handle key sequences separated by spaces', a => {
+		it.should('handle key sequences separated by spaces', (a: TestApi) => {
 			const result = parseKey('ctrl+a ctrl+b');
 			a.equal(result.length, 2);
+			a.assert(result[0] && result[1]);
 			a.equal(result[0].key, 'a');
 			a.equal(result[0].ctrlKey, true);
 			a.equal(result[1].key, 'b');
 			a.equal(result[1].ctrlKey, true);
 		});
 
-		it.should('map mod key to the correct modifier', a => {
-			const layout = KeyboardLayoutData['en-US'];
+		it.should('map mod key to the correct modifier', (a: TestApi) => {
+			const layout = enUsKeyboardLayout;
 			const result = parseKey('mod+c', { ...layout, modKey: 'ctrlKey' });
+			a.assert(result[0]);
 			a.equal(result.length, 1);
 			a.equal(result[0].key, 'c');
 			a.equal(result[0].ctrlKey, true);
 			const result2 = parseKey('mod+c', { ...layout, modKey: 'metaKey' });
 			a.equal(result2.length, 1);
+			a.assert(result2[0]);
 			a.equal(result2[0].key, 'c');
 			a.equal(result2[0].metaKey, true);
 		});
 
-		it.should('handle shifted characters correctly', a => {
+		it.should('handle shifted characters correctly', (a: TestApi) => {
 			const result = parseKey('shift+1');
 			a.equal(result.length, 1);
+			a.assert(result[0]);
 			a.equal(result[0].key, '1'); // assuming shift+1 maps to '@' in shiftMap
 			a.equal(result[0].shiftKey, true);
 		});
-		it.should('handle keys with special characters', a => {
+		it.should('handle keys with special characters', (a: TestApi) => {
 			const result = parseKey('ctrl+shift+1');
 			a.equal(result.length, 1);
+			a.assert(result[0]);
 			a.equal(result[0].key, '1');
 			a.equal(result[0].ctrlKey, true);
 			a.equal(result[0].shiftKey, true);
 		});
 
-		it.should('handle unsupported modifier combinations', a => {
+		it.should('handle unsupported modifier combinations', (a: TestApi) => {
 			const result = parseKey('ctrl+alt+meta+z');
 			a.equal(result.length, 1);
+			a.assert(result[0]);
 			a.equal(result[0].key, 'z');
 			a.equal(result[0].ctrlKey, true);
 			a.equal(result[0].altKey, true);
 			a.equal(result[0].metaKey, true);
 		});
-		it.should('correctly parse special character keys', a => {
+		it.should('correctly parse special character keys', (a: TestApi) => {
 			const result = parseKey('ctrl+alt+!');
 			a.equal(result.length, 1);
+			a.assert(result[0]);
 			a.equal(result[0].key, '1');
 			a.equal(result[0].ctrlKey, true);
 			a.equal(result[0].altKey, true);
 			a.equal(result[0].shiftKey, true);
 		});
 
-		it.should('handle unsupported character sequences', a => {
+		it.should('handle unsupported character sequences', (a: TestApi) => {
 			const result = parseKey('ctrl+alt+ctrl+z');
 			a.equal(result.length, 1);
+			a.assert(result[0]);
 			a.equal(result[0].key, 'z');
 			a.equal(result[0].ctrlKey, true);
 			a.equal(result[0].altKey, true);

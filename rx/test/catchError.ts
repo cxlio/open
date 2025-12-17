@@ -12,7 +12,7 @@ import {
 	take,
 	takeWhile,
 	throwError,
-	cancel,
+	Signal,
 } from '../index.js';
 import { spec } from '../../spec/index.js';
 
@@ -272,16 +272,16 @@ export default spec('catchError', it => {
 			subscriber.complete();
 		});
 
-		const signal = cancel();
+		const cancel = new Signal();
 		const result = source.pipe(
 			catchError(() => {
 				// Unsubscribe to close subscriber
-				signal.next();
+				cancel.next();
 				return of(2);
 			}),
 		);
 
-		result.subscribe({ next: n => sideEffects.push(n), signal });
+		result.subscribe({ next: n => sideEffects.push(n), signal: cancel });
 
 		// Ensure the side effect in catchError isn't triggered
 		a.equalValues(sideEffects, [1]);

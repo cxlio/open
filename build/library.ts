@@ -1,7 +1,7 @@
 import { basename, join } from 'path';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 
-import { EMPTY, fromAsync, of } from '../rx/index.js';
+import { EMPTY, concat, fromAsync, of } from '../rx/index.js';
 import { run as runSpec } from '../spec-runner/runner.js';
 import printReportV2 from '../spec-runner/report-stdout.js';
 
@@ -9,14 +9,14 @@ import { BuildConfiguration, build, exec } from './builder.js';
 import { pkg, readme, esbuild } from './package.js';
 import { copyDir, file } from './file.js';
 import { eslint } from './lint.js';
-import { tsconfig, parseTsConfig } from './tsc.js';
+import { TsconfigJson, tsconfig, parseTsConfig } from './tsc.js';
 import { buildDocs } from './docs.js';
 import audit from './audit.js';
 
 import { Package, publishNpm } from './npm.js';
 import type { ParsedCommandLine } from 'typescript';
 
-let browserRunner: string;
+let browserRunner: string | undefined;
 
 function collectDependencies(
 	deps: Package['dependencies'],
@@ -92,7 +92,7 @@ function generateEsmTestFile(
 		join(import.meta.dirname, 'spec-browser.js'),
 		'utf8',
 	))}
-	browserRunner.run([suite], '../../${dirName}/spec');
+	__cxlRunner({ type: 'run', suites: [suite], baselinePath: '../../${dirName}/spec' })
 </script>`);
 }
 
@@ -100,8 +100,10 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	const cwd = process.cwd();
 	const tsconfigFile = JSON.parse(
 		readFileSync(cwd + '/tsconfig.json', 'utf8'),
-	);
-	const outputDir = tsconfigFile?.compilerOptions?.outDir;
+	) as TsconfigJson;
+	const outputDir = tsconfigFile.compilerOptions?.outDir;
+	if (!outputDir) throw new Error('Invalid tsconfig file');
+
 	const appId = basename(outputDir);
 	const pkgDir = join(outputDir, 'package');
 	const pkgJson = JSON.parse(readFileSync('package.json', 'utf8')) as Package;
@@ -122,7 +124,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 		...Object.keys(pkgJson.dependencies ?? {}),
 		...Object.keys(pkgJson.peerDependencies ?? {}),
 	];
-
+	const hasScreenshotTests = existsSync('./test-screenshot.ts');
 	const bundleEntryPoint = [
 		{
 			out: isBrowser ? 'index.bundle' : 'index',
@@ -168,7 +170,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 						const report = await runSpec({
 							node: !isBrowser,
 							mjs: true,
-							vfsRoot: '../..',
+							vfsRoot: '../../',
 							entryFile: './test.js',
 							importmap: isBrowser
 								? generateImportMap(
@@ -188,6 +190,79 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				}).ignoreElements(),
 			],
 		},
+		...(hasScreenshotTests
+			? [
+					{
+						target: 'test',
+						outputDir,
+						tasks: [
+							of({
+								path: 'test-screenshot.html',
+								source: generateEsmTestFile(
+									appId,
+									pkgJson.name,
+									'./test-screenshot.js',
+									generateTestImportMap(rootPkg, pkgJson),
+								),
+							}),
+							concat(
+								fromAsync(async () => {
+									const { buildDts } = await import(
+										'@cxl/3doc/render.js'
+									);
+									const { renderJson, findExamples } =
+										await import(
+											'@cxl/3doc/render-summary.js'
+										);
+									const dts = await buildDts({
+										clean: false,
+										outputDir,
+										noHtml: true,
+									});
+									const summary = renderJson(dts);
+									const examples = summary.index.flatMap(n =>
+										findExamples(n),
+									);
+									return {
+										path: 'test-screenshot.json',
+										source: Buffer.from(
+											JSON.stringify({
+												index: summary.index,
+												examples,
+											}),
+										),
+									};
+								}),
+								fromAsync(async () => {
+									try {
+										process.chdir(outputDir);
+										const report = await runSpec({
+											node: false,
+											mjs: true,
+											vfsRoot: '../../',
+											ignoreCoverage: true,
+											baselinePath: `../../${appId}/spec`,
+											entryFile: './test-screenshot.js',
+											importmap: generateImportMap(
+												rootPkg,
+												pkgJson,
+												parsedTsconfig,
+											),
+											sources: new Map(),
+											log: console.log.bind(console),
+										});
+										printReportV2(report);
+										if (!report.success)
+											throw new Error('Tests failed');
+									} finally {
+										process.chdir(cwd);
+									}
+								}).ignoreElements(),
+							),
+						],
+					},
+			  ]
+			: []),
 		{
 			target: 'audit',
 			outputDir,
@@ -205,7 +280,13 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 		{
 			target: 'package',
 			outputDir: '.',
-			tasks: [readme(), eslint(), exec(`rm -rf ${pkgDir}`)],
+			tasks: [
+				readme(),
+				eslint(tsconfigFile.files ?? tsconfigFile.include, {
+					ignorePatterns: tsconfigFile.exclude,
+				}),
+				exec(`rm -rf ${pkgDir}`),
+			],
 		},
 		{
 			target: 'package',

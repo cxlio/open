@@ -14,7 +14,7 @@ export {
 
 export * from './git.js';
 export * from './lint.js';
-export { tsconfig } from './tsc.js';
+export { TsconfigJson, tsconfig } from './tsc.js';
 export { buildDocs } from './docs.js';
 
 import { existsSync } from 'fs';

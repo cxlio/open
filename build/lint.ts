@@ -1,8 +1,10 @@
 import { relative, join } from 'path';
+import { readFile } from 'fs/promises';
 
-import { Observable } from '../rx/index.js';
+import { Observable, fromAsync } from '../rx/index.js';
 import { Output, appLog, resolveRequire } from './builder.js';
 
+import type { TsconfigJson } from './tsc.js';
 import type { ESLint } from 'eslint';
 
 function handleEslintResult(results: ESLint.LintResult[]) {
@@ -45,4 +47,17 @@ export function eslint(files = ['**/*.ts?(x)'], options?: ESLint.Options) {
 				e => subs.error(e),
 			);
 	});
+}
+
+export function eslintTsconfig(path: string | TsconfigJson = 'tsconfig.json') {
+	return fromAsync(async () => {
+		return typeof path === 'string'
+			? (JSON.parse(await readFile(path, 'utf8')) as TsconfigJson)
+			: path;
+	}).switchMap(tsconfigFile =>
+		eslint(tsconfigFile.files ?? tsconfigFile.include, {
+			ignorePatterns: tsconfigFile.exclude,
+			errorOnUnmatchedPattern: false,
+		}),
+	);
 }

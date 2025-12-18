@@ -8,7 +8,7 @@ import printReportV2 from '../spec-runner/report-stdout.js';
 import { BuildConfiguration, build, exec } from './builder.js';
 import { pkg, readme, esbuild } from './package.js';
 import { copyDir, file } from './file.js';
-import { eslint } from './lint.js';
+import { eslintTsconfig } from './lint.js';
 import { TsconfigJson, tsconfig, parseTsConfig } from './tsc.js';
 import { buildDocs } from './docs.js';
 import audit from './audit.js';
@@ -282,9 +282,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			outputDir: '.',
 			tasks: [
 				readme(),
-				eslint(tsconfigFile.files ?? tsconfigFile.include, {
-					ignorePatterns: tsconfigFile.exclude,
-				}),
+				eslintTsconfig(tsconfigFile),
 				exec(`rm -rf ${pkgDir}`),
 			],
 		},

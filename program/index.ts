@@ -306,7 +306,7 @@ export function sh(cmd: string, options: SpawnOptions = {}) {
 	return new Promise<string>((resolve, reject) => {
 		const proc = spawn(cmd, [], {
 			shell: true,
-			stdio: 'inherit',
+			stdio: ['inherit', 'pipe', 'pipe'],
 			...options,
 		});
 		let output = '';

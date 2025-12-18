@@ -304,7 +304,11 @@ export function log(prefix: string | (() => string), ...msg: unknown[]) {
 
 export function sh(cmd: string, options: SpawnOptions = {}) {
 	return new Promise<string>((resolve, reject) => {
-		const proc = spawn(cmd, [], { shell: true, ...options });
+		const proc = spawn(cmd, [], {
+			shell: true,
+			stdio: 'inherit',
+			...options,
+		});
 		let output = '';
 		proc.stdout?.on(
 			'data',

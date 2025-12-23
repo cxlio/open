@@ -1,4 +1,4 @@
-import { sh } from '../program/index.js';
+import { input, sh } from '../program/index.js';
 import { readFile } from 'fs/promises';
 import { /*checkBranchClean,*/ getBranch, getMainBranch } from './git.js';
 import { resolve } from 'path';
@@ -104,9 +104,10 @@ export async function publishNpm(dir: string, distDir: string) {
 			: 'latest';
 		const removeVersion =
 			tag === 'alpha' ? info['dist-tags'].alpha : undefined;
+		const otp = await input({ prompt: 'NPM OTP: ' });
 
 		console.log(
-			await sh(`npm publish --access=public --tag ${tag}`, {
+			await sh(`npm publish --access=public --tag ${tag} --otp ${otp}`, {
 				cwd: distDir,
 			}),
 		);

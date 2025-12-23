@@ -20,6 +20,8 @@ type CombineResult<R extends Observable<unknown>[]> = R extends (infer U)[]
 	: never;
 
 export type Operator<T, T2 = T> = (observable: Observable<T>) => Observable<T2>;
+export type ObservableInput<T> = Iterable<T> | Promise<T> | Observable<T>;
+export type ReadonlyBehaviorSubject<T> = Observable<T> & { readonly value: T };
 
 export interface Observer<T> {
 	/**
@@ -474,13 +476,6 @@ export function defer<T>(fn: () => Subscribable<T>) {
 	});
 }
 
-export function fromArray<T>(input: Array<T>): Observable<T> {
-	return new Observable<T>(subs => {
-		for (const item of input) if (!subs.closed) subs.next(item);
-		subs.complete();
-	});
-}
-
 export function fromPromise<T>(input: Promise<T>): Observable<T> {
 	return new Observable<T>(subs => {
 		input
@@ -496,7 +491,7 @@ export function fromAsync<T>(input: () => Promise<T>): Observable<T> {
 	return defer(() => fromPromise(input()));
 }
 
-export function fromGenerator<T>(input: Generator<T>): Observable<T> {
+export function fromIterable<T>(input: Iterable<T>): Observable<T> {
 	return new Observable<T>(subs => {
 		for (const item of input) if (!subs.closed) subs.next(item);
 		subs.complete();
@@ -506,20 +501,17 @@ export function fromGenerator<T>(input: Generator<T>): Observable<T> {
 /**
  * Creates an Observable from an Array, an array-like object, a Promise, an iterable object, or an Observable-like object.
  */
-export function from<T>(
-	input: Array<T> | Promise<T> | Observable<T> | Generator<T>,
-): Observable<T> {
+export function from<T>(input: ObservableInput<T>): Observable<T> {
 	if (input instanceof Observable) return input;
-	if (Array.isArray(input)) return fromArray(input);
 	if (input instanceof Promise) return fromPromise(input);
-	return fromGenerator(input);
+	return fromIterable(input);
 }
 
 /**
  * Converts the arguments to an observable sequence.
  */
 export function of<T>(...values: T[]): Observable<T> {
-	return fromArray(values);
+	return fromIterable(values);
 }
 
 function _toPromise<T, P>(observable: Observable<T, P>) {
@@ -592,6 +584,11 @@ export function map<T, T2>(mapFn: (val: T) => T2) {
 	);
 }
 
+/*
+ * Emits a mapped value only if it differs from the previous one.
+ * This operator optimizes emission by preventing duplicate consecutive values,
+ *   reducing unnecessary updates to downstream subscribers.
+ */
 export function select<T, T2>(mapFn: (val: T) => T2) {
 	let lastValue: T2 | typeof Undefined = Undefined;
 	return operatorNext<T, T2>(subscriber => (val: T) => {
@@ -713,16 +710,25 @@ export function timer(delay: number) {
  * Emits a value from the source Observable only after a particular time span has passed without another source emission.
  */
 export function debounceTime<T>(time: number, useTimer = timer): Operator<T> {
-	return switchMap(val => useTimer(time).map(() => val));
+	return switchMap<T, T>(val => useTimer(time).map(() => val));
 }
 
 /**
  * Projects each source value to an Observable which is merged in the output Observable,
  * emitting values only from the most recently projected Observable.
  */
-export function switchMap<T, T2>(project: (val: T) => Observable<T2>) {
+export function switchMap<T, T2>(
+	project: (val: T) => Observable<T2>,
+): Operator<T2>;
+export function switchMap<T, T2, T3>(
+	project: (val: T) => Observable<T2> | Promise<T3>,
+): Operator<T2 | T3>;
+export function switchMap<T, T2>(
+	project: (val: T) => Promise<T2>,
+): Operator<T, T2>;
+export function switchMap<T>(project: (val: T) => ObservableInput<unknown>) {
 	return (source: Observable<T>) =>
-		observable<T2>(subscriber => {
+		observable<unknown>(subscriber => {
 			let hasSubscription = false;
 			let completed = false;
 			let signal: Signal | undefined;
@@ -744,7 +750,7 @@ export function switchMap<T, T2>(project: (val: T) => Observable<T2>) {
 					cleanUp();
 					signal = new Signal();
 					hasSubscription = true;
-					project(val).subscribe({
+					from(project(val)).subscribe({
 						next: subscriber.next,
 						error: subscriber.error,
 						complete: cleanUp,
@@ -764,7 +770,7 @@ export function switchMap<T, T2>(project: (val: T) => Observable<T2>) {
 /**
  * Projects each source value to an Observable which is merged in the output Observable.
  */
-export function mergeMap<T, T2>(project: (val: T) => Observable<T2>) {
+export function mergeMap<T, T2>(project: (val: T) => ObservableInput<T2>) {
 	return (source: Observable<T>) =>
 		observable<T2>(subscriber => {
 			const signal = subscriber.signal;
@@ -775,7 +781,7 @@ export function mergeMap<T, T2>(project: (val: T) => Observable<T2>) {
 			source.subscribe({
 				next: (val: T) => {
 					count++;
-					project(val).subscribe({
+					from(project(val)).subscribe({
 						next: subscriber.next,
 						error: subscriber.error,
 						complete: () => {
@@ -801,14 +807,14 @@ export function mergeMap<T, T2>(project: (val: T) => Observable<T2>) {
  * Projects each source value to an Observable which is merged in the output Observable
  * only if the previous projected Observable has completed.
  */
-export function exhaustMap<T, T2>(project: (value: T) => Observable<T2>) {
+export function exhaustMap<T, T2>(project: (value: T) => ObservableInput<T2>) {
 	return operator<T, T2>(subscriber => {
 		let ready = true;
 		return {
 			next(val: T) {
 				if (ready) {
 					ready = false;
-					project(val).subscribe({
+					from(project(val)).subscribe({
 						next: subscriber.next,
 						error: subscriber.error,
 						complete: () => (ready = true),
@@ -874,7 +880,7 @@ export function first<T>() {
  * Perform a side effect for every emission on the source Observable,
  * but return an Observable that is identical to the source.
  */
-export function tap<T>(fn: (val: T) => unknown): Operator<T, T> {
+export function tap<T>(fn: (val: T) => void): Operator<T, T> {
 	return operatorNext<T, T>((subscriber: Subscriber<T>) => (val: T) => {
 		fn(val);
 		subscriber.next(val);
@@ -1229,12 +1235,12 @@ export interface Observable<T> {
 		timer?: (delay: number) => Observable<void>,
 	): Observable<T>;
 	distinctUntilChanged(): Observable<T>;
-	exhaustMap<T2>(project: (value: T) => Observable<T2>): Observable<T2>;
+	exhaustMap<T2>(project: (value: T) => ObservableInput<T2>): Observable<T2>;
 	filter<T2 = T>(fn: (val: T) => boolean): Observable<T2>;
 	finalize(fn: () => void): Observable<T>;
 	first(): Observable<T>;
 	map<T2>(mapFn: (val: T) => T2): Observable<T2>;
-	mergeMap<T2>(project: (val: T) => Observable<T2>): Observable<T2>;
+	mergeMap<T2>(project: (val: T) => ObservableInput<T2>): Observable<T2>;
 	publishLast(): Observable<T>;
 	reduce<T2>(
 		reduceFn: (acc: T2, val: T, i: number) => T2,
@@ -1243,6 +1249,11 @@ export interface Observable<T> {
 	share(): Observable<T>;
 	shareLatest(): Observable<T>;
 	switchMap<T2>(project: (val: T) => Observable<T2>): Observable<T2>;
+	switchMap<T2, T3>(
+		project: (val: T) => Observable<T2> | Promise<T3>,
+	): Observable<T2 | T3>;
+	switchMap<T2>(project: (val: T) => Promise<T2>): Observable<T2>;
+	//switchMap<T2>(project: (val: T) => ObservableInput<T2>): Observable<T2>;
 	take(howMany: number): Observable<T>;
 	takeWhile(fn: (val: T) => boolean): Observable<T>;
 	tap(tapFn: (val: T) => void): Observable<T>;

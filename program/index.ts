@@ -1,6 +1,7 @@
 import { readFile, stat, mkdir } from 'fs/promises';
 import { join, resolve } from 'path';
 import { SpawnOptions, spawn } from 'child_process';
+import * as readline from 'node:readline/promises';
 
 const codes = {
 	reset: [0, 0],
@@ -245,6 +246,27 @@ interface OperationResult<T> {
 	time: bigint;
 	tasks: number;
 	result: T;
+}
+
+export async function input({
+	prompt,
+	mask,
+}: {
+	prompt: string;
+	mask?: boolean;
+}) {
+	process.stdout.write(prompt);
+
+	const rl = readline.createInterface({
+		input: process.stdin,
+		output: mask ? undefined : process.stdout,
+	});
+
+	try {
+		return await rl.question('');
+	} finally {
+		rl.close();
+	}
 }
 
 function hrtime(): bigint {

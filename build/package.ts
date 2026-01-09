@@ -27,6 +27,22 @@ function verifyFields(fields: string[], pkg: Package, pkgPath: string) {
 			throw new Error(`Field "${f}" missing in "${pkgPath}"`);
 }
 
+function collectDependencies(
+	deps: Package['dependencies'],
+	map: Record<string, string> = {},
+) {
+	for (const name in deps) map[name] = `/${name}`;
+	return map;
+}
+
+export function getDependencies(rootPkg: Package, pkgJson: Package) {
+	const map: Record<string, string> = {};
+	if (rootPkg.devDependencies)
+		collectDependencies(rootPkg.devDependencies, map);
+	if (pkgJson.dependencies) collectDependencies(pkgJson.dependencies, map);
+	return map;
+}
+
 export function esbuild(options: esbuildApi.BuildOptions) {
 	return new Observable<never>(subs => {
 		esbuildApi
@@ -150,7 +166,7 @@ ${extra}`),
 	});
 }
 
-export function pkg(main: string) {
+export function pkg(main?: string) {
 	return defer(() => {
 		const p = readPackage();
 		const licenseId = p.license;

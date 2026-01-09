@@ -796,8 +796,8 @@ export class Test {
 
 			if (!promise) await this.emit('syncComplete');
 			syncCompleteNeeded = false;
-
 			await promise;
+
 			if (promise && (this.completed as boolean) === false)
 				throw new Error('Never completed');
 			if (this.only.length) {
@@ -806,8 +806,8 @@ export class Test {
 			} else if (this.tests.length)
 				await Promise.all(this.tests.map(test => test.run()));
 		} catch (e) {
-			console.error(String(e));
 			this.pushError(e);
+			console.error(String(e));
 		} finally {
 			if (syncCompleteNeeded) await this.emit('syncComplete');
 			this.domContainer?.parentNode?.removeChild(this.domContainer);

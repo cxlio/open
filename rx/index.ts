@@ -167,7 +167,7 @@ export function pipe(...operators: Operator<unknown>[]): Operator<unknown> {
 /**
  * A representation of any set of values over any amount of time.
  */
-export class Observable<T, P = 'none'> {
+export class Observable<T, P = 'none' | 'emit1'> {
 	constructor(protected __subscribe: SubscribeFunction<T>) {}
 
 	/**
@@ -545,7 +545,7 @@ export function toPromise<T, P>(
 }
 
 export async function firstValueFrom<T>(observable: Observable<T>) {
-	return _toPromise(observable.first()) as Promise<T>;
+	return _toPromise(observable.first());
 }
 
 export function operatorNext<T, T2 = T>(
@@ -566,7 +566,8 @@ export function operator<T, T2 = T>(
 	return (source: Observable<T>) =>
 		new Observable<T2>(subscriber => {
 			const next = fn(subscriber, source);
-			subscriber.signal.subscribe(() => next.unsubscribe?.());
+			if (next.unsubscribe)
+				subscriber.signal.subscribe(() => next.unsubscribe?.());
 			if (!next.error) next.error = subscriber.error;
 			if (!next.complete) next.complete = subscriber.complete;
 			next.signal = subscriber.signal;
@@ -803,6 +804,57 @@ export function mergeMap<T, T2>(project: (val: T) => ObservableInput<T2>) {
 		});
 }
 
+export function concatMap<T, T2>(project: (val: T) => ObservableInput<T2>) {
+	return operator<T, T2>(subscriber => {
+		const outerSignal = new Signal();
+		let innerSignal: Signal | undefined;
+		let innerSubscription: Subscription | undefined;
+		const queue: T[] = [];
+		let completed = false;
+		let active = false;
+
+		const cleanUp = () => {
+			innerSignal?.next();
+			innerSignal = undefined;
+			innerSubscription = undefined;
+			active = false;
+
+			if (queue.length && !subscriber.closed) run(queue.shift() as T);
+			else if (completed) subscriber.complete();
+		};
+
+		const run = (val: T) => {
+			active = true;
+			innerSignal = new Signal();
+			innerSubscription = from(project(val)).subscribe({
+				next: subscriber.next,
+				error: subscriber.error,
+				complete: cleanUp,
+				signal: innerSignal,
+			});
+		};
+
+		subscriber.signal.subscribe(() => {
+			innerSignal?.next();
+			outerSignal.next();
+		});
+
+		return {
+			next(val: T) {
+				if (active) queue.push(val);
+				else run(val);
+			},
+			error: subscriber.error,
+			complete() {
+				completed = true;
+				if (!active && queue.length === 0) subscriber.complete();
+			},
+			signal: outerSignal,
+			unsubscribe: () => innerSubscription?.unsubscribe(),
+		};
+	});
+}
+
 /**
  * Projects each source value to an Observable which is merged in the output Observable
  * only if the previous projected Observable has completed.
@@ -895,10 +947,10 @@ export function tap<T>(fn: (val: T) => void): Operator<T, T> {
  *  returned will be used to continue the observable chain.
  *
  */
-export function catchError<T, O extends T | never>(
-	selector: (err: unknown, source: Observable<T>) => Observable<O> | void,
-): Operator<T, T> {
-	return operator<T, T>((subscriber, source) => {
+export function catchError<T, O>(
+	selector: (err: unknown, source: Observable<T>) => Observable<O>,
+): Operator<T, T | O> {
+	return operator<T, T | O>((subscriber, source) => {
 		let signal: Signal | undefined;
 		const observer = {
 			next: subscriber.next,
@@ -906,11 +958,9 @@ export function catchError<T, O extends T | never>(
 				try {
 					if (subscriber.closed) return;
 					const result = selector(err, source);
-					if (result) {
-						signal?.next();
-						signal = new Signal();
-						result.subscribe({ ...observer, signal });
-					}
+					signal?.next();
+					signal = new Signal();
+					result.subscribe({ ...observer, signal });
 				} catch (err2) {
 					subscriber.error(err2);
 				}
@@ -1191,6 +1241,7 @@ export function ref<T>() {
 
 export const operators = {
 	catchError,
+	concatMap,
 	debounceTime,
 	distinctUntilChanged,
 	exhaustMap,
@@ -1224,12 +1275,10 @@ for (const p in operators) {
 }
 
 export interface Observable<T> {
-	catchError<T2 extends T | never>(
-		selector: (
-			err: unknown,
-			source: Observable<T>,
-		) => Observable<T2> | void,
-	): Observable<T>;
+	catchError<T2>(
+		selector: (err: unknown, source: Observable<T>) => Observable<T2>,
+	): Observable<T | T2>;
+	concatMap<T2>(project: (val: T) => ObservableInput<T2>): Observable<T2>;
 	debounceTime(
 		time?: number,
 		timer?: (delay: number) => Observable<void>,
@@ -1238,7 +1287,7 @@ export interface Observable<T> {
 	exhaustMap<T2>(project: (value: T) => ObservableInput<T2>): Observable<T2>;
 	filter<T2 = T>(fn: (val: T) => boolean): Observable<T2>;
 	finalize(fn: () => void): Observable<T>;
-	first(): Observable<T>;
+	first(): Observable<T, 'emit1'>;
 	map<T2>(mapFn: (val: T) => T2): Observable<T2>;
 	mergeMap<T2>(project: (val: T) => ObservableInput<T2>): Observable<T2>;
 	publishLast(): Observable<T>;

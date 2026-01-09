@@ -128,13 +128,12 @@ async function fixTsconfig({ projectPath, name }: LintData) {
 }
 
 async function fixTest({ projectPath, name }: LintData) {
-	const path = `${projectPath}/tsconfig.test.json`;
-	const testPath = `${projectPath}/test.ts`;
+	const tsconfigPath = path.join(projectPath, `tsconfig.test.json`);
 	let hasChanged = false;
 
-	if (!(await exists(path))) {
+	if (!(await exists(tsconfigPath))) {
 		await fs.writeFile(
-			path,
+			tsconfigPath,
 			`{
 	"extends": "./tsconfig.json",
 	"include": ["test.ts"],
@@ -144,6 +143,7 @@ async function fixTest({ projectPath, name }: LintData) {
 		);
 	}
 
+	const testPath = path.join(projectPath, 'test.ts');
 	const tsconfig =
 		(await readJson<Tsconfig | null>(
 			`${projectPath}/tsconfig.test.json`,
@@ -166,7 +166,10 @@ async function fixTest({ projectPath, name }: LintData) {
 		);
 	}
 
-	if (!(await exists(testPath))) {
+	if (
+		!(await exists(testPath)) &&
+		!(await exists(path.join(projectPath, 'test.tsx')))
+	) {
 		await fs.writeFile(
 			testPath,
 			`import { spec } from '@cxl/spec';
@@ -472,7 +475,7 @@ async function verifyProject(rootPkg: Package) {
 	return results;
 }
 
-export default async function () {
+export async function audit() {
 	function error(project: string, msg: string) {
 		console.error(`${project}: ${msg}`);
 	}

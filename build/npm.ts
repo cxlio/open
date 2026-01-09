@@ -104,7 +104,7 @@ export async function publishNpm(dir: string, distDir: string) {
 			: 'latest';
 		const removeVersion =
 			tag === 'alpha' ? info['dist-tags'].alpha : undefined;
-		const otp = await input({ prompt: 'NPM OTP: ' });
+		const otp = await input({ prompt: 'NPM OTP: ', mask: true });
 
 		console.log(
 			await sh(`npm publish --access=public --tag ${tag} --otp ${otp}`, {
@@ -113,18 +113,22 @@ export async function publishNpm(dir: string, distDir: string) {
 		);
 
 		if (tag === 'beta' || tag === 'alpha') {
+			const otp2 = await input({ prompt: 'NPM OTP: ', mask: true });
 			const baseTag = `${pkg.version.split('.')[0]}-${tag}`;
 			console.log(
 				await sh(
-					`npm dist-tag add ${pkg.name}@${pkg.version} ${baseTag}`,
+					`npm dist-tag add ${pkg.name}@${pkg.version} ${baseTag} --otp ${otp2}`,
 				),
 			);
 		}
 
 		if (removeVersion) {
+			const otp = await input({ prompt: 'NPM OTP: ', mask: true });
 			try {
 				console.log(
-					await sh(`npm unpublish ${pkg.name}@${removeVersion}`),
+					await sh(
+						`npm unpublish ${pkg.name}@${removeVersion} --otp ${otp}`,
+					),
 				);
 			} catch (e) {
 				console.error(

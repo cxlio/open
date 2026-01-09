@@ -263,7 +263,7 @@ export async function input({
 	});
 
 	try {
-		return await rl.question('');
+		return await rl.question(mask ? '🔒' : '');
 	} finally {
 		rl.close();
 	}

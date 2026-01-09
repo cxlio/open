@@ -4,6 +4,15 @@ export async function getBranch(cwd: string): Promise<string> {
 	return (await sh('git rev-parse --abbrev-ref HEAD', { cwd })).trim();
 }
 
+export async function getRefHash(cwd?: string) {
+	return (
+		await sh(
+			'git rev-parse --short "$(git symbolic-ref HEAD | sed \'s@^refs/remotes/origin/@@\')"',
+			{ cwd },
+		)
+	).trim();
+}
+
 export async function checkBranchClean(branch: string) {
 	try {
 		await sh(`git status > /dev/null; git diff-index --quiet ${branch}`);

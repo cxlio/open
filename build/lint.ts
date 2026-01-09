@@ -56,7 +56,7 @@ export function eslintTsconfig(path: string | TsconfigJson = 'tsconfig.json') {
 			: path;
 	}).switchMap(tsconfigFile =>
 		eslint(tsconfigFile.files ?? tsconfigFile.include, {
-			ignorePatterns: tsconfigFile.exclude,
+			ignorePatterns: [...(tsconfigFile.exclude ?? []), '*.js'],
 			errorOnUnmatchedPattern: false,
 		}),
 	);

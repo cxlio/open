@@ -2,7 +2,6 @@ import { Browser, CoverageEntry, Page, HTTPRequest } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { basename, resolve, relative, join, extname } from 'path';
-//import { createRequire } from 'module';
 import { resolveImport } from './resolve.js';
 
 import type { FigureData, RunnerCommand, Test, Result } from '../spec/index.js';
@@ -105,13 +104,17 @@ async function createPage(
 		};
 	}
 
+	const pageError: Result[] = [];
 	const page = await openPage(browser);
 	const entryFile = app.vfsRoot
 		? `./${relative(app.vfsRoot, app.entryFile)}`
 		: app.entryFile;
 
 	page.on('console', msg => handleConsole(msg, app));
-	page.on('pageerror', msg => app.log(msg));
+	page.on('pageerror', msg => {
+		app.log(msg);
+		pageError.push({ success: false, message: String(msg) });
+	});
 	page.on('requestfailed', req => {
 		app.log(
 			`requestfailed: ${req.method()} ${req.url()} ${req.failure()
@@ -129,6 +132,7 @@ async function createPage(
 
 	const suite = await mjsRunner(page, app, entryFile);
 	if (!suite) throw new Error('Invalid suite');
+	if (pageError.length) suite.results.push(...pageError);
 
 	const coverage = app.ignoreCoverage
 		? undefined

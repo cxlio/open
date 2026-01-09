@@ -18,6 +18,7 @@ import {
 import combineLatestSuite from './test/combineLatest.js';
 import catchErrorSuite from './test/catchError.js';
 import concatSuite from './test/concat.js';
+import concatMapSuite from './test/concatMap.js';
 import debounceTimeSuite from './test/debounceTime.js';
 import deferSuite from './test/defer.js';
 import distinctUntilChangedSuite from './test/distinctUntilChanged.js';
@@ -57,6 +58,9 @@ function throwError(msg: string) {
 export default spec('rx', suite => {
 	[
 		catchErrorSuite,
+		combineLatestSuite,
+		concatSuite,
+		concatMapSuite,
 		deferSuite,
 		debounceFunctionSuite,
 		distinctUntilChangedSuite,
@@ -69,8 +73,6 @@ export default spec('rx', suite => {
 		mergeMapSuite,
 		orderedSubjectSuite,
 		intervalSuite,
-		concatSuite,
-		combineLatestSuite,
 		debounceTimeSuite,
 		reduceSuite,
 		ignoreElementsSuite,

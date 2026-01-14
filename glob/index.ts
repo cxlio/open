@@ -346,10 +346,10 @@ function globToRegexString(
 	const prefix = effectiveMatchBase
 		? ''
 		: anchoredToRoot
-			? '^'
-			: gitignore
-				? '^(?:.*/)?'
-				: '^';
+		? '^'
+		: gitignore
+		? '^(?:.*/)?'
+		: '^';
 
 	// directory-only: match the directory itself or anything under it
 	const suffix = dirOnly ? '(?:/.*)?$' : '/?$';

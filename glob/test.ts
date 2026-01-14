@@ -1,9 +1,14 @@
 import { TestApi, spec } from '../spec/index.js';
-import { globToRegex } from './index.js';
+import { Options, globToRegex } from './index.js';
 
 export default spec('glob', s => {
-	function isMatch(a: TestApi, term: string, glob: string | string[]) {
-		const regex = globToRegex(glob);
+	function isMatch(
+		a: TestApi,
+		term: string,
+		glob: string | string[],
+		op?: Options,
+	) {
+		const regex = globToRegex(glob, op);
 		a.ok(
 			regex.test(term),
 			`${JSON.stringify(term)} should match glob ${JSON.stringify(
@@ -25,6 +30,13 @@ export default spec('glob', s => {
 		const regex = globToRegex(glob);
 		return list.filter(i => regex.test(i));
 	}
+
+	s.test('gitignore', a => {
+		isMatch(a, 'dist', 'dist/', { gitignore: true });
+		isMatch(a, 'dist', '(dist/|node_modules)', { gitignore: true });
+		isMatch(a, 'node_modules', '(dist/|node_modules)', { gitignore: true });
+	});
+
 	s.test('should return true when any of the patterns match', a => {
 		isMatch(a, '.', ['.', 'foo']);
 		isMatch(a, 'a', ['a', 'foo']);

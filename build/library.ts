@@ -32,7 +32,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	const isBrowser = !!pkgJson.browser;
 	// "main" is used mainly by CDNs, bundlers will prefer to use the "exports" config.
 	const pkgMain = isBrowser
-		? pkgJson.browser ?? pkgJson.exports?.['.'] ?? './index.bundle.js'
+		? (pkgJson.browser ?? pkgJson.exports?.['.'] ?? './index.bundle.js')
 		: './index.js';
 
 	// If pkgJson browser points to './index.bundle.js' a bundle file will be created.
@@ -55,7 +55,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	const entryPoints = pkgJson.exports
 		? Object.values(pkgJson.exports).flatMap(val => {
 				return val ? [join(outputDir, val)] : [];
-		  })
+			})
 		: bundleEntryPoint;
 
 	return build(
@@ -111,13 +111,10 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 							}),
 							concat(
 								fromAsync(async () => {
-									const { buildDts } = await import(
-										'@cxl/3doc/render.js'
-									);
+									const { buildDts } =
+										await import('@cxl/3doc/render.js');
 									const { renderJson, findExamples } =
-										await import(
-											'@cxl/3doc/render-summary.js'
-										);
+										await import('@cxl/3doc/render-summary.js');
 									const dts = await buildDts({
 										clean: false,
 										outputDir,
@@ -171,7 +168,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 							),
 						],
 					},
-			  ]
+				]
 			: []),
 		{
 			target: 'audit',
@@ -184,6 +181,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			tasks: [
 				buildDocs({
 					outputDir: `../docs/${pkgJson.name}`,
+					spa: true,
 				}),
 			],
 		},
@@ -218,7 +216,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 								outdir: pkgDir,
 								external,
 							}),
-					  ]
+						]
 					: []),
 			],
 		},

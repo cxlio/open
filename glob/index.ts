@@ -3,6 +3,16 @@ export interface Options {
 	 * Perform a basename-only match.
 	 */
 	matchBase?: boolean;
+
+	/**
+	 * Enable gitignore-like pattern semantics:
+	 * - Leading `/` anchors to path root
+	 * - Trailing `/` matches directories (prefix match)
+	 * - Patterns without `/` match basenames (like matchBase)
+	 * - `#` starts a comment (unless escaped)
+	 * - Trailing spaces are trimmed (unless escaped)
+	 */
+	gitignore?: boolean;
 }
 
 /*
@@ -14,7 +24,47 @@ export interface Options {
  * handling edge cases such as unclosed groups, escaped characters, and match modifiers.
  * This low-level utility is used internally by the `globToRegex` function for pattern matching.
  */
-function globToRegexString(glob: string, { matchBase }: Options = {}): string {
+function globToRegexString(
+	glob: string,
+	{ matchBase, gitignore }: Options = {},
+): string {
+	// --- gitignore preprocessing ---
+	if (gitignore) {
+		// Trim trailing spaces unless escaped with a backslash (gitignore behavior).
+		// e.g. "foo " == "foo", but "foo\ " keeps the space.
+		let g = glob;
+
+		// Comments: a leading unescaped # means "ignore this pattern"
+		// (return a regex that matches nothing).
+		if (g[0] === '#' && g[1] !== '\\') return '(?!)';
+
+		// Remove unescaped trailing spaces
+		while (g.length > 0 && g.endsWith(' ') && !g.endsWith('\\ ')) {
+			g = g.slice(0, -1);
+		}
+		// Unescape "\ " -> " "
+		g = g.replace(/\\ $/, ' ');
+
+		glob = g;
+	}
+
+	let anchoredToRoot = false;
+	let dirOnly = false;
+
+	if (gitignore) {
+		// Leading slash anchors to root
+		if (glob.startsWith('/')) {
+			anchoredToRoot = true;
+			glob = glob.slice(1);
+		}
+
+		// Trailing slash means directory-only match
+		if (glob.endsWith('/')) {
+			dirOnly = true;
+			glob = glob.slice(0, -1);
+		}
+	}
+
 	const len = glob.length;
 	let reStr = '';
 	let inGroup = 0;
@@ -125,9 +175,10 @@ function globToRegexString(glob: string, { matchBase }: Options = {}): string {
 					}
 
 					if (negate)
-						return `^(?:(?!${globToRegexString(
-							glob.slice(i + 1),
-						)}).*)$`;
+						return `^(?:(?!${globToRegexString(glob.slice(i + 1), {
+							matchBase,
+							gitignore,
+						})}).*)$`;
 				}
 				break;
 			case '"':
@@ -218,7 +269,8 @@ function globToRegexString(glob: string, { matchBase }: Options = {}): string {
 				isStartOfPath = false;
 				break;
 			case '|':
-				reStr += '|';
+				if (gitignore && glob[i - 1] === '/') reStr += '?|';
+				else reStr += '|';
 				break;
 			case ',':
 				if (inGroup) {
@@ -287,7 +339,22 @@ function globToRegexString(glob: string, { matchBase }: Options = {}): string {
 		}
 	}
 
-	return `${matchBase ? '' : '^'}${reStr}/?$`;
+	// --- gitignore postprocessing / anchoring ---
+	const effectiveMatchBase =
+		!!matchBase || (gitignore && !anchoredToRoot && !glob.includes('/'));
+
+	const prefix = effectiveMatchBase
+		? ''
+		: anchoredToRoot
+			? '^'
+			: gitignore
+				? '^(?:.*/)?'
+				: '^';
+
+	// directory-only: match the directory itself or anything under it
+	const suffix = dirOnly ? '(?:/.*)?$' : '/?$';
+
+	return `${prefix}${reStr}${suffix}`;
 }
 
 /**

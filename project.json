@@ -5,44 +5,8 @@
 	"watch": {
 		"rules": {
 			"build": {
-				"files": ["build/**/*"],
-				"tasks": "cd build && npm run build"
-			},
-			"core": {
-				"files": ["core/*"],
-				"tasks": "cd core && npm run build"
-			},
-			"rx": {
-				"files": ["rx/**/*"],
-				"tasks": "cd rx && npm run build"
-			},
-			"glob": {
-				"files": ["glob/**/*"],
-				"tasks": "cd glob && npm run build"
-			},
-			"tgz": {
-				"files": ["tgz/**/*"],
-				"tasks": "cd tgz && npm run build"
-			},
-			"keyboard": {
-				"files": ["keyboard/**/*"],
-				"tasks": "cd keyboard && npm run build"
-			},
-			"spec": {
-				"files": ["spec/**/*"],
-				"tasks": "npm run build --prefix spec"
-			},
-			"spec-browser": {
-				"files": ["spec-browser/*"],
-				"tasks": "npm run build --prefix spec-browser"
-			},
-			"spec-runner": {
-				"files": ["spec-runner/*"],
-				"tasks": "npm run build --prefix spec-runner"
-			},
-			"ui": {
-				"files": ["ui/*"],
-				"tasks": "npm run build --prefix ui"
+				"regex": "/([^/]+)/.+",
+				"tasks": "shell.npmBuild $1"
 			}
 		}
 	}

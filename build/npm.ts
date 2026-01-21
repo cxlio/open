@@ -100,8 +100,8 @@ export async function publishNpm(dir: string, distDir: string) {
 		const tag = pkg.version.includes('beta')
 			? 'beta'
 			: pkg.version.includes('alpha')
-			? 'alpha'
-			: 'latest';
+				? 'alpha'
+				: 'latest';
 		const removeVersion =
 			tag === 'alpha' ? info['dist-tags'].alpha : undefined;
 		const otp = await input({ prompt: 'NPM OTP: ', mask: true });
@@ -147,8 +147,31 @@ export async function publishNpm(dir: string, distDir: string) {
 	}
 }
 
-export async function getPackageInfo(name: string) {
-	return JSON.parse(
-		(await sh(`npm show ${name} --json`)).trim(),
-	) as PackageInfo;
+export async function getPackageInfo(name: string): Promise<PackageInfo> {
+	try {
+		return JSON.parse(
+			(await sh(`npm show ${name} --json`)).trim(),
+		) as PackageInfo;
+	} catch (e) {
+		const msg = String(e); //?.stderr ?? e?.stdout ?? e?.message ?? e);
+		// npm uses E404 / "Not Found" when the package doesn't exist
+		if (
+			/\bE404\b/.test(msg) ||
+			/Not Found/i.test(msg) ||
+			/code E404/i.test(msg)
+		) {
+			return {
+				name,
+				version: '',
+				private: false,
+				bugs: '',
+				repository: '',
+				bundledDependencies: {},
+				'dist-tags': {},
+				versions: [],
+				time: {},
+			} as PackageInfo;
+		}
+		throw e;
+	}
 }

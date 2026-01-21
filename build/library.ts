@@ -5,7 +5,7 @@ import { EMPTY, concat, fromAsync } from '../rx/index.js';
 
 import { BuildConfiguration, build, exec } from './builder.js';
 import { pkg, readme, esbuild } from './package.js';
-import { copyDir, file } from './file.js';
+import { file } from './file.js';
 import { eslintTsconfig } from './lint.js';
 import { TsconfigJson, tsconfig } from './tsc.js';
 import { buildDocs } from './docs.js';
@@ -32,7 +32,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	const isBrowser = !!pkgJson.browser;
 	// "main" is used mainly by CDNs, bundlers will prefer to use the "exports" config.
 	const pkgMain = isBrowser
-		? pkgJson.browser ?? pkgJson.exports?.['.'] ?? './index.bundle.js'
+		? (pkgJson.browser ?? pkgJson.exports?.['.'] ?? './index.bundle.js')
 		: './index.js';
 
 	// If pkgJson browser points to './index.bundle.js' a bundle file will be created.
@@ -55,8 +55,13 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	const entryPoints = pkgJson.exports
 		? Object.values(pkgJson.exports).flatMap(val => {
 				return val ? [join(outputDir, val)] : [];
-		  })
+			})
 		: bundleEntryPoint;
+	const toDts = (e: string) => e.replace(/\.js$/, '.d.ts');
+	const dtsEntryPoints = entryPoints.map(e => {
+		if (typeof e === 'string') return toDts(e);
+		return { ...e, in: toDts(e.in) };
+	});
 
 	return build(
 		{
@@ -111,18 +116,18 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 							}),
 							concat(
 								fromAsync(async () => {
-									const { buildDts } = await import(
-										'@cxl/3doc/render.js'
-									);
+									const { buildDts } =
+										await import('@cxl/3doc/render.js');
 									const { renderJson, findExamples } =
-										await import(
-											'@cxl/3doc/render-summary.js'
-										);
-									const dts = await buildDts({
-										clean: false,
-										outputDir,
-										noHtml: true,
-									});
+										await import('@cxl/3doc/render-summary.js');
+									const dts = await buildDts(
+										{
+											clean: false,
+											outputDir,
+											noHtml: true,
+										},
+										pkgJson,
+									);
 									const summary = renderJson(dts);
 									const examples = summary.index.flatMap(n =>
 										findExamples(n),
@@ -171,7 +176,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 							),
 						],
 					},
-			  ]
+				]
 			: []),
 		{
 			target: 'audit',
@@ -204,9 +209,15 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				file('README.md', 'README.md'),
 				file('LICENSE.md', 'LICENSE.md').catchError(() => EMPTY),
 				pkg(pkgMain),
-				copyDir(outputDir, pkgDir, '*.d.ts'),
+				//copyDir(outputDir, pkgDir, '*.d.ts'),
 				esbuild({
 					entryPoints,
+					platform: isBrowser ? 'browser' : 'node',
+					outdir: pkgDir,
+					external,
+				}),
+				esbuild({
+					entryPoints: dtsEntryPoints,
 					platform: isBrowser ? 'browser' : 'node',
 					outdir: pkgDir,
 					external,
@@ -219,7 +230,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 								outdir: pkgDir,
 								external,
 							}),
-					  ]
+						]
 					: []),
 			],
 		},

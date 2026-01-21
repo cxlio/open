@@ -10,7 +10,6 @@ node ../dist/build "$@"
 
 cp license-* ../dist/build/package
 cp ../dist/build/eslint-config.js ../dist/build/package
-cp ../node_modules/@cxl/3doc/3doc.js ../dist/build/package
-cp ../node_modules/@cxl/3doc/hljs.css ../dist/build/package
 cp ../dist/build/spec-browser.js ../dist/build/package/spec-browser.js
+cp ../node_modules/@cxl/3doc/3doc.js ../dist/build/package
 

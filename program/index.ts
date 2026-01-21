@@ -2,6 +2,9 @@ import { readFile, stat, mkdir } from 'fs/promises';
 import { join, resolve } from 'path';
 import { SpawnOptions, spawn } from 'child_process';
 import * as readline from 'node:readline/promises';
+import { inspect } from 'util';
+
+inspect.defaultOptions.depth = null;
 
 const codes = {
 	reset: [0, 0],
@@ -82,8 +85,8 @@ export type ProgramParameters = Parameters<typeof parseParameters>[0];
 type ParameterType<T extends Parameter> = T['type'] extends 'string'
 	? string
 	: T['type'] extends 'number'
-	? number
-	: boolean;
+		? number
+		: boolean;
 
 export type ParametersResult<T extends Record<string, Parameter>> = {
 	[K in keyof T]?: T[K]['many'] extends true

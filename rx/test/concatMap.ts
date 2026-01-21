@@ -42,7 +42,7 @@ export default spec('concatMap', it => {
 		'not subscribe to later inners if the first inner never completes',
 		a => {
 			const src = cold('-a-b-|');
-			const srcSubs = '^     !';
+			const srcSubs = '^    !';
 
 			const innerNever = cold('-'); // never completes
 			const innerNeverSubs = ' ^';
@@ -50,7 +50,7 @@ export default spec('concatMap', it => {
 			const innerLater = cold('--x-|');
 			const innerLaterSubs = ''; // should never be subscribed
 
-			const expected = '--'; // only the innerNever tick keeps it alive; no completion
+			const expected = '-----'; // only the innerNever tick keeps it alive; no completion
 
 			const result = src.concatMap(v =>
 				v === 'a' ? innerNever : innerLater,
@@ -103,12 +103,12 @@ export default spec('concatMap', it => {
 		'unsubscribe active inner when the result is unsubscribed early',
 		a => {
 			const src = cold('-a-b-c-|');
-			const srcSubs = '^ !';
+			const srcSubs = '^    !';
 
 			const inner = cold('--i-j-k-l-|');
-			const innerSubs = '  ^  !'; // inner starts after `a`, then gets cut off by take()
+			const innerSubs = ' ^   !'; // inner starts after `a`, then gets cut off by take()
 
-			const expected = '----i-(j|)';
+			const expected = '---i-(j|)';
 
 			const result = src.concatMap(() => inner);
 

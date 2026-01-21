@@ -52,7 +52,7 @@ export interface KeyboardLayout {
 	 * A mapping of shifted keys to their non-shifted counterparts, used to accurately
 	 * interpret which character a shifted key press represents.
 	 */
-	shiftMap: Record<string, string | undefined>;
+	shiftMap?: Record<string, string | undefined>;
 
 	/**
 	 * Indicates whether the 'meta' or 'ctrl' key is the primary modifier used for commands,
@@ -60,17 +60,21 @@ export interface KeyboardLayout {
 	 */
 	modKey?: 'metaKey' | 'ctrlKey';
 
+	altName?: 'option' | 'alt';
+	modName?: 'meta' | 'cmd';
+
 	/**
 	 * Describes a function that translates a `Key` object (representing a keyboard event) to a character string.
 	 */
-	translate(ev: Key): string;
+	translate?(ev: Key): string;
 }
 
-interface InternalKeyboardLayout extends KeyboardLayout {
+interface InternalKeyboardLayout {
+	shiftMap: Record<string, string | undefined>;
 	modKey: 'metaKey' | 'ctrlKey';
-
 	altName: 'option' | 'alt';
 	modName: 'meta' | 'cmd';
+	translate(ev: Key): string;
 }
 
 const navigator =
@@ -311,6 +315,7 @@ function _parseKey(
 function augmentLayout(layout: KeyboardLayout): InternalKeyboardLayout {
 	const isMac = IS_MAC.test(navigator.platform);
 	return {
+		...enUsKeyboardLayout,
 		modKey: isMac ? 'metaKey' : 'ctrlKey',
 		altName: isMac ? 'option' : 'alt',
 		modName: isMac ? 'cmd' : 'meta',

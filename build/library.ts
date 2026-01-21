@@ -5,7 +5,7 @@ import { EMPTY, concat, fromAsync } from '../rx/index.js';
 
 import { BuildConfiguration, build, exec } from './builder.js';
 import { pkg, readme, esbuild } from './package.js';
-import { file } from './file.js';
+import { file, copyDir } from './file.js';
 import { eslintTsconfig } from './lint.js';
 import { TsconfigJson, tsconfig } from './tsc.js';
 import { buildDocs } from './docs.js';
@@ -57,11 +57,11 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				return val ? [join(outputDir, val)] : [];
 			})
 		: bundleEntryPoint;
-	const toDts = (e: string) => e.replace(/\.js$/, '.d.ts');
+	/*const toDts = (e: string) => e.replace(/\.js$/, '.d.ts');
 	const dtsEntryPoints = entryPoints.map(e => {
 		if (typeof e === 'string') return toDts(e);
 		return { ...e, in: toDts(e.in) };
-	});
+	});*/
 
 	return build(
 		{
@@ -209,19 +209,19 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				file('README.md', 'README.md'),
 				file('LICENSE.md', 'LICENSE.md').catchError(() => EMPTY),
 				pkg(pkgMain),
-				//copyDir(outputDir, pkgDir, '*.d.ts'),
+				copyDir(outputDir, pkgDir, '*.d.ts'),
 				esbuild({
 					entryPoints,
 					platform: isBrowser ? 'browser' : 'node',
 					outdir: pkgDir,
 					external,
 				}),
-				esbuild({
+				/*esbuild({
 					entryPoints: dtsEntryPoints,
 					platform: isBrowser ? 'browser' : 'node',
 					outdir: pkgDir,
 					external,
-				}),
+				}),*/
 				...(needsBundle
 					? [
 							esbuild({

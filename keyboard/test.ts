@@ -28,6 +28,7 @@ export default spec('keyboard', s => {
 			const layout: KeyboardLayout = {
 				...enUsKeyboardLayout,
 				modKey: 'ctrlKey',
+				modName: 'meta',
 			};
 			a.equal(normalize('mod+x', layout), 'ctrl+x');
 			a.equal(normalize('x+mod', layout), 'ctrl+x');
@@ -60,7 +61,11 @@ export default spec('keyboard', s => {
 		});
 
 		it.should('normalize special keys with modifiers', a => {
-			a.equal(normalize('ctrl+alt+del'), 'ctrl+alt+del');
+			const layout: KeyboardLayout = {
+				...enUsKeyboardLayout,
+				altName: 'alt',
+			};
+			a.equal(normalize('ctrl+alt+del', layout), 'ctrl+alt+del');
 			a.equal(normalize('ctrl+shift+esc'), 'ctrl+shift+esc');
 		});
 
@@ -199,7 +204,7 @@ export default spec('keyboard', s => {
 			const dispose = handleKeyboard({
 				element: elementMock,
 				onKey: onKeyMock,
-				layout: undefined,
+				layout: { altName: 'alt' },
 				capture: false,
 			});
 
@@ -225,8 +230,8 @@ export default spec('keyboard', s => {
 			const dispose = handleKeyboard({
 				element: elementMock,
 				onKey: onKeyMock,
+				layout: { altName: 'alt' },
 				delay: 100,
-				layout: undefined,
 				capture: false,
 			});
 
@@ -266,7 +271,7 @@ export default spec('keyboard', s => {
 				element: elementMock,
 				onKey: onKeyMock,
 				delay: 100,
-				layout: undefined,
+				layout: { altName: 'alt', modName: 'meta' },
 				capture: false,
 			});
 

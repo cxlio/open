@@ -107,7 +107,6 @@ export function runTests({
 			readFileSync('../package.json', 'utf8'),
 		) as Package;
 		const parsedTsconfig = parseTsConfig(join(cwd, 'tsconfig.json'));
-
 		try {
 			process.chdir(outputDir);
 			const report = await runSpec({

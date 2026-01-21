@@ -110,19 +110,22 @@ async function createPage(
 		? `./${relative(app.vfsRoot, app.entryFile)}`
 		: app.entryFile;
 
-	page.on('console', msg => handleConsole(msg, app));
+	page.on('console', msg => {
+		handleConsole(msg, app).catch(e => console.error(e));
+	});
 	page.on('pageerror', msg => {
 		app.log(msg);
 		pageError.push({ success: false, message: String(msg) });
 	});
 	page.on('requestfailed', req => {
 		app.log(
-			`requestfailed: ${req.method()} ${req.url()} ${req.failure()
-				?.errorText}`,
+			`requestfailed: ${req.method()} ${req.url()} ${
+				req.failure()?.errorText
+			}`,
 		);
 	});
-	page.exposeFunction('__cxlRunner', cxlRunner);
 
+	await page.exposeFunction('__cxlRunner', cxlRunner);
 	await startTracing(page);
 
 	if (app.browserUrl) await goto(app, page, app.browserUrl);
@@ -131,7 +134,6 @@ async function createPage(
 	await page.bringToFront();
 
 	const suite = await mjsRunner(page, app, entryFile);
-	if (!suite) throw new Error('Invalid suite');
 	if (pageError.length) suite.results.push(...pageError);
 
 	const coverage = app.ignoreCoverage
@@ -149,7 +151,6 @@ function virtualFileServer(page: Page, app: SpecRunner) {
 		try {
 			const mod = path.slice(1);
 			const result = resolveImport(mod, `${cwd}/`);
-
 			if (result) {
 				return relative(cwd, result);
 			}
@@ -159,7 +160,7 @@ function virtualFileServer(page: Page, app: SpecRunner) {
 		return path;
 	}
 
-	page.on('request', async (req: HTTPRequest) => {
+	async function onRequest(req: HTTPRequest) {
 		try {
 			const url = new URL(req.url());
 			if (req.method() === 'GET' && url.hostname === 'cxl-tester') {
@@ -183,22 +184,26 @@ function virtualFileServer(page: Page, app: SpecRunner) {
 						source: body,
 					});
 
-				req.respond({
+				await req.respond({
 					status: 200,
 					contentType:
 						ext === '.js' ? 'text/javascript' : 'text/plain',
 					body,
 				});
 			} else {
-				req.continue();
+				await req.continue();
 			}
 		} catch (e) {
 			app.log(`Error handling request ${req.method()} ${req.url()}`);
 			console.error(e);
-			req.respond({
+			await req.respond({
 				status: 500,
 			});
 		}
+	}
+
+	page.on('request', req => {
+		onRequest(req).catch(e => console.error(e));
 	});
 }
 
@@ -272,7 +277,7 @@ async function generateCoverage(
 							isBlockCoverage: true,
 						},
 					],
-			  }
+				}
 			: [];
 	});
 }
@@ -283,7 +288,7 @@ async function parsePNG(buffer: Uint8Array) {
 	const PNG = (await import('pngjs')).PNG;
 	return new Promise<PNG>((resolve, reject) => {
 		const png = new PNG();
-		png.parse(Buffer.from(buffer), (e, self) => {
+		png.parse(Buffer.from(buffer), (e: Error | undefined, self) => {
 			if (e) reject(e);
 			else resolve(self);
 		});
@@ -345,16 +350,14 @@ async function handleFigureRequest(
 		readFile(baseline).catch(() => undefined),
 		screenshot(page, domId, html),
 	]);
-	if (buffer)
-		mkdir('spec')
-			.catch(() => false)
-			.then(() => writeFile(filename, buffer));
 
-	if ((!original || app.updateBaselines) && buffer && app.baselinePath) {
-		mkdir(app.baselinePath)
-			.catch(() => false)
-			.then(() => writeFile(baseline, buffer));
-	} else if (original && buffer && app.baselinePath) {
+	await mkdir('spec').catch(() => false);
+	await writeFile(filename, buffer);
+
+	if ((!original || app.updateBaselines) && app.baselinePath) {
+		await mkdir(app.baselinePath).catch(() => false);
+		await writeFile(baseline, buffer);
+	} else if (original && app.baselinePath) {
 		const [oPng, newPng] = await Promise.all([
 			parsePNG(original),
 			parsePNG(buffer),

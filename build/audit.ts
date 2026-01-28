@@ -202,7 +202,8 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 		: 'node ../dist/build';
 	const testScript = `npm run build test`;
 	const browser = './index.bundle.js';
-	const homepage = rootPkg.homepage && path.join(rootPkg.homepage, name);
+	const homepage =
+		rootPkg.homepage && new URL(pkg.name, rootPkg.homepage).href;
 
 	pkg.scripts ??= {};
 	if (!pkg.scripts.test) pkg.scripts.test = testScript;
@@ -275,7 +276,7 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 		),
 		rule(
 			!!rootPkg.homepage &&
-				pkg.homepage === path.join(rootPkg.homepage, name),
+				pkg.homepage === new URL(pkg.name, rootPkg.homepage).href,
 			'Package should inherit homepage field from root package.json',
 		),
 		rule(

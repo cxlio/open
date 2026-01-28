@@ -105,6 +105,7 @@ export async function publishNpm(dir: string, distDir: string) {
 		const removeVersion =
 			tag === 'alpha' ? info['dist-tags'].alpha : undefined;
 		const otp = await input({ prompt: 'NPM OTP: ', mask: true });
+		if (!otp) throw new Error('Invalid otp');
 
 		console.log(
 			await sh(`npm publish --access=public --tag ${tag} --otp ${otp}`, {

@@ -10,6 +10,14 @@ import type { PNG } from 'pngjs';
 
 import { TestCoverage, generateReport } from './report.js';
 
+interface HTMLElement {
+	activeElement: HTMLElement | null;
+	innerHTML: string;
+	style: { zIndex: string };
+	getRootNode(): HTMLElement | null;
+	blur(): void;
+}
+
 async function startTracing(page: Page) {
 	await Promise.all([
 		page.coverage.startJSCoverage({
@@ -302,10 +310,10 @@ function screenshot(page: Page, domId: string, html: string) {
 			return page
 				.$eval(
 					id,
-					(el, html) => {
+					(el: HTMLElement, html) => {
 						el.innerHTML = html;
 						el.style.zIndex = '10';
-						el.getRootNode()?.activeElement?.blur?.();
+						el.getRootNode()?.activeElement?.blur();
 					},
 					html,
 				)

@@ -27,23 +27,40 @@ export interface Output {
 	source: string;
 }
 
+// CLI parameters prefixed by --
 const parameters = {
-	node: { type: 'boolean', help: 'Run tests in node mode.' },
-	baselinePath: { type: 'string', help: 'Baseline Path' },
-	updateBaselines: { help: 'Update baselines' },
-	ignoreCoverage: { help: 'Disable coverage report.' },
-	mjs: { help: 'Enable ES modules mode' },
-	inspect: { help: 'Enable node debugger' },
-	disableSecurity: { help: 'Disable Browser Security' },
-	browserUrl: { type: 'string', help: 'Browser runner initial URL' },
-	vfsRoot: { type: 'string', help: 'Start a Virtual File Server' },
+	node: {
+		type: 'boolean',
+		help: 'Run specs using the Node.js runner (no browser).',
+	},
+	baselinePath: {
+		type: 'string',
+		help: 'Directory containing baseline files used for comparisons.',
+	},
+	updateBaselines: {
+		help: 'Overwrite baselines with current outputs (updates expected results).',
+	},
+	ignoreCoverage: { help: 'Skip generating the coverage report.' },
+	mjs: { help: 'Treat spec files as ES modules (ESM) when executing.' },
+	inspect: { help: 'Enable the Node.js inspector for debugging.' },
+	disableSecurity: {
+		help: 'Disable browser web security (e.g., CORS) for the browser runner.',
+	},
+	browserUrl: {
+		type: 'string',
+		help: 'Initial URL to open in the browser runner.',
+	},
+	vfsRoot: {
+		type: 'string',
+		help: 'Root directory to serve via the virtual file server.',
+	},
 	startServer: {
 		type: 'string',
-		help: 'Start a server application while the tests are running',
+		help: 'Command to start an external server while tests run (e.g. "npm run dev").',
 	},
 	reportPath: {
 		type: 'string',
-		help: '',
+		help: 'Path to write the JSON test report (default: "test-report.json").',
 	},
 } as const;
 
@@ -51,8 +68,8 @@ function startServer(cmd: string) {
 	const [bin, ...args] = cmd.split(' ');
 	if (!bin) return;
 	const proc = spawn(bin, args);
-	proc.stdout?.on('data', data => console.log(data.toString()));
-	proc.stderr?.on('data', data => console.error(data.toString()));
+	proc.stdout.on('data', (data: Buffer) => console.log(data.toString()));
+	proc.stderr.on('data', (data: Buffer) => console.error(data.toString()));
 	return proc;
 }
 
@@ -87,10 +104,8 @@ const start = program({}, async ({ log }) => {
 		log(`Could not kill "${args.startServer}"`);
 	}
 
-	if (report) {
-		printReportV2(report);
-		await writeFile(config.reportPath, JSON.stringify(report));
-	}
+	printReportV2(report);
+	await writeFile(config.reportPath, JSON.stringify(report));
 
 	if (!report.success) {
 		process.exitCode = 1;
@@ -100,4 +115,4 @@ const start = program({}, async ({ log }) => {
 
 export default start;
 
-if (import.meta.main) start();
+if (import.meta.main) await start();

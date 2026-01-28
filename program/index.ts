@@ -260,16 +260,46 @@ export async function input({
 }) {
 	process.stdout.write(prompt);
 
-	const rl = readline.createInterface({
-		input: process.stdin,
-		output: mask ? undefined : process.stdout,
-	});
-
-	try {
-		return await rl.question(mask ? '🔒' : '');
-	} finally {
-		rl.close();
+	if (!mask) {
+		const rl = readline.createInterface({
+			input: process.stdin,
+			output: process.stdout,
+		});
+		try {
+			return await rl.question('');
+		} finally {
+			rl.close();
+		}
 	}
+
+	const stdin = process.stdin;
+	if (!stdin.isTTY) throw new Error('Masked input requires a TTY');
+
+	stdin.setRawMode(true);
+	stdin.resume();
+	stdin.setEncoding('utf8');
+
+	let value = '';
+	return await new Promise<string>(resolve => {
+		const onData = (ch: string) => {
+			if (ch === '\r' || ch === '\n') {
+				stdin.off('data', onData);
+				stdin.setRawMode(false);
+				stdin.pause();
+				process.stdout.write('\n');
+				resolve(value);
+			} else if (ch === '\u0003') {
+				// Ctrl+C
+				process.exit(130);
+			} else if (ch === '\u007f') {
+				// Backspace
+				value = value.slice(0, -1);
+			} else {
+				value += ch;
+			}
+		};
+		stdin.on('data', onData);
+	});
 }
 
 function hrtime(): bigint {

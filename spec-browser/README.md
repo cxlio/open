@@ -8,7 +8,7 @@ Browser test runner and HTML reporter for spec tests. Renders results, error sta
 
 -   Branch Version: [0.4.0](https://npmjs.com/package/@cxl/spec-browser/v/0.4.0)
 -   License: GPL-3.0
--   Documentation: [Link](https:/cxlio.github.io/docs/spec-browser)
+-   Documentation: [Link](https://cxlio.github.io/docs/@cxl/spec-browser)
 -   Report Issues: [Github](https://github.com/cxlio/open/issues)
 
 ## Installation

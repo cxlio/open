@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 
 import { sh } from '../program/index.js';
-import { Package, getLatestVersion, readPackage } from './npm.js';
+import { Package, readPackage } from './npm.js';
 
 export async function buildRoot() {
 	const dirs = await fs.readdir('.');
@@ -12,13 +12,14 @@ export async function buildRoot() {
 	for (const dir of dirs) {
 		result.push(await renderPackage(dir, pkg));
 	}
+	const usage = await fs.readFile('./USAGE.md', 'utf8').catch(() => '');
 
 	const content = `${pkg.description}
-
+${usage ? `\n\n${usage}\n` : ''}
 ## Packages
 
-| Name           | Version | License | Description                          | Links                                          |
-| -------------- | ------- | ------- | ------------------------------------ | ---------------------------------------------- |
+| Name           | License | Description                          | Links                                          |
+| -------------- | ------- | ------------------------------------ | ---------------------------------------------- |
 ${result.join('')}
 `;
 
@@ -60,9 +61,9 @@ function write(file: string, content: string) {
 	return fs.writeFile(file, content);
 }
 
-function npmLink(pkgName: string, version: string) {
+/*function npmLink(pkgName: string, version: string) {
 	return `https://npmjs.com/package/${pkgName}/v/${version}`;
-}
+}*/
 
 async function renderPackage(dir: string, rootPkg: Package) {
 	const pkg = await readPkg(dir);
@@ -72,19 +73,19 @@ async function renderPackage(dir: string, rootPkg: Package) {
 
 	await sh(`npm run build audit test package docs --prefix ${dir}`);
 
-	const latestVersion =
+	/*const latestVersion =
 		(await getLatestVersion(pkg.name, 'beta').catch(() => '')) ||
 		(await getLatestVersion(pkg.name).catch(() => ''));
-	const version = latestVersion
+	/*const version = latestVersion
 		? `[${latestVersion}](${npmLink(pkg.name, latestVersion)})`
-		: `${pkg.version}`;
+		: `${pkg.version}`;*/
 	const homepage =
 		pkg.docs ??
 		(rootPkg.docs
 			? new URL(`${pkg.name}/${pkg.version}/`, rootPkg.docs + '/').href
 			: '');
 
-	return `| ${pkg.name.padEnd(20)} | ${version} | ${pkg.license.padEnd(
+	return `| ${pkg.name.padEnd(20)} | ${pkg.license.padEnd(
 		10,
 	)} | ${pkg.description} | ${homepage ? `[Docs](${homepage})` : ''} |\n`;
 }

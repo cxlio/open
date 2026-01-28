@@ -32,9 +32,9 @@ export default spec('tgz', it => {
 		);
 		const files = await tgz(tar);
 		a.equal(files.length, 1);
-		a.equal(files[0].path, 'test1.txt');
-		a.equal(files[0].content.byteLength, 4);
-		a.equal(decode(files[0].content), '123\n');
+		a.equal(files[0]?.path, 'test1.txt');
+		a.equal(files[0]?.content.byteLength, 4);
+		a.equal(files[0]?.content && decode(files[0]?.content), '123\n');
 	});
 
 	it.should('load long filenames', async a => {
@@ -43,12 +43,12 @@ export default spec('tgz', it => {
 		);
 		const files = await tgz(tar);
 		a.equal(files.length, 1);
-		a.equal(files[0].path.length, 156);
+		a.equal(files[0]?.path.length, 156);
 		a.equal(
-			files[0].path,
+			files[0]?.path,
 			'./82Z57wod1xDaGABZu6zdwBnGXo4GeyVcugoq1REkyTDVxRxpkTvHVxrKMEdQQSaTujDQuYyQrPDRSRBAcRBpQrvFWjakQq0rdRN19ECNBhMMKQSEMMBLl0LwDOwc55XSBPUiXIrkl7VmqlbL70Hjq2.txt',
 		);
-		a.equal(files[0].content.byteLength, 10);
+		a.equal(files[0]?.content.byteLength, 10);
 	});
 
 	it.should(
@@ -64,8 +64,8 @@ export default spec('tgz', it => {
 				'./V4lDshfCvtOaQ0G32wwFe4mJu3tdFstILpL1hLjUcBzFVUtYXMlSGRSQbN1HUe9TSnevqZRSuYduWyiMHsLsbdcuIcyuZq16O6YwJMqXq1rOc5MuiWofIs4SopRmed6Fqni7GBq9xgOPtZ7PQoqJRw.txt',
 				'./yKRG4fOkNnMd7oBWFas0eCxvs23yPIB7XpuHBueJ6zHW4S9M7hQvqsNGYh9PUfOewCXDUTqcf3VOtmtd8PCcswAk6IRKcO7os7tw5sterz4udaz2qcrwqDe1REhz4QJ9YuXggQv9hoANkH5REWyWVt.txt',
 			]);
-			a.equal(files[0].content.byteLength, 10);
-			a.equal(files[1].content.byteLength, 10);
+			a.equal(files[0]?.content.byteLength, 10);
+			a.equal(files[1]?.content.byteLength, 10);
 		},
 	);
 
@@ -77,8 +77,8 @@ export default spec('tgz', it => {
 		a.equal(files.length, 2);
 		const paths = files.map(f => f.path).sort();
 		a.equalValues(paths, ['./subdir1/file1.txt', './subdir2/file2.txt']);
-		a.equal(files[0].content.byteLength, 10);
-		a.equal(files[1].content.byteLength, 10);
+		a.equal(files[0]?.content.byteLength, 10);
+		a.equal(files[1]?.content.byteLength, 10);
 	});
 
 	it.should('extract archive with file with 512 bytes', async a => {
@@ -87,7 +87,7 @@ export default spec('tgz', it => {
 		);
 		const files = await tgz(tar);
 		a.equal(files.length, 2);
-		a.equal(files[0].content.byteLength, 512);
+		a.equal(files[0]?.content.byteLength, 512);
 	});
 
 	it.should(
@@ -112,7 +112,7 @@ export default spec('tgz', it => {
 			);
 			const files = await tgz(tar.pipeThrough(transformStream));
 			a.equal(files.length, 2);
-			a.equal(files[0].content.byteLength, 512);
+			a.equal(files[0]?.content.byteLength, 512);
 		},
 	);
 });

@@ -4,7 +4,7 @@
 	"description": "Lightweight, efficient tool for extracting files from gzip-compressed tarballs.",
 	"license": "GPL-3.0",
 	"bugs": "https://github.com/cxlio/open/issues",
-	"homepage": "https:/cxlio.github.io/docs/tgz",
+	"homepage": "https://cxlio.github.io/docs/@cxl/tgz",
 	"type": "module",
 	"scripts": {
 		"build": "node ../dist/build",

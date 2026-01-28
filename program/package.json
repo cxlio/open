@@ -2,7 +2,7 @@
 	"name": "@cxl/program",
 	"version": "1.0.0",
 	"bugs": "https://github.com/cxlio/open/issues",
-	"homepage": "https:/cxlio.github.io/docs/program",
+	"homepage": "https://cxlio.github.io/docs/@cxl/program",
 	"description": "Utility module providing command-line parameter parsing, colorized console output, JSON file reading, directory creation, child process execution, and high-resolution operation timing for Node.js programs.",
 	"type": "module",
 	"scripts": {

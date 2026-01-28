@@ -16,7 +16,7 @@
 		"pngjs": "^6.0.0"
 	},
 	"bugs": "https://github.com/cxlio/open/issues",
-	"homepage": "https:/cxlio.github.io/docs/spec-runner",
+	"homepage": "https://cxlio.github.io/docs/@cxl/spec-runner",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/cxlio/open.git",

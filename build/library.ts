@@ -57,11 +57,6 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				return val ? [join(outputDir, val)] : [];
 			})
 		: bundleEntryPoint;
-	/*const toDts = (e: string) => e.replace(/\.js$/, '.d.ts');
-	const dtsEntryPoints = entryPoints.map(e => {
-		if (typeof e === 'string') return toDts(e);
-		return { ...e, in: toDts(e.in) };
-	});*/
 
 	return build(
 		{
@@ -70,22 +65,12 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				file('test-screenshot.html', 'test-screenshot.html').catchError(
 					() => EMPTY,
 				),
-				file('test.html', 'test.html').catchError(
-					() =>
-						generateTestFile({
-							appId,
-							pkgJson,
-							rootPkg,
-						}),
-					/*of({
-						path: 'test.html',
-						source: generateEsmTestFile(
-							appId,
-							pkgJson.name,
-							'./test.js',
-							generateTestImportMap(rootPkg, pkgJson),
-						),
-					}),*/
+				file('test.html', 'test.html').catchError(() =>
+					generateTestFile({
+						appId,
+						pkgJson,
+						rootPkg,
+					}),
 				),
 				tsconfig('tsconfig.test.json'),
 				pkg('index.js'),
@@ -189,7 +174,6 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			tasks: [
 				buildDocs({
 					outputDir: `../docs/${pkgJson.name}`,
-					spa: true,
 				}),
 			],
 		},

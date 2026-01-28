@@ -18,7 +18,7 @@ A test runner CLI that supports node and browser testing, baseline updates, cove
 ## Usage
 
 ```sh
-spec-runner [entryFile] [options]
+cxl-spec [entryFile] [options]
 ```
 
 - `entryFile` defaults to `./test.js`
@@ -43,25 +43,25 @@ spec-runner [entryFile] [options]
 Run with default entry file:
 
 ```sh
-spec-runner
+cxl-spec
 ```
 
 Run a specific entry file:
 
 ```sh
-spec-runner ./path/to/test.js
+cxl-spec ./path/to/test.js
 ```
 
 Update baselines:
 
 ```sh
-spec-runner ./test.js --baselinePath ./baselines --updateBaselines
+cxl-spec ./test.js --baselinePath ./baselines --updateBaselines
 ```
 
 Write report to a custom path:
 
 ```sh
-spec-runner ./test.js --reportPath ./artifacts/test-report.json
+cxl-spec ./test.js --reportPath ./artifacts/test-report.json
 ```
 
 ### Feature list

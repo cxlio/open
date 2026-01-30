@@ -37,6 +37,7 @@ export interface Package {
 	bundledDependencies: Dependencies;
 
 	docs?: string;
+	cxl?: { ignore?: boolean };
 }
 
 export interface PackageInfo extends Package {

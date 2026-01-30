@@ -35,6 +35,14 @@ type ValidatedPackage = Omit<
 	homepage: string;
 };
 
+function missingRequiredFields(pkg: Package) {
+	const missing: string[] = [];
+	if (!pkg.description) missing.push('description');
+	if (!pkg.license) missing.push('license');
+	if (!pkg.homepage) missing.push('homepage');
+	return missing;
+}
+
 async function readPkg(dir: string): Promise<ValidatedPackage | void> {
 	const folder = path.join('.', dir);
 	const pkgPath = path.resolve(folder, './package.json');
@@ -46,13 +54,18 @@ async function readPkg(dir: string): Promise<ValidatedPackage | void> {
 		/* Ignore */
 		return;
 	}
+	if (pkg.cxl?.ignore) return;
 
-	if (pkg.private) return;
+	console.log(`Package: ${dir}`);
 
-	if (pkg.description && pkg.license && pkg.homepage)
-		return pkg as ValidatedPackage;
+	const missing = missingRequiredFields(pkg);
+	if (missing.length === 0) return pkg as ValidatedPackage;
 
-	throw new Error(`Invalid package: ${pkg.name}`);
+	throw new Error(
+		`Invalid package.json in "${dir}" (${pkgPath}): missing ${missing.join(
+			', ',
+		)} (name: ${pkg.name || '<unknown>'})`,
+	);
 }
 
 function write(file: string, content: string) {
@@ -68,8 +81,6 @@ function write(file: string, content: string) {
 async function renderPackage(dir: string, rootPkg: Package) {
 	const pkg = await readPkg(dir);
 	if (!pkg) return '';
-
-	console.log(`Package: ${dir}`);
 
 	await sh(`npm run build audit test package docs --prefix ${dir}`);
 

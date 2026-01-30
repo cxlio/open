@@ -481,30 +481,37 @@ export async function audit() {
 		console.error(`${project}: ${msg}`);
 	}
 
-	const rootPkg = await readJson<Package>('../package.json');
-	const results = await verifyProject(rootPkg);
+	async function validate() {
+		const rootPkg = await readJson<Package>('../package.json');
+		const results = await verifyProject(rootPkg);
 
-	let hasErrors = false;
-	const fixes = [];
-	for (const result of results) {
-		for (const rule of result.rules) {
-			if (!rule.valid) {
-				result.hasErrors = hasErrors = true;
-				error(result.data?.name || 'root', rule.message);
+		let hasErrors = false;
+		const fixes = [];
+		for (const result of results) {
+			for (const rule of result.rules) {
+				if (!rule.valid) {
+					result.hasErrors = hasErrors = true;
+					error(result.data?.name || 'root', rule.message);
+				}
+			}
+			if (result.hasErrors && result.fix && result.data) {
+				const { data, fix } = result;
+				fixes.push(() => {
+					console.log(
+						`${result.data?.name}: Attempting fix for "${result.id}"`,
+					);
+					return fix(data);
+				});
 			}
 		}
-		if (result.hasErrors && result.fix && result.data) {
-			const { data, fix } = result;
-			fixes.push(() => {
-				console.log(
-					`${result.data?.name}: Attempting fix for "${result.id}"`,
-				);
-				return fix(data);
-			});
-		}
+
+		for (const fix of fixes) await fix();
+		return hasErrors;
 	}
 
-	for (const fix of fixes) await fix();
+	let hasErrors = await validate();
+	// Run again after fixes have been applied.
+	if (hasErrors) hasErrors = await validate();
 
 	if (hasErrors) throw new Error('Errors detected, check logs for details.');
 }

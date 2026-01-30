@@ -6,7 +6,7 @@ cp license-* ../dist/build
 mkdir -p ../dist/build/package
 esbuild ../spec-browser/index.ts --bundle --format=esm --platform=browser --outfile=../dist/build/spec-browser.js
 
-node ../dist/build "$@"
+node ../dist/build/cli "$@"
 
 cp license-* ../dist/build/package
 cp ../dist/build/eslint-config.js ../dist/build/package

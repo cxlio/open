@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 export * from './file.js';
 export { pkg, readme, esbuild, readPackage } from './package.js';
 export { Package } from './npm.js';
@@ -18,15 +17,3 @@ export * from './lint.js';
 export * from './spec.js';
 export { TsconfigJson, tsconfig } from './tsc.js';
 export { buildDocs } from './docs.js';
-
-import { existsSync } from 'fs';
-
-if (import.meta.main) {
-	if (existsSync('./project.json')) {
-		const { buildRoot } = await import('./root.js');
-		await buildRoot();
-	} else {
-		const { buildLibrary } = await import('./library.js');
-		await buildLibrary();
-	}
-}

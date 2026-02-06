@@ -44,6 +44,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	const external = [
 		...Object.keys(pkgJson.dependencies ?? {}),
 		...Object.keys(pkgJson.peerDependencies ?? {}),
+		...Object.keys(pkgJson.bundledDependencies ?? {}),
 	];
 	const hasScreenshotTests = existsSync('./test-screenshot.ts');
 	const bundleEntryPoint = [

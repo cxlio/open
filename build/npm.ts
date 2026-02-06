@@ -29,12 +29,11 @@ export interface Package {
 	dependencies?: Dependencies;
 	devDependencies?: Dependencies;
 	peerDependencies?: Dependencies;
-	bundledDependecies?: Dependencies;
+	bundledDependencies?: Dependencies;
 	sideEffects?: boolean;
 	type?: string;
 	scripts?: Record<string, string>;
 	exports?: Record<string, string>;
-	bundledDependencies: Dependencies;
 
 	docs?: string;
 	cxl?: { ignore?: boolean };

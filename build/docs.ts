@@ -11,7 +11,7 @@ export function buildDocs(options: BuildDocsOptions) {
 				clean: true,
 				summary: true,
 				markdown: true,
-				markdownSummary: true,
+				markdownSummary: false,
 				cxlExtensions: true,
 				...options,
 			},

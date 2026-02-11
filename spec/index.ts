@@ -293,15 +293,20 @@ export class TestApi {
 			this.equal(a, b, desc);
 		} else if (typeof a === 'object' && typeof b === 'object') {
 			// Compare all keys in 'b'
+			let count = 0;
+
 			for (const key in b) {
+				count++;
 				this.equalValues(
 					(a as Record<string, unknown>)[key],
 					(b as Record<string, unknown>)[key],
 					`${desc ? desc + ': ' : ''}Property "${key}"`,
 				);
 			}
+
 			// Optionally check for extra keys in "a" that are not in "b"
 			for (const key in a) {
+				count++;
 				if (!(key in (b as Record<string, unknown>))) {
 					this.ok(
 						false,
@@ -311,6 +316,7 @@ export class TestApi {
 					);
 				}
 			}
+			if (count === 0) this.ok(true, 'Both objects are empty.');
 		} else {
 			// Fallback for unknown types
 			this.equal(
@@ -750,7 +756,7 @@ export class Test {
 							typeof e === 'string'
 								? e
 								: JSON.stringify(e, null, 2),
-				  },
+					},
 		);
 	}
 

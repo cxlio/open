@@ -4,12 +4,9 @@ import { join } from 'path';
 import { run as runSpec } from '../spec-runner/runner.js';
 import printReportV2 from '../spec-runner/report-stdout.js';
 
-import { parseTsConfig } from './tsc.js';
 import { Package } from './npm.js';
 import { fromAsync, of } from '../rx/index.js';
 import { getDependencies } from './package.js';
-
-import type { ParsedCommandLine } from 'typescript';
 
 let browserRunner: string | undefined;
 
@@ -35,7 +32,6 @@ export function generateEsmTestFile(
 function generateImportMap(
 	rootPkg: Package & { importmap?: Record<string, string> },
 	pkgJson: Package,
-	_tsc: ParsedCommandLine,
 ) {
 	const map = getDependencies(rootPkg, pkgJson);
 	for (const key in map) {
@@ -54,6 +50,7 @@ function generateTestImportMap(
 
 	for (const key in map) {
 		map[`${key}/`] = `../../node_modules${map[key]}/`;
+		map[key] = `../../node_modules${map[key]}/index.js`;
 	}
 	map['@cxl/spec'] = '../../node_modules/@cxl/spec/index.js';
 	if (rootPkg.importmap) Object.assign(map, rootPkg.importmap);
@@ -106,7 +103,6 @@ export function runTests({
 		const rootPkg = JSON.parse(
 			readFileSync('../package.json', 'utf8'),
 		) as Package;
-		const parsedTsconfig = parseTsConfig(join(cwd, 'tsconfig.json'));
 		try {
 			process.chdir(outputDir);
 			const report = await runSpec({
@@ -118,7 +114,7 @@ export function runTests({
 				baselinePath: `../../${appId}/spec`,
 				importmap: node
 					? undefined
-					: generateImportMap(rootPkg, pkgJson, parsedTsconfig),
+					: generateImportMap(rootPkg, pkgJson),
 				sources: new Map(),
 				log: console.log.bind(console),
 			});

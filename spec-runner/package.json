@@ -8,7 +8,7 @@
 	"license": "GPL-3.0",
 	"type": "module",
 	"scripts": {
-		"build": "node ../dist/build",
+		"build": "node ../dist/build/cli.js",
 		"test": "npm run build test"
 	},
 	"dependencies": {

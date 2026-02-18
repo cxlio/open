@@ -8,7 +8,7 @@
 	"description": "Lightweight module for handling keyboard input on HTML elements with customizable layouts and configurable key sequence timing. Provides utilities to parse, normalize, and translate key events into standardized string representations, with support for modifier keys and platform-specific conventions.",
 	"type": "module",
 	"scripts": {
-		"build": "node ../dist/build",
+		"build": "node ../dist/build/cli.js",
 		"test": "npm run build test"
 	},
 	"repository": {

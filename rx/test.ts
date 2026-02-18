@@ -39,6 +39,7 @@ import orderedSubjectSuite from './test/orderedSubject.js';
 import debounceFunctionSuite from './test/debounceFunction.js';
 import intervalSuite from './test/interval.js';
 import firstSuite from './test/first.js';
+import throttleTimeSuite from './test/throttleTime.js';
 import ignoreElementsSuite from './test/ignoreElements.js';
 
 import { TestApi, spec } from '../spec/index.js';
@@ -82,6 +83,7 @@ export default spec('rx', suite => {
 		publishLast,
 		zipSuite,
 		subjectSuite,
+		throttleTimeSuite,
 		spec('Observable', s => {
 			const test = s.test.bind(s);
 

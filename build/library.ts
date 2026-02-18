@@ -179,6 +179,11 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 			],
 		},
 		{
+			target: 'lint',
+			outputDir: '.',
+			tasks: [eslintTsconfig(tsconfigFile)],
+		},
+		{
 			target: 'package',
 			outputDir: '.',
 			tasks: [

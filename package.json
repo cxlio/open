@@ -19,7 +19,7 @@
 	"type": "module",
 	"bugs": "https://github.com/cxlio/open/issues",
 	"scripts": {
-		"build": "npm run build --prefix build && node ./dist/build/index.js"
+		"build": "npm run build --prefix build && node ./dist/build/cli.js"
 	},
 	"repository": {
 		"type": "git",

@@ -6,7 +6,7 @@
 	"description": "Utility module providing command-line parameter parsing, colorized console output, JSON file reading, directory creation, child process execution, and high-resolution operation timing for Node.js programs.",
 	"type": "module",
 	"scripts": {
-		"build": "node ../dist/build",
+		"build": "node ../dist/build/cli.js",
 		"test": "npm run build test"
 	},
 	"dependencies": {},

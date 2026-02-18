@@ -102,6 +102,27 @@ let actionId = 0;
 const setTimeout = globalThis.setTimeout;
 const clearTimeout = globalThis.clearTimeout;
 
+function isIterator(val: unknown): val is Iterator<unknown> {
+	return !!val && typeof (val as Iterator<unknown>).next === 'function';
+}
+
+function isIterable(val: unknown): val is Iterable<unknown> {
+	return (
+		!!val &&
+		typeof (val as Iterable<unknown>)[Symbol.iterator] === 'function'
+	);
+}
+
+function isIterableOrIterator(val: unknown): boolean {
+	return isIterator(val) || isIterable(val);
+}
+
+function getIterator(val: unknown): Iterator<unknown> {
+	if (isIterator(val)) return val;
+	if (isIterable(val)) return val[Symbol.iterator]();
+	throw new Error('Value is not iterable');
+}
+
 class Subject<T> {
 	subscribers: Array<{
 		next?: (val: T) => void;
@@ -291,6 +312,31 @@ export class TestApi {
 		) {
 			// Primitive value mismatch
 			this.equal(a, b, desc);
+		} else if (isIterableOrIterator(a) && isIterableOrIterator(b)) {
+			const iteratorA = getIterator(a);
+			const iteratorB = getIterator(b);
+			let i = 0;
+
+			for (;;) {
+				const stepA = iteratorA.next();
+				const stepB = iteratorB.next();
+
+				if (stepA.done || stepB.done) {
+					this.equal(
+						!!stepA.done,
+						!!stepB.done,
+						`${desc ? desc + ': ' : ''}Generator completion differs at [${i}]`,
+					);
+					break;
+				}
+
+				this.equalValues(
+					stepA.value,
+					stepB.value,
+					`${desc ? desc + ': ' : ''}Generator value at [${i}]`,
+				);
+				i++;
+			}
 		} else if (typeof a === 'object' && typeof b === 'object') {
 			// Compare all keys in 'b'
 			let count = 0;

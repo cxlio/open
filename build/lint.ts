@@ -1,4 +1,4 @@
-import { relative, join } from 'path';
+import { resolve, dirname, relative, join } from 'path';
 import { readFile } from 'fs/promises';
 
 import { Observable, fromAsync } from '../rx/index.js';
@@ -50,14 +50,18 @@ export function eslint(files = ['**/*.ts?(x)'], options?: ESLint.Options) {
 }
 
 export function eslintTsconfig(path: string | TsconfigJson = 'tsconfig.json') {
+	let cwd: string;
 	return fromAsync(async () => {
-		return typeof path === 'string'
-			? (JSON.parse(await readFile(path, 'utf8')) as TsconfigJson)
-			: path;
+		if (typeof path === 'string') {
+			cwd = dirname(resolve(path));
+			return JSON.parse(await readFile(path, 'utf8')) as TsconfigJson;
+		}
+		return path;
 	}).switchMap(tsconfigFile =>
 		eslint(tsconfigFile.files ?? tsconfigFile.include, {
 			ignorePatterns: [...(tsconfigFile.exclude ?? []), '*.js'],
 			errorOnUnmatchedPattern: false,
+			cwd,
 		}),
 	);
 }

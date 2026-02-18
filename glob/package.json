@@ -8,7 +8,7 @@
 	"type": "module",
 	"browser": "./index.bundle.js",
 	"scripts": {
-		"build": "node ../dist/build",
+		"build": "node ../dist/build/cli.js",
 		"test": "npm run build test"
 	},
 	"repository": {

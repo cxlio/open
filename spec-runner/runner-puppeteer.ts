@@ -65,7 +65,7 @@ async function createPage(
 			} catch (e) {
 				return {
 					success: false,
-					message: String(e) || 'Unknown Error',
+					failureMessage: String(e) || 'Unknown Error',
 				};
 			}
 		} else if (type === 'hover' || type === 'tap' || type === 'click') {
@@ -81,7 +81,7 @@ async function createPage(
 				.then(() => {
 					return {
 						success: true,
-						message: 'Element',
+						failureMessage: 'Element',
 					};
 				});
 		} else if (type === 'type' || type === 'press') {
@@ -97,18 +97,22 @@ async function createPage(
 				.then(() => {
 					return {
 						success: true,
-						message: 'Element',
+						failureMessage: 'Element',
 					};
 				});
 		} else if (type === 'testElement') {
-			return { success: true, message: 'testElement supported' };
+			return { success: true, failureMessage: 'testElement supported' };
 		} else if (type === 'concurrency') {
-			return { success: true, message: 'Concurrency', concurrency };
+			return {
+				success: true,
+				failureMessage: 'Concurrency',
+				concurrency,
+			};
 		}
 
 		return {
 			success: false,
-			message: `Feature not supported: ${type}`,
+			failureMessage: `Feature not supported: ${type}`,
 		};
 	}
 
@@ -123,7 +127,7 @@ async function createPage(
 	});
 	page.on('pageerror', msg => {
 		app.log(msg);
-		pageError.push({ success: false, message: String(msg) });
+		pageError.push({ success: false, failureMessage: String(msg) });
 	});
 	page.on('requestfailed', req => {
 		app.log(
@@ -377,7 +381,7 @@ async function handleFigureRequest(
 		if (len !== newData.length) {
 			return {
 				success: false,
-				message: `Screenshot should match baseline: Different Size (${oPng.width}x${oPng.height} vs ${newPng.width}x${newPng.height})`,
+				failureMessage: `Screenshot should match baseline: Different Size (${oPng.width}x${oPng.height} vs ${newPng.width}x${newPng.height})`,
 				data,
 			};
 		}
@@ -385,7 +389,7 @@ async function handleFigureRequest(
 			if (originalData.readUInt8(i) !== newData.readUInt8(i))
 				return {
 					success: false,
-					message: `Screenshot should match baseline`,
+					failureMessage: `Screenshot should match baseline`,
 					data,
 				};
 		}
@@ -393,7 +397,7 @@ async function handleFigureRequest(
 
 	return {
 		success: true,
-		message: 'Screenshot should match baseline',
+		failureMessage: 'Screenshot should match baseline',
 		data,
 	};
 }

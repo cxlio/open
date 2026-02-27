@@ -8,7 +8,7 @@ import {
 } from './report.js';
 
 function printError(name: string, fail: TestResult) {
-	const msg = fail.message;
+	const msg = fail.failureMessage;
 	console.error(name, colors.red(msg));
 	if (fail.stack) console.error(fail.stack);
 }
@@ -24,8 +24,8 @@ function printTest(test: TestReport) {
 		test.runTime > test.timeout
 			? 'brightYellow'
 			: test.runTime > test.timeout / 2
-			? 'yellow'
-			: 'gray';
+				? 'yellow'
+				: 'gray';
 
 	console.group(
 		`${test.name} ${colors[timeColor](

@@ -2092,8 +2092,11 @@ export function testAccessibility(
 	const role: RoleMeta | null = roleName && ariaRoles[roleName];
 
 	function ok(success: boolean, message: string) {
-		if (!success) message += `\nNode: ${node.outerHTML}`;
-		result.push({ success, message });
+		result.push({
+			success,
+			message,
+			failureMessage: `Node: ${node.outerHTML}`,
+		});
 	}
 
 	function testAriaRole() {

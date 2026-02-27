@@ -2,7 +2,8 @@ import type { JsonResult, FigureData } from '../spec/index.js';
 
 export interface TestResult {
 	success: boolean;
-	message: string;
+	failureMessage: string;
+	message?: string;
 	stack?: string;
 	data?: FigureData;
 }
@@ -100,6 +101,7 @@ function renderTestReport(test: JsonResult): TestReport {
 
 		return {
 			message: r.message,
+			failureMessage: r.failureMessage,
 			success: r.success,
 			data: r.data,
 			stack: r.stack,
@@ -114,7 +116,7 @@ function renderTestReport(test: JsonResult): TestReport {
 
 	if (results.length === 0 && test.tests.length === 0) {
 		failureCount++;
-		results.push({ success: false, message: 'No assertions found' });
+		results.push({ success: false, failureMessage: 'No assertions found' });
 	}
 
 	return {

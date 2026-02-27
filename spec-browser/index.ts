@@ -1,7 +1,11 @@
 import type { Result, RunnerCommand, Test } from '../spec';
 import type { TestResult } from '../spec-runner/report';
 import {
+	Alert,
 	Component,
+	Page,
+	Layout,
+	T,
 	attribute,
 	component,
 	css,
@@ -9,6 +13,7 @@ import {
 	merge,
 	styleAttribute,
 	tsx,
+	theme,
 } from '@cxl/ui';
 
 declare global {
@@ -21,6 +26,13 @@ interface RunnerConfig {
 	suites: Test[];
 	baselinePath?: string;
 }
+
+theme.globalCss += `
+c-t[font=h1] { font-size: 24px; line-height: 24px; margin: 24px 0; }
+c-t[font=h2] { font-size: 22px; line-height: 22px; margin: 22px 0; }
+c-t[font=h3] { font-size: 20px; line-height: 20px; margin: 20px 0; }
+c-t[font=h4] { font-size: 18px; line-height: 18px; margin: 18px 0; }
+`;
 
 window.__cxlRunner = data => {
 	if (data.type === 'figure')
@@ -45,20 +57,43 @@ window.__cxlRunner = data => {
 	};
 };
 
-let output = `<style>.thumb{vertical-align:middle;display:inline-block;overflow:hidden;width:320px;position:relative;vertical-align:top}
-	dl { display: flex; margin-top:8px;margin-bottom:8px; } dd { margin-left: 16px}
-	body {font-family:monospace;font-size:16px;tab-size:4}
-	</style>`;
+const output = tsx(Layout, { type: 'block', center: true });
+const page = tsx(
+	Page,
+	{},
+	tsx(
+		'style',
+		undefined,
+		`
+.thumb{vertical-align:middle;display:inline-block;overflow:hidden;width:320px;position:relative;vertical-align:top}
+body {tab-size:4}
+`,
+	),
+	output,
+);
 
-function group(testId: number, title: string) {
-	output += `<dl><dt><a data-test="${testId}" href="#">${escapeHtml(
-		title,
-	)}</a></dt><dd>`;
+function group(
+	testId: number,
+	title: string,
+	level: number | undefined,
+	children: Node[],
+) {
+	if (level === undefined) output.append(tsx('p', {}, title), ...children);
+	else {
+		const link = tsx('a', { href: '#' }, title);
+		link.dataset.test = `${testId}`;
+		const head = tsx(T, { font: `h${level}` as 'h1' }, link);
+		const ol = tsx('ol', undefined, children);
+
+		if (level > 1) {
+			const li = tsx('li', undefined, head);
+			li.append(ol);
+			output.append(li);
+		} else output.append(head, ol);
+	}
 }
 
-function groupEnd() {
-	output += '</dd></dl>';
-}
+function groupEnd() {}
 
 const ENTITIES_REGEX = /[&<>]/g,
 	ENTITIES_MAP = {
@@ -75,39 +110,50 @@ export function escapeHtml(str: string) {
 }
 
 function error(msg: string | Error) {
-	output += '<div style="background-color:#ffcdd2;padding:8px">';
 	if (msg instanceof Error) {
-		output += `
-			<p style="white-space:pre">${escapeHtml(msg.message)}</p>
-			<pre>${escapeHtml(msg.stack || '')}</pre>
-		`;
-	} else output += `<p style="white-space:pre-wrap">${escapeHtml(msg)}</p>`;
-	output += '</div>';
+		output.append(
+			tsx(
+				Alert,
+				{ color: 'error' },
+				msg.message,
+				tsx('pre', undefined, msg.stack ?? ''),
+			),
+		);
+	} else output.append(tsx(Alert, { color: 'error' }, msg));
 }
 
-function success(): string {
-	return '&check;';
+function success(r: TestResult): string {
+	return r.message ?? '';
 }
 
-function failure(): string {
-	return '&times;';
+function failure(r: TestResult): string {
+	printError(r);
+	return '';
 }
 
 function printError(fail: Result) {
-	console.error(fail.message);
+	const msg = fail.failureMessage;
+	console.error(msg);
 	if (fail.stack) console.error(fail.stack);
-	const msg = fail.message;
 	error(msg);
 }
 
 function printResult(result: Result, baselinePath = 'spec') {
-	output += result.success ? success() : failure();
+	const div = tsx('div');
+	div.append(result.success ? success(result) : failure(result));
+
 	const data = result.data;
 	if (data?.type === 'figure') {
-		//require('@cxl/workspace.ui/image-diff.js');
-		output += `<div class="thumb">${data.html}</div>
-		<spec-image-diff src1="spec/${data.name}.png" src2="${baselinePath}/${data.name}.png"></cxl-image-diff>`;
+		div.append(
+			tsx('div', { className: 'thumb', innerHTML: data.html }),
+			tsx(ImageDiff, {
+				src1: `spec/${data.name}.png`,
+				src2: `${baselinePath}/${data.name}.png`,
+			}),
+		);
 	}
+
+	return div;
 }
 
 function findTest(tests: Test[], id: number): Test | void {
@@ -151,13 +197,6 @@ export function loadImage(src: string) {
 		img.addEventListener('error', () => reject(img));
 	});
 }
-/*export async function loadImage(src: string) {
-	const result = new Image();
-	result.src = src;
-	console.log(src);
-	await result.decode();
-	return result;
-}*/
 
 export async function imageData(srcA: string) {
 	const A = await loadImage(srcA);
@@ -311,7 +350,10 @@ class BrowserRunner {
 			test.only.length === 0
 		) {
 			failureCount++;
-			results.push({ success: false, message: 'No assertions found' });
+			results.push({
+				success: false,
+				failureMessage: 'No assertions found',
+			});
 		}
 
 		group(
@@ -319,12 +361,10 @@ class BrowserRunner {
 			`${test.name}${
 				failureCount > 0 ? ` (${failureCount} failures)` : ''
 			}`,
+			test.level,
+			results.map(r => printResult(r, this.baselinePath)),
 		);
 
-		results.forEach(r => {
-			printResult(r, this.baselinePath);
-			if (!r.success) printError(r);
-		});
 		if (test.only.length)
 			test.only.forEach((test: Test) => this.renderTestReport(test));
 		else test.tests.forEach((test: Test) => this.renderTestReport(test));
@@ -333,12 +373,10 @@ class BrowserRunner {
 
 	async run() {
 		await Promise.all(this.suites.map(suite => this.runSuite(suite)));
-		const container = document.createElement('cxl-content');
-		container.innerHTML = output;
-		container.addEventListener('click', ev => {
+		document.body.addEventListener('click', ev => {
 			onClick(this.suites, ev).catch(e => console.error(e));
 		});
-		document.body.appendChild(container);
+		document.body.appendChild(page);
 	}
 }
 

@@ -8,7 +8,7 @@ type EventType =
 	| 'syncComplete';
 type TestEvent = { type: EventType; promises: Promise<unknown>[] };
 
-type TestFn<T = TestApi> = (test: T) => void | Promise<unknown>;
+export type TestFn<T = TestApi> = (test: T) => void | Promise<unknown>;
 
 type FunctionsOf<T> = {
 	/* eslint @typescript-eslint/no-explicit-any:off */
@@ -85,7 +85,8 @@ export interface FigureData {
 
 export interface Result {
 	success: boolean;
-	message: string;
+	message?: string;
+	failureMessage: string;
 	concurrency?: number;
 	data?: FigureData;
 	stack?: string;
@@ -194,8 +195,10 @@ function inspect(val: unknown) {
 	return val;
 }
 
-export class TestApi {
-	constructor(private $test: Test) {}
+export abstract class TestApiBase<T> {
+	abstract createTest: (name: string, testFn: TestFn<T>) => Test<T>;
+
+	constructor(public $test: Test<T>) {}
 
 	get id() {
 		return this.$test.id;
@@ -212,36 +215,62 @@ export class TestApi {
 		return el as HTMLElement;
 	}
 
-	log(object: unknown) {
+	/**
+	 * You can use testOnly instead of test to specify which tests are the only ones
+	 * you want to run in that test file.
+	 */
+	/*testOnly = (name: string, testFn: TestFn) => {
+		const test = new Test(name, testFn, TestApi, this.$test);
+		this.$test.addTest(test);
+		this.$test.setOnly(test);
+	};*/
+
+	test = (name: string, testFn: TestFn<T>, hlevel?: number) => {
+		const t = this.createTest(name, testFn);
+		if (hlevel !== undefined) t.level = hlevel;
+		this.$test.addTest(t);
+	};
+
+	p = (desc: string, testFn: TestFn<T>) => this.test(desc, testFn);
+
+	h = (name: string, testFn: TestFn<T>) =>
+		this.test(name, testFn, this.$test.level ? this.$test.level + 1 : 1);
+
+	log = (object: unknown) => {
 		console.log(object);
-	}
+	};
 
-	afterAll(fn: () => Promise<unknown> | void) {
+	afterAll = (fn: () => Promise<unknown> | void) => {
 		this.$test.onEvent('afterAll', fn);
-	}
+	};
 
-	ok<T>(condition: T, message = 'Assertion failed') {
-		this.$test.push({ success: !!condition, message });
-	}
+	ok = <T,>(condition: T, message?: string) => {
+		this.$test.push({
+			success: !!condition,
+			message,
+			failureMessage: `Assertion failed: ${message}`,
+		});
+	};
 
-	assert(
-		condition: unknown,
-		message = 'Assertion Failed',
-	): asserts condition {
+	assert = (condition: unknown, message?: string): asserts condition => {
 		if (!condition) throw new Error(message);
-		this.$test.push({ success: !!condition, message });
-	}
+		this.$test.push({
+			success: !!condition,
+			message,
+			failureMessage: `Assertion Failed: ${message}`,
+		});
+	};
 
-	equal<T>(a: T, b: T, desc?: string) {
+	equal = <T,>(a: T, b: T, desc?: string) => {
 		return this.ok(
 			a === b,
 			`${desc ? desc + ': ' : ''}${inspect(a)} should equal ${inspect(
 				b,
 			)}`,
 		);
-	}
+	};
 
-	equalBuffer(a: ArrayBuffer, b: ArrayBuffer, desc?: string) {
+	equalBuffer = (a: ArrayBuffer, b: ArrayBuffer, desc?: string) => {
 		this.equal(
 			a.byteLength,
 			b.byteLength,
@@ -251,19 +280,378 @@ export class TestApi {
 		const valB = b instanceof Uint8Array ? b : new Uint8Array(b);
 
 		for (const i in valB) this.equal(valA[i], valB[i], desc);
+	};
+
+	equalPartial = <T,>(a: T, b: Partial<T>, desc?: string) => {
+		this.equalDeep(a, b, true, desc);
+	};
+
+	equalValues = <T,>(a: T, b: T, desc?: string) => {
+		this.equalDeep(a, b, false, desc);
+	};
+
+	addSpec(test: Test<T>) {
+		this.$test.addTest(test);
 	}
 
-	equalPartial<T>(a: T, b: Partial<T>, desc?: string) {
-		for (const key in b) {
-			this.equalValues(
-				(a as Record<string, unknown>)[key],
-				(b as Record<string, unknown>)[key],
-				`${desc ? desc + ': ' : ''}Property "${key}"`,
-			);
+	throws = (fn: () => unknown, matchError?: unknown) => {
+		let success = false;
+		try {
+			fn();
+		} catch (e) {
+			success = true;
+			if (matchError) this.equalPartial(e, matchError);
 		}
+		return this.ok(success, `Expected function to throw`);
+	};
+
+	ran = (n: number) => {
+		const results = this.$test.results;
+		return this.ok(
+			n === results.length,
+			`Expected ${n} assertions, instead got ${results.length}`,
+		);
+	};
+
+	async = () => {
+		let result: () => void;
+		let called = false;
+		if (this.$test.promise)
+			throw new Error('async() called multiple times');
+
+		this.$test.promise = this.$test.doTimeout(
+			new Promise<void>(resolve => (result = resolve)),
+		);
+		return () => {
+			if (called)
+				this.$test.pushError(new Error('Test was already completed.'));
+			result();
+			called = true;
+		};
+	};
+
+	should = (name: string, testFn: TestFn<T>) => {
+		return this.test(`should ${name}`, testFn);
+	};
+
+	testElement = (name: string, testFn: TestFn<T>) => {
+		return this.test(name, async b => {
+			const a = b as TestApi;
+			a.setTimeout(60000);
+			if (
+				typeof __cxlRunner === 'undefined' ||
+				!(await __cxlRunner({ type: 'testElement' })).success
+			) {
+				console.warn('testElement method not supported');
+				a.ok(true, 'testElement method not supported');
+			} else {
+				testQueue = testQueue.then(async () => {
+					try {
+						return await testFn(b);
+					} catch (e) {
+						console.error(
+							this.$test.name,
+							a.$test.name,
+							a.dom.id,
+							e,
+						);
+					}
+				});
+				await testQueue;
+			}
+		});
+	};
+
+	mock = <T, K extends keyof FunctionsOf<T>>(
+		object: T,
+		method: K,
+		fn: T[K],
+	) => {
+		const old = object[method];
+		object[method] = fn;
+		this.$test.events.subscribe(ev => {
+			if (ev.type === 'syncComplete') object[method] = old;
+		});
+		return fn;
+	};
+
+	spyFn = <T, K extends keyof FunctionsOf<T>>(object: T, method: K) => {
+		const spy = spyFn(object, method);
+		this.$test.events.subscribe({
+			complete: spy.destroy,
+		});
+		return spy;
+	};
+
+	spyProp = <T, K extends keyof T>(object: T, prop: K) => {
+		const spy = spyProp(object, prop);
+		this.$test.events.subscribe({
+			complete: spy.destroy,
+		});
+		return spy;
+	};
+
+	/** Returns a connected element */
+	element<K extends keyof HTMLElementTagNameMap>(
+		tagName: K,
+	): HTMLElementTagNameMap[K];
+	element(tagName: string): HTMLElement;
+	element<T>(tagName: { new (): T }): T;
+	element(tagName: string | { new (): HTMLElement }) {
+		const el =
+			typeof tagName === 'string'
+				? document.createElement(tagName)
+				: new tagName();
+		this.dom.appendChild(el);
+		return el;
 	}
 
-	equalValues<T>(a: T, b: T, desc?: string) {
+	waitForEvent = (el: EventTarget, name: string, trigger: () => void) => {
+		return new Promise<void>(resolve => {
+			function handler() {
+				el.removeEventListener(name, handler);
+				resolve();
+			}
+			el.addEventListener(name, handler);
+			trigger();
+		});
+	};
+
+	waitForElement = (el: Element | ShadowRoot, selector: string) => {
+		return new Promise<Element>(resolve => {
+			const observer = new MutationObserver(() => {
+				const found = el.querySelector(selector);
+				if (found) {
+					observer.disconnect();
+					resolve(found);
+				}
+			});
+			observer.observe(el, { childList: true, subtree: true });
+			this.$test.events.subscribe({
+				complete() {
+					observer.disconnect();
+				},
+			});
+		});
+	};
+
+	waitForDisconnect = (el: Element) => {
+		return new Promise<void>(resolve => {
+			const parent = el.parentNode;
+			if (!parent) return resolve();
+
+			const observer = new MutationObserver(() => {
+				if (!el.parentNode) resolve();
+			});
+			observer.observe(parent, { childList: true });
+			this.$test.events.subscribe({
+				complete() {
+					observer.disconnect();
+				},
+			});
+		});
+	};
+
+	expectEvent = <T extends HTMLElement>({
+		element,
+		listener,
+		eventName,
+		trigger,
+		message,
+		count,
+	}: {
+		element: T;
+		listener?: Element;
+		eventName: string;
+		trigger: (el: T) => void;
+		message?: string;
+		count?: number;
+	}) => {
+		return new Promise<void>((resolve, error) => {
+			try {
+				listener ??= element;
+				const handler = (ev: Event) => {
+					this.equal(
+						ev.type,
+						eventName,
+						message ?? `"${eventName}" event fired`,
+					);
+					this.equal(ev.target, element);
+
+					if (count === undefined || --count === 0) {
+						listener?.removeEventListener(eventName, handler);
+						resolve();
+					}
+				};
+				listener.addEventListener(eventName, handler);
+				trigger(element);
+			} catch (e) {
+				error(e);
+			}
+		});
+	};
+
+	a11y = async (node: Element = this.dom) => {
+		const mod = await import('./a11y.js');
+		const results = mod.testAccessibility(node);
+		for (const r of results) this.$test.push(r);
+	};
+
+	sleep = async (n: number) => {
+		await new Promise(resolve => setTimeout(resolve, n));
+	};
+
+	figure = (name: string, html: string, init?: (node: Node) => void) => {
+		if (typeof __cxlRunner !== 'undefined')
+			return new Promise<void>(resolve => {
+				this.test(name, async b => {
+					const a = b as TestApi;
+					const domId = (a.dom.id = `dom${a.id}`);
+					const style = a.dom.style;
+					style.position = 'absolute';
+					style.overflowX = 'hidden';
+					style.top = style.left = '0';
+					style.width = '320px';
+					style.backgroundColor = 'white';
+
+					if (init) init(a.dom);
+					const data: FigureData = {
+						type: 'figure',
+						name,
+						domId,
+						html,
+					};
+					const match = await __cxlRunner(data);
+					a.$test.push(match);
+					await a.a11y();
+					resolve();
+				});
+			});
+		else {
+			console.warn('figure method not supported');
+			this.ok(true, 'figure method not supported');
+		}
+	};
+
+	setTimeout = (val: number) => {
+		this.$test.timeout = val;
+	};
+
+	mockSetInterval = () => {
+		/*eslint @typescript-eslint/no-unsafe-function-type:off */
+		this.mockTimeCheck();
+
+		let id = 0;
+		const intervals: Record<
+			number,
+			{
+				cb: () => void;
+				delay: number;
+				lastFired: number;
+			}
+		> = {};
+
+		this.mock(globalThis, 'setInterval', ((
+			cb: string | (() => void),
+			delay = 0,
+		): number => {
+			if (typeof cb === 'string') cb = new Function(cb) as () => void;
+			intervals[++id] = { cb, delay, lastFired: 0 };
+			return id;
+		}) as typeof globalThis.setInterval);
+		this.mock(globalThis, 'clearInterval', (id => {
+			if (id !== undefined) delete intervals[id];
+		}) as typeof globalThis.clearInterval);
+
+		return {
+			advance(ms: number) {
+				for (const int of Object.values(intervals)) {
+					const { cb, delay, lastFired } = int;
+					const elapsedTime = ms - lastFired;
+					const timesToFire = Math.floor(elapsedTime / (delay || 1));
+					for (let i = 0; i < timesToFire; i++) cb();
+					int.lastFired = Math.floor(ms / delay) * delay;
+				}
+			},
+		};
+	};
+
+	mockSetTimeout = () => {
+		this.mockTimeCheck();
+
+		let id = 0;
+		const timeouts: Record<number, { cb: Function; time: number }> = {};
+
+		this.mock(globalThis, 'setTimeout', ((cb: TimerHandler, time = 0) => {
+			if (typeof cb === 'string') cb = new Function(cb) as () => void;
+			timeouts[++id] = { cb, time };
+			return id;
+		}) as typeof globalThis.setTimeout);
+		this.mock(globalThis, 'clearTimeout', ((id: number | undefined) => {
+			if (id !== undefined) delete timeouts[id];
+		}) as typeof globalThis.clearTimeout);
+		return {
+			advance(ms: number) {
+				for (const [key, { cb, time }] of Object.entries(timeouts)) {
+					if (time <= ms) {
+						(cb as () => void)();
+						delete timeouts[+key];
+					} else {
+						const to = timeouts[+key];
+						if (to) to.time -= ms;
+					}
+				}
+			},
+		};
+	};
+
+	mockRequestAnimationFrame = () => {
+		this.mockTimeCheck();
+
+		let id = 0;
+		const rafs: Record<number, FrameRequestCallback> = {};
+
+		this.mock(globalThis, 'requestAnimationFrame', ((
+			cb: FrameRequestCallback,
+		) => {
+			id++;
+			rafs[id] = cb;
+			return id;
+		}) as typeof globalThis.requestAnimationFrame);
+
+		this.mock(globalThis, 'cancelAnimationFrame', ((rafId: number) => {
+			delete rafs[rafId];
+		}) as typeof globalThis.cancelAnimationFrame);
+
+		return {
+			advance() {
+				for (const key in rafs) {
+					const cb = rafs[key];
+					delete rafs[key];
+					cb?.(performance.now());
+				}
+			},
+		};
+	};
+
+	action = (action: RunnerAction) => {
+		const selector = action.element;
+		const element =
+			selector instanceof Element
+				? `#${(selector.id ||= `dom${this.id}-${actionId++}`)}`
+				: `#${(this.dom.id ||= `dom${this.id}`)} ${selector ?? ''}`;
+		return __cxlRunner({ ...action, element });
+	};
+
+	hover = (element?: string | Element) => {
+		return this.action({ type: 'hover', element });
+	};
+
+	tap = (element?: string | Element) => {
+		return this.action({ type: 'tap', element });
+	};
+
+	protected equalDeep<T>(a: T, b: T, partial: boolean, desc?: string) {
 		if (a instanceof ArrayBuffer && b instanceof ArrayBuffer) {
 			return this.equalBuffer(a, b, desc);
 		}
@@ -343,25 +731,27 @@ export class TestApi {
 
 			for (const key in b) {
 				count++;
-				this.equalValues(
+				this.equalDeep(
 					(a as Record<string, unknown>)[key],
 					(b as Record<string, unknown>)[key],
+					partial,
 					`${desc ? desc + ': ' : ''}Property "${key}"`,
 				);
 			}
 
 			// Optionally check for extra keys in "a" that are not in "b"
-			for (const key in a) {
-				count++;
-				if (!(key in (b as Record<string, unknown>))) {
-					this.ok(
-						false,
-						`${
-							desc ? desc + ': ' : ''
-						}Unexpected extra property "${key}" found in actual value`,
-					);
+			if (!partial)
+				for (const key in a) {
+					count++;
+					if (!(key in (b as Record<string, unknown>))) {
+						this.ok(
+							false,
+							`${
+								desc ? desc + ': ' : ''
+							}Unexpected extra property "${key}" found in actual value`,
+						);
+					}
 				}
-			}
 			if (count === 0) this.ok(true, 'Both objects are empty.');
 		} else {
 			// Fallback for unknown types
@@ -375,375 +765,6 @@ export class TestApi {
 		}
 	}
 
-	addSpec(test: Test) {
-		this.$test.addTest(test);
-	}
-
-	throws(fn: () => unknown, matchError?: unknown) {
-		let success = false;
-		try {
-			fn();
-		} catch (e) {
-			success = true;
-			if (matchError) this.equalValues(e, matchError);
-		}
-		return this.ok(success, `Expected function to throw`);
-	}
-
-	ran(n: number) {
-		const results = this.$test.results;
-		return this.ok(
-			n === results.length,
-			`Expected ${n} assertions, instead got ${results.length}`,
-		);
-	}
-
-	async() {
-		let result: () => void;
-		let called = false;
-		if (this.$test.promise)
-			throw new Error('async() called multiple times');
-
-		this.$test.promise = this.$test.doTimeout(
-			new Promise<void>(resolve => (result = resolve)),
-		);
-		return () => {
-			if (called)
-				this.$test.pushError(new Error('Test was already completed.'));
-			result();
-			called = true;
-		};
-	}
-
-	/**
-	 * You can use testOnly instead of test to specify which tests are the only ones
-	 * you want to run in that test file.
-	 */
-	testOnly(name: string, testFn: TestFn) {
-		const test = new Test(name, testFn, this.$test);
-		this.$test.addTest(test);
-		this.$test.setOnly(test);
-	}
-
-	should(name: string, testFn: TestFn) {
-		return this.test(`should ${name}`, testFn);
-	}
-
-	test(name: string, testFn: TestFn) {
-		this.$test.addTest(new Test(name, testFn, this.$test));
-	}
-
-	testElement(name: string, testFn: TestFn) {
-		return this.test(name, async a => {
-			a.setTimeout(60000);
-			if (
-				typeof __cxlRunner === 'undefined' ||
-				!(await __cxlRunner({ type: 'testElement' })).success
-			) {
-				console.warn('testElement method not supported');
-				a.ok(true, 'testElement method not supported');
-			} else {
-				testQueue = testQueue.then(async () => {
-					try {
-						return await testFn(a);
-					} catch (e) {
-						console.error(
-							this.$test.name,
-							a.$test.name,
-							a.dom.id,
-							e,
-						);
-					}
-				});
-				await testQueue;
-			}
-		});
-	}
-
-	mock<T, K extends keyof FunctionsOf<T>>(object: T, method: K, fn: T[K]) {
-		const old = object[method];
-		object[method] = fn;
-		this.$test.events.subscribe(ev => {
-			if (ev.type === 'syncComplete') object[method] = old;
-		});
-		return fn;
-	}
-
-	spyFn<T, K extends keyof FunctionsOf<T>>(object: T, method: K) {
-		const spy = spyFn(object, method);
-		this.$test.events.subscribe({
-			complete: spy.destroy,
-		});
-		return spy;
-	}
-
-	spyProp<T, K extends keyof T>(object: T, prop: K) {
-		const spy = spyProp(object, prop);
-		this.$test.events.subscribe({
-			complete: spy.destroy,
-		});
-		return spy;
-	}
-
-	/** Returns a connected element */
-	element<K extends keyof HTMLElementTagNameMap>(
-		tagName: K,
-	): HTMLElementTagNameMap[K];
-	element(tagName: string): HTMLElement;
-	element<T>(tagName: { new (): T }): T;
-	element(tagName: string | { new (): HTMLElement }) {
-		const el =
-			typeof tagName === 'string'
-				? document.createElement(tagName)
-				: new tagName();
-		this.dom.appendChild(el);
-		return el;
-	}
-
-	waitForEvent(el: EventTarget, name: string, trigger: () => void) {
-		return new Promise<void>(resolve => {
-			function handler() {
-				el.removeEventListener(name, handler);
-				resolve();
-			}
-			el.addEventListener(name, handler);
-			trigger();
-		});
-	}
-
-	waitForElement(el: Element | ShadowRoot, selector: string) {
-		return new Promise<Element>(resolve => {
-			const observer = new MutationObserver(() => {
-				const found = el.querySelector(selector);
-				if (found) {
-					observer.disconnect();
-					resolve(found);
-				}
-			});
-			observer.observe(el, { childList: true, subtree: true });
-			this.$test.events.subscribe({
-				complete() {
-					observer.disconnect();
-				},
-			});
-		});
-	}
-
-	waitForDisconnect(el: Element) {
-		return new Promise<void>(resolve => {
-			const parent = el.parentNode;
-			if (!parent) return resolve();
-
-			const observer = new MutationObserver(() => {
-				if (!el.parentNode) resolve();
-			});
-			observer.observe(parent, { childList: true });
-			this.$test.events.subscribe({
-				complete() {
-					observer.disconnect();
-				},
-			});
-		});
-	}
-
-	expectEvent<T extends HTMLElement>({
-		element,
-		listener,
-		eventName,
-		trigger,
-		message,
-		count,
-	}: {
-		element: T;
-		listener?: Element;
-		eventName: string;
-		trigger: (el: T) => void;
-		message?: string;
-		count?: number;
-	}) {
-		return new Promise<void>((resolve, error) => {
-			try {
-				listener ??= element;
-				const handler = (ev: Event) => {
-					this.equal(
-						ev.type,
-						eventName,
-						message ?? `"${eventName}" event fired`,
-					);
-					this.equal(ev.target, element);
-
-					if (count === undefined || --count === 0) {
-						listener?.removeEventListener(eventName, handler);
-						resolve();
-					}
-				};
-				listener.addEventListener(eventName, handler);
-				trigger(element);
-			} catch (e) {
-				error(e);
-			}
-		});
-	}
-
-	async a11y(node: Element = this.dom) {
-		const mod = await import('./a11y.js');
-		const results = mod.testAccessibility(node);
-		for (const r of results) this.$test.push(r);
-	}
-
-	async sleep(n: number) {
-		await new Promise(resolve => setTimeout(resolve, n));
-	}
-
-	figure(name: string, html: string, init?: (node: Node) => void) {
-		if (typeof __cxlRunner !== 'undefined')
-			return new Promise<void>(resolve => {
-				this.test(name, async a => {
-					const domId = (a.dom.id = `dom${a.id}`);
-					const style = a.dom.style;
-					style.position = 'absolute';
-					style.overflowX = 'hidden';
-					style.top = style.left = '0';
-					style.width = '320px';
-					style.backgroundColor = 'white';
-
-					if (init) init(a.dom);
-					const data: FigureData = {
-						type: 'figure',
-						name,
-						domId,
-						html,
-					};
-					const match = await __cxlRunner(data);
-					a.$test.push(match);
-					await a.a11y();
-					resolve();
-				});
-			});
-		else {
-			console.warn('figure method not supported');
-			this.ok(true, 'figure method not supported');
-		}
-	}
-
-	setTimeout(val: number) {
-		this.$test.timeout = val;
-	}
-
-	mockSetInterval() {
-		/*eslint @typescript-eslint/no-unsafe-function-type:off */
-		this.mockTimeCheck();
-
-		let id = 0;
-		const intervals: Record<
-			number,
-			{
-				cb: () => void;
-				delay: number;
-				lastFired: number;
-			}
-		> = {};
-
-		this.mock(globalThis, 'setInterval', ((
-			cb: string | (() => void),
-			delay = 0,
-		): number => {
-			if (typeof cb === 'string') cb = new Function(cb) as () => void;
-			intervals[++id] = { cb, delay, lastFired: 0 };
-			return id;
-		}) as typeof globalThis.setInterval);
-		this.mock(globalThis, 'clearInterval', (id => {
-			if (id !== undefined) delete intervals[id];
-		}) as typeof globalThis.clearInterval);
-
-		return {
-			advance(ms: number) {
-				for (const int of Object.values(intervals)) {
-					const { cb, delay, lastFired } = int;
-					const elapsedTime = ms - lastFired;
-					const timesToFire = Math.floor(elapsedTime / (delay || 1));
-					for (let i = 0; i < timesToFire; i++) cb();
-					int.lastFired = Math.floor(ms / delay) * delay;
-				}
-			},
-		};
-	}
-
-	mockSetTimeout() {
-		this.mockTimeCheck();
-
-		let id = 0;
-		const timeouts: Record<number, { cb: Function; time: number }> = {};
-
-		this.mock(globalThis, 'setTimeout', ((cb: TimerHandler, time = 0) => {
-			if (typeof cb === 'string') cb = new Function(cb) as () => void;
-			timeouts[++id] = { cb, time };
-			return id;
-		}) as typeof globalThis.setTimeout);
-		this.mock(globalThis, 'clearTimeout', ((id: number | undefined) => {
-			if (id !== undefined) delete timeouts[id];
-		}) as typeof globalThis.clearTimeout);
-		return {
-			advance(ms: number) {
-				for (const [key, { cb, time }] of Object.entries(timeouts)) {
-					if (time <= ms) {
-						(cb as () => void)();
-						delete timeouts[+key];
-					} else {
-						const to = timeouts[+key];
-						if (to) to.time -= ms;
-					}
-				}
-			},
-		};
-	}
-
-	mockRequestAnimationFrame() {
-		this.mockTimeCheck();
-
-		let id = 0;
-		const rafs: Record<number, FrameRequestCallback> = {};
-
-		this.mock(globalThis, 'requestAnimationFrame', ((
-			cb: FrameRequestCallback,
-		) => {
-			id++;
-			rafs[id] = cb;
-			return id;
-		}) as typeof globalThis.requestAnimationFrame);
-
-		this.mock(globalThis, 'cancelAnimationFrame', ((rafId: number) => {
-			delete rafs[rafId];
-		}) as typeof globalThis.cancelAnimationFrame);
-
-		return {
-			advance() {
-				for (const key in rafs) {
-					const cb = rafs[key];
-					delete rafs[key];
-					cb?.(performance.now());
-				}
-			},
-		};
-	}
-
-	action(action: RunnerAction) {
-		const selector = action.element;
-		const element =
-			selector instanceof Element
-				? `#${(selector.id ||= `dom${this.id}-${actionId++}`)}`
-				: `#${(this.dom.id ||= `dom${this.id}`)} ${selector ?? ''}`;
-		return __cxlRunner({ ...action, element });
-	}
-
-	hover(element?: string | Element) {
-		return this.action({ type: 'hover', element });
-	}
-
-	tap(element?: string | Element) {
-		return this.action({ type: 'tap', element });
-	}
-
 	protected mockTimeCheck() {
 		if (
 			this.$test.promise ||
@@ -755,24 +776,31 @@ export class TestApi {
 	}
 }
 
-export class Test {
+export class TestApi extends TestApiBase<TestApi> {
+	createTest = (name: string, testFn: TestFn<TestApi>) =>
+		new Test<TestApi>(name, testFn, TestApi, this.$test);
+}
+
+export class Test<T = TestApi> {
 	name: string;
 	promise?: Promise<unknown>;
 	results: Result[] = [];
-	tests: Test[] = [];
-	only: Test[] = [];
+	tests: Test<T>[] = [];
+	only: Test<T>[] = [];
 	timeout = 5 * 1000;
 	domContainer?: Element;
 	events = new Subject<TestEvent>();
 	completed = false;
 	runTime = 0;
+	level?: number;
 
 	readonly id = lastTestId++;
 
 	constructor(
 		nameOrConfig: string | TestConfig,
-		public testFn: TestFn,
-		public parent?: Test,
+		public testFn: TestFn<T>,
+		protected TestApiFn: new ($test: Test<T>) => T,
+		public parent?: Test<T>,
 	) {
 		if (typeof nameOrConfig === 'string') this.name = nameOrConfig;
 		else this.name = nameOrConfig.name;
@@ -795,10 +823,14 @@ export class Test {
 	pushError(e: unknown) {
 		this.results.push(
 			e instanceof Error
-				? { success: false, message: e.message, stack: e.stack }
+				? {
+						success: false,
+						failureMessage: e.message,
+						stack: e.stack,
+					}
 				: {
 						success: false,
-						message:
+						failureMessage:
 							typeof e === 'string'
 								? e
 								: JSON.stringify(e, null, 2),
@@ -824,12 +856,12 @@ export class Test {
 		});
 	}
 
-	setOnly(test: Test) {
+	setOnly(test: Test<T>) {
 		if (!this.only.includes(test)) this.only.push(test);
 		this.parent?.setOnly(this);
 	}
 
-	addTest(test: Test) {
+	addTest(test: Test<T>) {
 		this.tests.push(test);
 		test.parent = this;
 		test.timeout = this.timeout;
@@ -840,7 +872,7 @@ export class Test {
 		let syncCompleteNeeded = true;
 		this.completed = false;
 		this.promise = undefined;
-		const testApi = new TestApi(this);
+		const testApi = new this.TestApiFn(this);
 
 		try {
 			const result = this.testFn(testApi);
@@ -1001,5 +1033,5 @@ export function triggerKeydown(el: Element, key: string) {
 }
 
 export function spec(name: string | TestConfig, fn: TestFn) {
-	return new Test(name, fn);
+	return new Test(name, fn, TestApi);
 }

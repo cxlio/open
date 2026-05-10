@@ -15,9 +15,11 @@ import printReportV2 from './report-stdout.js';
 
 export type SpecRunnerOptions = ParametersResult<typeof parameters>;
 
-export type SpecRunner = Omit<SpecRunnerOptions, '$'> & {
+export type SpecRunner = Omit<SpecRunnerOptions, '$' | 'grep'> & {
 	entryFile: string;
 	importmap?: string;
+	reportPath: string;
+	grep?: RegExp;
 	sources: Map<string, Output>;
 	log: Logger;
 };
@@ -62,7 +64,18 @@ const parameters = {
 		type: 'string',
 		help: 'Path to write the JSON test report (default: "test-report.json").',
 	},
+	grep: {
+		type: 'string',
+		help: 'Run only tests whose full name matches the pattern.',
+	},
 } as const;
+
+function parseGrep(pattern?: string) {
+	if (!pattern) return undefined;
+	const match = pattern.match(/^\/(.*)\/([gimsuy]*)$/);
+	if (!match) return new RegExp(pattern);
+	return new RegExp(match[1] ?? '', match[2]);
+}
 
 function startServer(cmd: string) {
 	const [bin, ...args] = cmd.split(' ');
@@ -75,8 +88,9 @@ function startServer(cmd: string) {
 
 const start = program({}, async ({ log }) => {
 	const args = parseArgv(parameters);
-	const config = {
-		entryFile: args.$[0] || './test.js',
+	const { $, grep: grepPattern, ...rest } = args;
+	const config: SpecRunner = {
+		entryFile: $[0] || './test.js',
 		updateBaselines: false,
 		ignoreCoverage: false,
 		mjs: true,
@@ -84,7 +98,8 @@ const start = program({}, async ({ log }) => {
 		log,
 		reportPath: 'test-report.json',
 		sources: new Map(),
-		...args,
+		...rest,
+		grep: parseGrep(grepPattern),
 	};
 
 	const server = config.startServer && startServer(config.startServer);

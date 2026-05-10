@@ -24,6 +24,7 @@ export interface JsonResult {
 	only: JsonResult[];
 	runTime: number;
 	timeout: number;
+	skipped?: boolean;
 }
 interface Spy<EventT> {
 	lastEvent?: EventT;
@@ -71,6 +72,11 @@ export type RunnerCommand =
 	  }
 	| {
 			type: 'testElement';
+	  }
+	| {
+			type: 'proxy';
+			route: string;
+			target: string;
 	  }
 	| { type: 'concurrency' }
 	| { type: 'run'; suites: Test[]; baselinePath?: string };
@@ -193,6 +199,11 @@ function inspect(val: unknown) {
 		return val.outerHTML;
 
 	return val;
+}
+
+function matchesGrep(grep: RegExp, value: string) {
+	grep.lastIndex = 0;
+	return grep.test(value);
 }
 
 export abstract class TestApiBase<T> {
@@ -643,6 +654,10 @@ export abstract class TestApiBase<T> {
 		return __cxlRunner({ ...action, element });
 	};
 
+	proxy = (route: string, target: string) => {
+		return __cxlRunner({ type: 'proxy', route, target });
+	};
+
 	hover = (element?: string | Element) => {
 		return this.action({ type: 'hover', element });
 	};
@@ -793,6 +808,7 @@ export class Test<T = TestApi> {
 	completed = false;
 	runTime = 0;
 	level?: number;
+	skipped = false;
 
 	readonly id = lastTestId++;
 
@@ -816,24 +832,30 @@ export class Test<T = TestApi> {
 	}
 
 	push(result: Result) {
+		if (this.skipped) return;
 		if (this.completed) throw new Error('Test already completed');
 		this.results.push(result);
 	}
 
 	pushError(e: unknown) {
+		if (this.skipped) return;
+		const failureMessage =
+			typeof e === 'string'
+				? e
+				: e instanceof Error
+					? e.message
+					: JSON.stringify(e, null, 2) || String(e);
+
 		this.results.push(
 			e instanceof Error
 				? {
 						success: false,
-						failureMessage: e.message,
+						failureMessage,
 						stack: e.stack,
 					}
 				: {
 						success: false,
-						failureMessage:
-							typeof e === 'string'
-								? e
-								: JSON.stringify(e, null, 2),
+						failureMessage,
 					},
 		);
 	}
@@ -867,11 +889,16 @@ export class Test<T = TestApi> {
 		test.timeout = this.timeout;
 	}
 
-	async run(): Promise<Result[]> {
+	path(): string {
+		return this.parent ? `${this.parent.path()} ${this.name}` : this.name;
+	}
+
+	async run(grep?: RegExp): Promise<Result[]> {
 		const start = performance.now();
 		let syncCompleteNeeded = true;
 		this.completed = false;
 		this.promise = undefined;
+		this.skipped = !!grep && !!this.parent && !matchesGrep(grep, this.path());
 		const testApi = new this.TestApiFn(this);
 
 		try {
@@ -885,10 +912,25 @@ export class Test<T = TestApi> {
 			if (promise && (this.completed as boolean) === false)
 				throw new Error('Never completed');
 			if (this.only.length) {
-				await Promise.all(this.only.map(test => test.run()));
+				await Promise.all(this.only.map(test => test.run(grep)));
 				throw new Error('"only" was used');
 			} else if (this.tests.length)
-				await Promise.all(this.tests.map(test => test.run()));
+				await Promise.all(this.tests.map(test => test.run(grep)));
+
+			if (
+				this.skipped &&
+				[...this.only, ...this.tests].some(test => !test.skipped)
+			)
+				this.skipped = false;
+
+			if (
+				!this.parent &&
+				!!grep &&
+				this.results.length === 0 &&
+				this.only.every(test => test.skipped) &&
+				this.tests.every(test => test.skipped)
+			)
+				this.skipped = true;
 		} catch (e) {
 			this.pushError(e);
 			console.error(String(e));
@@ -908,10 +950,11 @@ export class Test<T = TestApi> {
 		return {
 			name: this.name,
 			results: this.results,
-			tests: this.tests.map(r => r.toJSON()),
-			only: this.only.map(r => r.toJSON()),
+			tests: this.tests.filter(r => !r.skipped).map(r => r.toJSON()),
+			only: this.only.filter(r => !r.skipped).map(r => r.toJSON()),
 			runTime: this.runTime,
 			timeout: this.timeout,
+			skipped: this.skipped,
 		};
 	}
 

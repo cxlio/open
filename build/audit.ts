@@ -100,30 +100,7 @@ async function fixTsconfig({ projectPath, name }: LintData) {
 		);
 	}
 
-	/*if (tsconfig.references)
-		for (const ref of tsconfig.references) {
-			const refName = /^\.\.\/([^/]+)/.exec(ref.path)?.[1];
-			if (refName) {
-				const refPkg = `@cxl/${refName}`;
-				const pkgDep = (pkg[depProp] ||= {});
-
-				if (!pkgDep?.[refName]) {
-					const pkgVersion = (
-						await readJson<Package | null>(
-							`${baseDir}/${refName}/package.json`,
-							null,
-						)
-					)?.version;
-					if (pkgVersion && pkgDep) pkgDep[refPkg] = `~${pkgVersion}`;
-				}
-
-				if (pkg[notDepProp]?.[refName])
-					delete pkg[notDepProp]?.[refName];
-			}
-		}*/
-
 	const newPackage = JSON.stringify(pkg, null, '\t');
-
 	if (oldPackage !== newPackage) await fs.writeFile(pkgPath, newPackage);
 }
 

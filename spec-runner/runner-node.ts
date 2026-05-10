@@ -43,7 +43,7 @@ async function recordCoverage(
 export default async function runNode(app: SpecRunner) {
 	async function runSuite() {
 		const suite = ((await import(suitePath)) as { default: Test }).default;
-		return suite.run().then(() => suite);
+		return suite.run(app.grep).then(() => suite);
 	}
 
 	const entryFile = app.entryFile;

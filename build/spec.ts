@@ -1,9 +1,5 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-
-import { run as runSpec } from '../spec-runner/runner.js';
-import printReportV2 from '../spec-runner/report-stdout.js';
-
 import { Package } from './npm.js';
 import { fromAsync, of } from '../rx/index.js';
 import { getDependencies } from './package.js';
@@ -96,6 +92,10 @@ export function runTests({
 	ignoreCoverage?: boolean;
 }) {
 	return fromAsync(async () => {
+		const { run: runSpec } = await import('../spec-runner/runner.js');
+		const { default: printReportV2 } =
+			await import('../spec-runner/report-stdout.js');
+
 		const cwd = process.cwd();
 		const pkgJson = JSON.parse(
 			readFileSync('package.json', 'utf8'),
@@ -112,6 +112,7 @@ export function runTests({
 				entryFile,
 				ignoreCoverage,
 				baselinePath: `../../${appId}/spec`,
+				reportPath: 'test-report.json',
 				importmap: node
 					? undefined
 					: generateImportMap(rootPkg, pkgJson),

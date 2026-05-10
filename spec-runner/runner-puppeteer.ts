@@ -4,7 +4,12 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { basename, resolve, relative, join, extname } from 'path';
 import { resolveImport } from './resolve.js';
 
-import type { FigureData, RunnerCommand, Test, Result } from '../spec/index.js';
+import type {
+	FigureData,
+	RunnerCommand,
+	Result,
+	JsonResult,
+} from '../spec/index.js';
 import type { SpecRunner } from './index.js';
 import type { PNG } from 'pngjs';
 
@@ -57,6 +62,8 @@ async function createPage(
 	browser: Browser,
 	concurrency: number,
 ) {
+	const proxies = new Map<string, string>();
+
 	function cxlRunner(cmd: RunnerCommand): Promise<Result> | Result {
 		const type = cmd.type;
 		if (type === 'figure') {
@@ -102,6 +109,9 @@ async function createPage(
 				});
 		} else if (type === 'testElement') {
 			return { success: true, failureMessage: 'testElement supported' };
+		} else if (type === 'proxy') {
+			proxies.set(cmd.route, cmd.target);
+			return { success: true, failureMessage: 'Proxy' };
 		} else if (type === 'concurrency') {
 			return {
 				success: true,
@@ -145,7 +155,7 @@ async function createPage(
 	// Prevent unexpected focus behavior
 	await page.bringToFront();
 
-	const suite = await mjsRunner(page, app, entryFile);
+	const suite = await mjsRunner(page, app, entryFile, proxies);
 	if (pageError.length) suite.results.push(...pageError);
 
 	const coverage = app.ignoreCoverage
@@ -154,7 +164,11 @@ async function createPage(
 	return { suite, coverage };
 }
 
-function virtualFileServer(page: Page, app: SpecRunner) {
+function virtualFileServer(
+	page: Page,
+	app: SpecRunner,
+	proxies: Map<string, string>,
+) {
 	const cwd = app.vfsRoot ? resolve(app.vfsRoot) : process.cwd();
 
 	if (app.vfsRoot) app.log(`vfsRoot: ${cwd} (cwd: ${process.cwd()})`);
@@ -172,10 +186,68 @@ function virtualFileServer(page: Page, app: SpecRunner) {
 		return path;
 	}
 
+	function findProxy(pathname: string) {
+		let result: [string, string] | undefined;
+		for (const [route, target] of proxies) {
+			if (
+				pathname === route ||
+				pathname.startsWith(route.endsWith('/') ? route : `${route}/`)
+			) {
+				if (!result || route.length > result[0].length)
+					result = [route, target];
+			}
+		}
+		return result;
+	}
+
+	async function proxyRequest(
+		req: HTTPRequest,
+		url: URL,
+		route: string,
+		target: string,
+	) {
+		const targetUrl = new URL(target);
+		const suffix = url.pathname.slice(route.length);
+		targetUrl.pathname = suffix
+			? `${targetUrl.pathname.replace(/\/$/, '')}/${suffix.replace(
+					/^\//,
+					'',
+				)}`
+			: targetUrl.pathname;
+		targetUrl.search = url.search;
+
+		const headers = { ...req.headers() };
+		delete headers.host;
+		delete headers.origin;
+		delete headers['content-length'];
+
+		const response = await fetch(targetUrl, {
+			method: req.method(),
+			headers,
+			body:
+				req.method() === 'GET' || req.method() === 'HEAD'
+					? undefined
+					: req.postData(),
+			redirect: 'manual',
+		});
+
+		await req.respond({
+			status: response.status,
+			headers: Object.fromEntries(response.headers.entries()),
+			body: Buffer.from(await response.arrayBuffer()),
+		});
+	}
+
 	async function onRequest(req: HTTPRequest) {
 		try {
 			const url = new URL(req.url());
-			if (req.method() === 'GET' && url.hostname === 'cxl-tester') {
+			if (url.hostname === 'cxl-tester') {
+				const proxy = findProxy(url.pathname);
+				if (proxy)
+					return proxyRequest(req, url, proxy[0], proxy[1]);
+
+				if (req.method() !== 'GET') return req.continue();
+
 				if (url.pathname === '/' || url.pathname === '/favicon.ico')
 					return req.respond({ status: 200, body: '' });
 
@@ -223,10 +295,15 @@ function goto(_app: SpecRunner, page: Page, url: string) {
 	return page.goto(url);
 }
 
-async function mjsRunner(page: Page, app: SpecRunner, entry: string) {
+async function mjsRunner(
+	page: Page,
+	app: SpecRunner,
+	entry: string,
+	proxies: Map<string, string>,
+) {
 	await page.setRequestInterception(true);
 
-	virtualFileServer(page, app);
+	virtualFileServer(page, app, proxies);
 
 	await goto(app, page, 'https://cxl-tester');
 
@@ -240,12 +317,34 @@ async function mjsRunner(page: Page, app: SpecRunner, entry: string) {
 	}
 
 	return page.evaluate(
-		`(async entry => {
-		const r = (await import(entry)).default;
-		await r.run();
-		return r.toJSON();
-	})('./${basename(entry)}')`,
-	) as Promise<Test>;
+		async ({
+			entry,
+			grepSource,
+			grepFlags,
+		}: {
+			entry: string;
+			grepSource?: string;
+			grepFlags?: string;
+		}) => {
+			const mod = (await import(entry)) as {
+				default: {
+					run(grep?: RegExp): Promise<unknown>;
+					toJSON(): JsonResult;
+				};
+			};
+			const r = mod.default;
+			const grep = grepSource
+				? new RegExp(grepSource, grepFlags)
+				: undefined;
+			await r.run(grep);
+			return r.toJSON();
+		},
+		{
+			entry: `./${basename(entry)}`,
+			grepSource: app.grep?.source,
+			grepFlags: app.grep?.flags,
+		},
+	) as Promise<JsonResult>;
 }
 
 function Range(startOffset: number, endOffset: number, count: number) {

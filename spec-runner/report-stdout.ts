@@ -8,7 +8,7 @@ import {
 } from './report.js';
 
 function printError(name: string, fail: TestResult) {
-	const msg = fail.failureMessage;
+	const msg = fail.message ?? fail.failureMessage ?? 'Unknown failure';
 	console.error(name, colors.red(msg));
 	if (fail.stack) console.error(fail.stack);
 }
@@ -26,12 +26,12 @@ function printTest(test: TestReport) {
 			: test.runTime > test.timeout / 2
 				? 'yellow'
 				: 'gray';
-
-	console.group(
+	console[failures.length > 0 ? 'error' : 'log'](
 		`${test.name} ${colors[timeColor](
 			`(${test.runTime.toFixed(2)} ms)`,
 		)} ${out}`,
 	);
+	console.group();
 	failures.forEach(fail => printError(test.name, fail));
 	test.tests.forEach(printTest);
 	console.groupEnd();
@@ -41,15 +41,19 @@ function printTest(test: TestReport) {
 
 function printCoverage(coverage: TestCoverageReport[]) {
 	console.log('Coverage Report:');
-	for (const cov of coverage) {
-		const pct = ((cov.blockCovered / cov.blockTotal) * 100).toFixed(2);
+	for (const cov of coverage.sort((a, b) => (a.url > b.url ? 1 : -1))) {
+		const blockPct = cov.blockCoveragePct.toFixed(2);
+		const functionPct = cov.functionCoveragePct.toFixed(2);
 		console.log(
-			`${cov.url}: ${pct}% (${cov.blockTotal}/${cov.blockCovered})`,
+			`${cov.url}: blocks ${blockPct}% (${cov.blockCovered}/${cov.blockTotal}), functions ${functionPct}% (${cov.functionCovered}/${cov.functionTotal})`,
 		);
 	}
 }
 
-export default function generate(report: Report) {
+export default function (report: Report) {
+	console.log(
+		`Tests: ${report.summary.testTotal}, Failures: ${report.summary.failureCount}`,
+	);
 	if (report.coverage) printCoverage(report.coverage);
 	printTest(report.testReport);
 }

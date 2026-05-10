@@ -1,5 +1,5 @@
 import { spec } from '../spec/index.js';
-import { parseParameters } from './index.js';
+import { parseArgv, parseParameters } from './index.js';
 
 export default spec('program', s => {
 	s.test('parseParameters', a => {
@@ -109,6 +109,43 @@ export default spec('program', s => {
 			a.equal(r.browserUrl, 'http://localhost:9009');
 			a.equal(r.startServer, 'npm run start:test --prefix ..');
 			a.ok(r);
+		});
+	});
+
+	s.test('parseArgv', a => {
+		a.test('preserves multi-word values', a => {
+			const parameters = {
+				grep: { type: 'string', help: 'grep' },
+				node: { type: 'boolean', help: 'node' },
+			} as const;
+			const result = parseArgv(parameters, [
+				'--node',
+				'--grep',
+				'multiple short',
+				'test.js',
+			]);
+			a.equal(result.node, true);
+			a.equal(result.grep, 'multiple short');
+			a.equal(result.$[0], 'test.js');
+		});
+
+		a.test('supports equals syntax', a => {
+			const parameters = {
+				grep: { type: 'string', help: 'grep' },
+			} as const;
+			const result = parseArgv(parameters, ['--grep=multiple short']);
+			a.equal(result.grep, 'multiple short');
+		});
+
+		a.test('supports short values and rest args', a => {
+			const parameters = {
+				help: { short: 'h', type: 'boolean', help: 'help' },
+				grep: { short: 'g', type: 'string', help: 'grep' },
+			} as const;
+			const result = parseArgv(parameters, ['-h', '-g', 'multiple short', 'a']);
+			a.equal(result.help, true);
+			a.equal(result.grep, 'multiple short');
+			a.equal(result.$[0], 'a');
 		});
 	});
 

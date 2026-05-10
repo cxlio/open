@@ -235,6 +235,68 @@ export function parseParameters<T extends Record<string, Parameter>>(
 	return result;
 }
 
+export function parseArgvTokens<T extends Record<string, Parameter>>(
+	parameters: T,
+	argv: string[],
+): ParametersResult<T> {
+	const result = { $: [] as string[] } as ParametersResult<T>;
+
+	for (let i = 0; i < argv.length; i++) {
+		const token = argv[i];
+		if (!token) continue;
+
+		if (token.startsWith('--')) {
+			const equals = token.indexOf('=');
+			const key =
+				equals === -1 ? token.slice(2) : token.slice(2, equals);
+			const param = parameters[key];
+			if (!param) {
+				result.$.push(token);
+				continue;
+			}
+
+			const value =
+				equals !== -1
+					? token.slice(equals + 1)
+					: argv[i + 1]?.startsWith('-')
+						? undefined
+						: argv[i + 1];
+			setParam(result, [key, param], value);
+			if (equals === -1 && value !== undefined) i++;
+			continue;
+		}
+
+		if (token.startsWith('-') && token.length > 2 && !token.includes('=')) {
+			token
+				.slice(1)
+				.split('')
+				.forEach(p => setParam(result, findParameter(parameters, p), ''));
+			continue;
+		}
+
+		if (token.startsWith('-') && token.length > 1) {
+			const equals = token.indexOf('=');
+			const short = token[1];
+			if (!short) throw new Error('Invalid parameter');
+
+			const param = findParameter(parameters, short);
+			const value =
+				equals !== -1
+					? token.slice(equals + 1)
+					: argv[i + 1]?.startsWith('-')
+						? undefined
+						: argv[i + 1];
+			setParam(result, param, value);
+			if (equals === -1 && value !== undefined) i++;
+			continue;
+		}
+
+		result.$.push(token);
+	}
+
+	return result;
+}
+
 export function parametersParser<T extends Record<string, Parameter>, R>(
 	parameters: T,
 	cb: (parsed: ParametersResult<T>) => R,
@@ -324,8 +386,11 @@ export async function operation<T>(
 	return result;
 }
 
-export function parseArgv<T extends Record<string, Parameter>>(parameters: T) {
-	return parseParameters(parameters, process.argv.slice(2).join(' '));
+export function parseArgv<T extends Record<string, Parameter>>(
+	parameters: T,
+	argv = process.argv.slice(2),
+) {
+	return parseArgvTokens(parameters, argv);
 }
 
 /**

@@ -6,7 +6,7 @@
 		"rules": {
 			"build": {
 				"regex": "/([^/]+)/.+",
-				"tasks": "shell.npmBuild $1"
+				"tasks": "npm run build --prefix $1"
 			}
 		}
 	}

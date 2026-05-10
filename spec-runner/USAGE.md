@@ -20,6 +20,7 @@ cxl-spec [entryFile] [options]
 - `--vfsRoot <dir>` Root directory to serve via the virtual file server.
 - `--startServer "<command>"` Start an external server while tests run (e.g. `npm run dev`).
 - `--reportPath <path>` Path to write the JSON test report (default: `test-report.json`).
+- `--grep <pattern>` Run only tests whose full name matches the pattern. Use a plain string or `/regex/flags`.
 
 ## Examples
 

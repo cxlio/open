@@ -672,105 +672,16 @@ export abstract class TestApiBase<T> {
 		}
 
 		if (Array.isArray(a) && Array.isArray(b)) {
-			// Compare array length with description.
-			this.equal(
-				a.length,
-				b.length,
-				`${desc ? desc + ': ' : ''}Expected array of length ${
-					b.length
-				}, got ${a.length}`,
-			);
-			for (let i = 0; i < Math.max(a.length, b.length); i++) {
-				this.equal(
-					a[i],
-					b[i],
-					`${
-						desc ? desc + ': ' : ''
-					}Array element at [${i}] differs: ${inspect(
-						a[i],
-					)} !== ${inspect(b[i])}`,
-				);
-			}
-		} else if (
+			return this.equalArray(a, b, desc);
+		}
+
+		if (
 			a === null ||
 			a === undefined ||
 			b === null ||
 			b === undefined
 		) {
-			// One or both are null/undefined.
-			this.equal(
-				a,
-				b,
-				`${desc ? desc + ': ' : ''}Expected ${inspect(
-					b,
-				)}, got ${inspect(a)}`,
-			);
-		} else if (
-			typeof a === 'string' ||
-			typeof b === 'string' ||
-			typeof a === 'number' ||
-			typeof b === 'number' ||
-			typeof a === 'boolean' ||
-			typeof b === 'boolean'
-		) {
-			// Primitive value mismatch
-			this.equal(a, b, desc);
-		} else if (isIterableOrIterator(a) && isIterableOrIterator(b)) {
-			const iteratorA = getIterator(a);
-			const iteratorB = getIterator(b);
-			let i = 0;
-
-			for (;;) {
-				const stepA = iteratorA.next();
-				const stepB = iteratorB.next();
-
-				if (stepA.done || stepB.done) {
-					this.equal(
-						!!stepA.done,
-						!!stepB.done,
-						`${desc ? desc + ': ' : ''}Generator completion differs at [${i}]`,
-					);
-					break;
-				}
-
-				this.equalValues(
-					stepA.value,
-					stepB.value,
-					`${desc ? desc + ': ' : ''}Generator value at [${i}]`,
-				);
-				i++;
-			}
-		} else if (typeof a === 'object' && typeof b === 'object') {
-			// Compare all keys in 'b'
-			let count = 0;
-
-			for (const key in b) {
-				count++;
-				this.equalDeep(
-					(a as Record<string, unknown>)[key],
-					(b as Record<string, unknown>)[key],
-					partial,
-					`${desc ? desc + ': ' : ''}Property "${key}"`,
-				);
-			}
-
-			// Optionally check for extra keys in "a" that are not in "b"
-			if (!partial)
-				for (const key in a) {
-					count++;
-					if (!(key in (b as Record<string, unknown>))) {
-						this.ok(
-							false,
-							`${
-								desc ? desc + ': ' : ''
-							}Unexpected extra property "${key}" found in actual value`,
-						);
-					}
-				}
-			if (count === 0) this.ok(true, 'Both objects are empty.');
-		} else {
-			// Fallback for unknown types
-			this.equal(
+			return this.equal(
 				a,
 				b,
 				`${desc ? desc + ': ' : ''}Expected ${inspect(
@@ -778,6 +689,38 @@ export abstract class TestApiBase<T> {
 				)}, got ${inspect(a)}`,
 			);
 		}
+
+		if (
+			typeof a === 'string' ||
+			typeof b === 'string' ||
+			typeof a === 'number' ||
+			typeof b === 'number' ||
+			typeof a === 'boolean' ||
+			typeof b === 'boolean'
+		) {
+			return this.equal(a, b, desc);
+		}
+
+		if (isIterableOrIterator(a) && isIterableOrIterator(b)) {
+			return this.equalIterable(a, b, desc);
+		}
+
+		if (typeof a === 'object' && typeof b === 'object') {
+			return this.equalObject(
+				a as Record<string, unknown>,
+				b as Record<string, unknown>,
+				partial,
+				desc,
+			);
+		}
+
+		this.equal(
+			a,
+			b,
+			`${desc ? desc + ': ' : ''}Expected ${inspect(
+				b,
+			)}, got ${inspect(a)}`,
+		);
 	}
 
 	protected mockTimeCheck() {
@@ -789,11 +732,92 @@ export abstract class TestApiBase<T> {
 				`mockSetTimeout should not be used in async tests. Test: "${this.$test.name}"`,
 			);
 	}
+
+	private equalArray(a: unknown[], b: unknown[], desc?: string) {
+		this.equal(
+			a.length,
+			b.length,
+			`${desc ? desc + ': ' : ''}Expected array of length ${
+				b.length
+			}, got ${a.length}`,
+		);
+		for (let i = 0; i < Math.max(a.length, b.length); i++) {
+			this.equalValues(
+				a[i],
+				b[i],
+				`${
+					desc ? desc + ': ' : ''
+				}Array element at [${i}] differs: ${inspect(
+					a[i],
+				)} !== ${inspect(b[i])}`,
+			);
+		}
+	}
+
+	private equalIterable(a: unknown, b: unknown, desc?: string) {
+		const iteratorA = getIterator(a);
+		const iteratorB = getIterator(b);
+		let i = 0;
+
+		for (;;) {
+			const stepA = iteratorA.next();
+			const stepB = iteratorB.next();
+
+			if (stepA.done || stepB.done) {
+				this.equal(
+					!!stepA.done,
+					!!stepB.done,
+					`${desc ? desc + ': ' : ''}Generator completion differs at [${i}]`,
+				);
+				break;
+			}
+
+			this.equalValues(
+				stepA.value,
+				stepB.value,
+				`${desc ? desc + ': ' : ''}Generator value at [${i}]`,
+			);
+			i++;
+		}
+	}
+
+	private equalObject(
+		a: Record<string, unknown>,
+		b: Record<string, unknown>,
+		partial: boolean,
+		desc?: string,
+	) {
+		let count = 0;
+
+		for (const key in b) {
+			count++;
+			this.equalDeep(
+				a[key],
+				b[key],
+				partial,
+				`${desc ? desc + ': ' : ''}Property "${key}"`,
+			);
+		}
+
+		if (!partial)
+			for (const key in a) {
+				count++;
+				if (!(key in b)) {
+					this.ok(
+						false,
+						`${
+							desc ? desc + ': ' : ''
+						}Unexpected extra property "${key}" found in actual value`,
+					);
+				}
+			}
+		if (count === 0) this.ok(true, 'Both objects are empty.');
+	}
 }
 
 export class TestApi extends TestApiBase<TestApi> {
-	createTest = (name: string, testFn: TestFn<TestApi>) =>
-		new Test<TestApi>(name, testFn, TestApi, this.$test);
+	createTest = (name: string, testFn: TestFn) =>
+		new Test(name, testFn, TestApi, this.$test);
 }
 
 export class Test<T = TestApi> {

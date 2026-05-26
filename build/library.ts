@@ -134,31 +134,6 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 									entryFile: './test-screenshot.js',
 									ignoreCoverage: true,
 								}),
-								/*fromAsync(async () => {
-									try {
-										process.chdir(outputDir);
-										const report = await runSpec({
-											node: false,
-											mjs: true,
-											vfsRoot: '../../',
-											ignoreCoverage: true,
-											baselinePath: `../../${appId}/spec`,
-											entryFile: './test-screenshot.js',
-											importmap: generateImportMap(
-												rootPkg,
-												pkgJson,
-												parsedTsconfig,
-											),
-											sources: new Map(),
-											log: console.log.bind(console),
-										});
-										printReportV2(report);
-										if (!report.success)
-											throw new Error('Tests failed');
-									} finally {
-										process.chdir(cwd);
-									}
-								}).ignoreElements(),*/
 							),
 						],
 					},

@@ -50,10 +50,36 @@ function printCoverage(coverage: TestCoverageReport[]) {
 	}
 }
 
+function collectFailures(
+	test: TestReport,
+	parentPath: string,
+	out: { path: string; message: string; stack?: string }[],
+) {
+	const path = parentPath ? `${parentPath} > ${test.name}` : test.name;
+	for (const r of test.results) {
+		if (!r.success)
+			out.push({
+				path,
+				message: r.message ?? r.failureMessage ?? 'Unknown failure',
+				stack: r.stack,
+			});
+	}
+	for (const child of test.tests) collectFailures(child, path, out);
+}
+
+function printFailureSummary(report: Report) {
+	const failures: { path: string; message: string; stack?: string }[] = [];
+	collectFailures(report.testReport, '', failures);
+	if (!failures.length) return;
+	console.error(colors.red(`\nFailures (${failures.length}):`));
+	for (const f of failures) {
+		console.error(colors.red(`✗ ${f.path}`));
+		console.error(`  ${f.message.replace(/\n/g, '\n  ')}`);
+	}
+}
+
 export default function (report: Report) {
-	console.log(
-		`Tests: ${report.summary.testTotal}, Failures: ${report.summary.failureCount}`,
-	);
 	if (report.coverage) printCoverage(report.coverage);
 	printTest(report.testReport);
+	printFailureSummary(report);
 }

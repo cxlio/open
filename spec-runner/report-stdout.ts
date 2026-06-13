@@ -54,7 +54,7 @@ function collectFailures(
 	test: TestReport,
 	parentPath: string,
 	out: { path: string; message: string; stack?: string }[],
-) {
+): void {
 	const path = parentPath ? `${parentPath} > ${test.name}` : test.name;
 	for (const r of test.results) {
 		if (!r.success)
@@ -67,19 +67,25 @@ function collectFailures(
 	for (const child of test.tests) collectFailures(child, path, out);
 }
 
-function printFailureSummary(report: Report) {
+function printFailureSummary(report: Report): number {
 	const failures: { path: string; message: string; stack?: string }[] = [];
 	collectFailures(report.testReport, '', failures);
-	if (!failures.length) return;
+	if (!failures.length) return 0;
 	console.error(colors.red(`\nFailures (${failures.length}):`));
 	for (const f of failures) {
 		console.error(colors.red(`✗ ${f.path}`));
 		console.error(`  ${f.message.replace(/\n/g, '\n  ')}`);
 	}
+	return failures.length;
+}
+
+function printSuccessSummary(): void {
+	console.log(colors.green(`\nAll tests passed.`));
 }
 
 export default function (report: Report) {
 	if (report.coverage) printCoverage(report.coverage);
 	printTest(report.testReport);
-	printFailureSummary(report);
+	const failures = printFailureSummary(report);
+	if (!failures) printSuccessSummary();
 }

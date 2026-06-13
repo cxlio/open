@@ -41,6 +41,12 @@ export default defineConfig([
 				'error',
 				{ checksVoidReturn: { attributes: false } },
 			],
+			'@typescript-eslint/consistent-type-assertions': [
+				'warn',
+				{
+					assertionStyle: 'never',
+				},
+			],
 			/*'@typescript-eslint/strict-boolean-expressions': [
 				'error',
 				{ allowString: true, allowNumber: false },

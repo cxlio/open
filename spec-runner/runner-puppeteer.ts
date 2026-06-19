@@ -1,7 +1,8 @@
 import { Browser, CoverageEntry, Page, HTTPRequest } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, mkdtemp, rm } from 'fs/promises';
 import { basename, resolve, relative, join, extname } from 'path';
+import { tmpdir } from 'os';
 import { resolveImport } from './resolve.js';
 
 import type {
@@ -53,8 +54,7 @@ async function handleConsole(msg: puppeteer.ConsoleMessage, app: SpecRunner) {
 }
 
 async function openPage(browser: Browser) {
-	const context = await browser.createBrowserContext();
-	return await context.newPage();
+	return await browser.newPage();
 }
 
 async function createPage(
@@ -522,20 +522,27 @@ export default async function runPuppeteer(app: SpecRunner) {
 		'--disable-renderer-backgrounding',
 		'--mute-audio', // avoid potentially different audio stack warnings
 		'--disable-extensions',
+		'--single-process',
 	];
 	if (app.disableSecurity) args.push('--disable-web-security');
 
-	const browser = await puppeteer.launch({
-		headless: true,
-		args,
-		timeout: 5000,
-	});
+	const userDataDir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
+	let browser: Browser | undefined;
 	try {
+		browser = await puppeteer.launch({
+			headless: 'shell',
+			args,
+			env: { ...process.env, HOME: userDataDir },
+			pipe: true,
+			timeout: 5000,
+			userDataDir,
+		});
 		app.log(`Puppeteer ${await browser.version()}`);
 
 		const { suite, coverage } = await createPage(app, browser, 0);
 		return generateReport(suite, coverage);
 	} finally {
-		await browser.close();
+		if (browser) await browser.close();
+		await rm(userDataDir, { recursive: true, force: true });
 	}
 }

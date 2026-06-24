@@ -5,6 +5,7 @@ import {
 	exec,
 	formatArtifactSummary,
 	formatBuildError,
+	formatTargetArtifactSummary,
 } from './builder.js';
 
 export default spec('build', s => {
@@ -28,6 +29,16 @@ export default spec('build', s => {
 					{ path: 'index.d.ts', size: 500 },
 				]),
 				'2 files, 2.00kb',
+			);
+		});
+
+		it.should('format target artifact summary', a => {
+			a.equal(
+				formatTargetArtifactSummary('package', [
+					{ path: 'package.json', size: 480 },
+					{ path: 'index.js', size: 1170 },
+				]),
+				'package: 2 files, 1.65kb',
 			);
 		});
 

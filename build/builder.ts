@@ -64,6 +64,13 @@ export function formatArtifactSummary(artifacts: BuildArtifact[]) {
 	return `${artifacts.length} ${files}, ${kb(total)}`;
 }
 
+export function formatTargetArtifactSummary(
+	target: string | undefined,
+	artifacts: BuildArtifact[],
+) {
+	return `${target || 'build'}: ${formatArtifactSummary(artifacts)}`;
+}
+
 export function formatBuildError(error: Error | string) {
 	if (error instanceof Error) return error.message;
 	return error;
@@ -91,9 +98,14 @@ export async function build(...targets: BuildConfiguration[]) {
 	const runTargets = buildTargets();
 	try {
 		for (const targetId of runTargets) {
+			const artifacts: BuildArtifact[] = [];
 			for (const target of targets)
 				if (target.target === targetId)
-					await new Build(appLog, target, options).build();
+					artifacts.push(
+						...(await new Build(appLog, target, options).build()),
+					);
+			if (!options.verbose && artifacts.length)
+				console.log(formatTargetArtifactSummary(targetId, artifacts));
 		}
 	} catch (e) {
 		if (!(e instanceof ReportedBuildError)) console.error(e);
@@ -175,11 +187,7 @@ class Build {
 					this.config.tasks.map(task => this.runTask(task)),
 				)
 			).flat();
-
-			if (!this.options.verbose && artifacts.length) {
-				const name = target || 'build';
-				console.log(`${name}: ${formatArtifactSummary(artifacts)}`);
-			}
+			return artifacts;
 		} catch (e) {
 			if (this.options.verbose) console.error('build failed:', e);
 			else

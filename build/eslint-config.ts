@@ -94,6 +94,11 @@ export default defineConfig([
 	{
 		rules: {
 			'sonarjs/cognitive-complexity': 'off',
+			'sonarjs/no-all-duplicated-branches': 'error',
+			'sonarjs/no-duplicated-branches': 'error',
+			'sonarjs/no-identical-conditions': 'error',
+			'sonarjs/no-identical-expressions': 'error',
+			'sonarjs/no-identical-functions': 'error',
 			'sonarjs/no-nested-assignment': 'off',
 			'sonarjs/no-nested-conditional': 'off',
 			'sonarjs/no-nested-template-literals': 'off',

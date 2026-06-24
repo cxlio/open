@@ -34,6 +34,10 @@ export interface Package {
 	type?: string;
 	scripts?: Record<string, string>;
 	exports?: Record<string, string>;
+	build?: {
+		dependencyUsageFunctions?: string[];
+		tsconfigs?: string[];
+	};
 
 	docs?: string;
 	cxl?: { ignore?: boolean };

@@ -23,6 +23,7 @@ export interface TsconfigJson {
 }
 
 const { readDirectory, getCurrentDirectory, fileExists, readFile } = ts.sys;
+const DefaultTsconfig = 'tsconfig.json';
 
 const parseConfigHost: ParseConfigFileHost = {
 	useCaseSensitiveFileNames: true,
@@ -69,7 +70,7 @@ export function printDiagnostics(
 }
 
 function getBuilder(
-	tsconfig = 'tsconfig.json',
+	tsconfig = DefaultTsconfig,
 	defaultOptions: BuildOptions = { module: ts.ModuleKind.CommonJS },
 ) {
 	const host = ts.createSolutionBuilderHost(ts.sys);
@@ -87,7 +88,7 @@ function getBuilder(
 }
 
 export function tsbuild(
-	tsconfig = 'tsconfig.json',
+	tsconfig = DefaultTsconfig,
 	subs: Subscriber<Output>,
 	defaultOptions: BuildOptions = { module: ts.ModuleKind.CommonJS },
 ) {
@@ -122,7 +123,7 @@ export function tsbuild(
 	}
 }
 
-export function tsconfig(tsconfig = 'tsconfig.json', options?: BuildOptions) {
+export function tsconfig(tsconfig = DefaultTsconfig, options?: BuildOptions) {
 	return new Observable<Output>(subs => {
 		tsbuild(tsconfig, subs, options);
 		subs.complete();

@@ -2,6 +2,7 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import * as cp from 'child_process';
 import * as esbuild from 'esbuild';
+import * as ts from 'typescript';
 import { readJson } from '../program/index.js';
 import {
 	getPackageEntryPoints,
@@ -48,6 +49,9 @@ type Fixer = (data: LintData) => Promise<void>;
 type Linter = (data: LintData) => Promise<LinterResult>;
 
 const BugsUrl = 'https://github.com/cxlio/cxl/issues';
+const TsconfigJson = 'tsconfig.json';
+const TsconfigTestJson = 'tsconfig.test.json';
+const LocalTsconfigJson = './tsconfig.json';
 const baseDir = path.resolve('.');
 const requiredPackageFields = [
 	'name',
@@ -87,7 +91,7 @@ async function fixTsconfig({ projectPath, name }: LintData) {
 	const pkgPath = `${projectPath}/package.json`;
 	const pkg = await readJson<Package>(pkgPath);
 	let tsconfig = await readJson<Tsconfig | false>(
-		`${projectPath}/tsconfig.json`,
+		path.join(projectPath, TsconfigJson),
 		false,
 	);
 	const oldPackage = JSON.stringify(pkg, null, '\t');
@@ -102,7 +106,7 @@ async function fixTsconfig({ projectPath, name }: LintData) {
 			references: [],
 		};
 		await fs.writeFile(
-			`${projectPath}/tsconfig.json`,
+			path.join(projectPath, TsconfigJson),
 			JSON.stringify(tsconfig, null, '\t'),
 		);
 	}
@@ -112,14 +116,14 @@ async function fixTsconfig({ projectPath, name }: LintData) {
 }
 
 async function fixTest({ projectPath, name }: LintData) {
-	const tsconfigPath = path.join(projectPath, `tsconfig.test.json`);
+	const tsconfigPath = path.join(projectPath, TsconfigTestJson);
 	let hasChanged = false;
 
 	if (!(await exists(tsconfigPath))) {
 		await fs.writeFile(
 			tsconfigPath,
 			`{
-	"extends": "./tsconfig.json",
+	"extends": "${LocalTsconfigJson}",
 	"include": ["test.ts"],
 	"references": [{ "path": "." }, { "path": "../spec" }]
 }
@@ -129,13 +133,10 @@ async function fixTest({ projectPath, name }: LintData) {
 
 	const testPath = path.join(projectPath, 'test.ts');
 	const tsconfig =
-		(await readJson<Tsconfig | null>(
-			`${projectPath}/tsconfig.test.json`,
-			null,
-		)) ?? {};
+		(await readJson<Tsconfig | null>(tsconfigPath, null)) ?? {};
 
-	if (!tsconfig.extends || tsconfig.extends !== './tsconfig.json') {
-		tsconfig.extends = './tsconfig.json';
+	if (!tsconfig.extends || tsconfig.extends !== LocalTsconfigJson) {
+		tsconfig.extends = LocalTsconfigJson;
 		hasChanged = true;
 	}
 	if (tsconfig.compilerOptions) {
@@ -145,7 +146,7 @@ async function fixTest({ projectPath, name }: LintData) {
 
 	if (hasChanged) {
 		await fs.writeFile(
-			`${projectPath}/tsconfig.test.json`,
+			tsconfigPath,
 			JSON.stringify(tsconfig, null, '\t'),
 		);
 	}
@@ -228,6 +229,68 @@ async function collectUsedPackages(pkg: Package, projectPath: string) {
 	}
 
 	return used;
+}
+
+function collectCallExpressionUsedPackages(
+	sourceFile: ts.SourceFile,
+	functions: Set<string>,
+	used: Set<string>,
+) {
+	function visit(node: ts.Node) {
+		if (
+			ts.isCallExpression(node) &&
+			ts.isIdentifier(node.expression) &&
+			functions.has(node.expression.text)
+		) {
+			const specifier = node.arguments[0];
+			if (specifier && ts.isStringLiteral(specifier)) {
+				const packageName = getPackageName(specifier.text);
+				if (packageName) used.add(packageName);
+			}
+		}
+
+		ts.forEachChild(node, visit);
+	}
+
+	visit(sourceFile);
+}
+
+async function collectConfiguredUsedPackages(
+	rootPkg: Package,
+	projectPath: string,
+	used: Set<string>,
+) {
+	const functions = new Set(rootPkg.build?.dependencyUsageFunctions);
+	const tsconfigs = rootPkg.build?.tsconfigs;
+	if (!functions.size || !tsconfigs?.length) return;
+
+	for (const tsconfig of tsconfigs) {
+		const configPath = path.join(projectPath, tsconfig);
+		if (!(await exists(configPath))) continue;
+
+		const config = ts.readConfigFile(configPath, ts.sys.readFile);
+		if (config.error) continue;
+
+		const parsed = ts.parseJsonConfigFileContent(
+			config.config,
+			ts.sys,
+			projectPath,
+		);
+
+		for (const fileName of parsed.fileNames) {
+			const source = await fs.readFile(fileName, 'utf8');
+			collectCallExpressionUsedPackages(
+				ts.createSourceFile(
+					fileName,
+					source,
+					ts.ScriptTarget.Latest,
+					true,
+				),
+				functions,
+				used,
+			);
+		}
+	}
 }
 
 async function fixPackage({ projectPath, name, rootPkg }: LintData) {
@@ -345,9 +408,8 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 }
 
 async function lintTest({ projectPath }: LintData) {
-	const tsconfig = await readJson<Tsconfig>(
-		`${projectPath}/tsconfig.test.json`,
-	);
+	const tsconfigPath = path.join(projectPath, TsconfigTestJson);
+	const tsconfig = await readJson<Tsconfig>(tsconfigPath);
 
 	return {
 		id: 'test',
@@ -355,11 +417,11 @@ async function lintTest({ projectPath }: LintData) {
 		project: projectPath,
 		rules: [
 			rule(
-				!!(await exists(`${projectPath}/tsconfig.test.json`)),
+				!!(await exists(tsconfigPath)),
 				`Missing "tsconfig.test.json" file.`,
 			),
 			rule(
-				tsconfig.extends === './tsconfig.json',
+				tsconfig.extends === LocalTsconfigJson,
 				'tsconfig.test.json extends should be "./tsconfig.json"',
 			),
 			rule(
@@ -380,6 +442,7 @@ async function lintTest({ projectPath }: LintData) {
 async function lintDependencies({ name, rootPkg, pkg, projectPath }: LintData) {
 	const rules = [];
 	const usedPackages = await collectUsedPackages(pkg, projectPath);
+	await collectConfiguredUsedPackages(rootPkg, projectPath, usedPackages);
 
 	for (const name in pkg.dependencies) {
 		const pkgValue = pkg.dependencies[name];
@@ -416,7 +479,7 @@ async function lintDependencies({ name, rootPkg, pkg, projectPath }: LintData) {
 
 async function lintTsconfig({ projectPath, name }: LintData) {
 	const tsconfig = await readJson<Tsconfig | null>(
-		`${projectPath}/tsconfig.json`,
+		path.join(projectPath, TsconfigJson),
 		null,
 	);
 	const rules = [

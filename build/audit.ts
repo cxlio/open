@@ -8,6 +8,7 @@ import {
 	getPackageExternal,
 	getPackagePlatform,
 } from './package.js';
+import { buildOutputOptions } from './builder.js';
 
 import type { Package } from './npm.js';
 
@@ -519,8 +520,18 @@ async function verifyProject(rootPkg: Package) {
 }
 
 export async function audit() {
+	const { verbose } = buildOutputOptions();
+
 	function error(project: string, msg: string) {
 		console.error(`${project}: ${msg}`);
+	}
+
+	function reportErrors(results: LinterResult[]) {
+		for (const result of results) {
+			for (const rule of result.rules) {
+				if (!rule.valid) error(result.data?.name || 'root', rule.message);
+			}
+		}
 	}
 
 	async function validate() {
@@ -533,27 +544,32 @@ export async function audit() {
 			for (const rule of result.rules) {
 				if (!rule.valid) {
 					result.hasErrors = hasErrors = true;
-					error(result.data?.name || 'root', rule.message);
 				}
 			}
 			if (result.hasErrors && result.fix && result.data) {
 				const { data, fix } = result;
 				fixes.push(() => {
-					console.log(
-						`${result.data?.name}: Attempting fix for "${result.id}"`,
-					);
+					if (verbose)
+						console.log(
+							`${result.data?.name}: Attempting fix for "${result.id}"`,
+						);
 					return fix(data);
 				});
 			}
 		}
 
-		for (const fix of fixes) await fix();
-		return hasErrors;
+		return { fixes, hasErrors, results };
 	}
 
-	let hasErrors = await validate();
+	let validation = await validate();
 	// Run again after fixes have been applied.
-	if (hasErrors) hasErrors = await validate();
+	if (validation.hasErrors && validation.fixes.length) {
+		for (const fix of validation.fixes) await fix();
+		validation = await validate();
+	}
 
-	if (hasErrors) throw new Error('Errors detected, check logs for details.');
+	if (validation.hasErrors) {
+		reportErrors(validation.results);
+		throw new Error('Errors detected, check logs for details.');
+	}
 }

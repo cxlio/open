@@ -48,9 +48,11 @@ export default async function runNode(app: SpecRunner) {
 
 	const entryFile = app.entryFile;
 	const session = new inspector.Session();
-	app.log(`Runner: Node ${process.version}`);
 	const suitePath = resolve(entryFile);
-	app.log(`Suite: ${suitePath}`);
+	if (app.verbose) {
+		app.log(`Runner: Node ${process.version}`);
+		app.log(`Suite: ${suitePath}`);
+	}
 
 	if (app.inspect) {
 		inspector.open();

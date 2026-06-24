@@ -68,6 +68,9 @@ const parameters = {
 		type: 'string',
 		help: 'Run only tests whose full name matches the pattern.',
 	},
+	verbose: {
+		help: 'Print detailed test output.',
+	},
 } as const;
 
 function parseGrep(pattern?: string) {
@@ -119,7 +122,7 @@ const start = program({}, async ({ log }) => {
 		log(`Could not kill "${args.startServer}"`);
 	}
 
-	printReportV2(report);
+	printReportV2(report, { verbose: !!config.verbose });
 	await writeFile(config.reportPath, JSON.stringify(report));
 
 	if (!report.success) {

@@ -3,6 +3,7 @@ import { join } from 'path';
 import { Package } from './npm.js';
 import { fromAsync, of } from '../rx/index.js';
 import { readJson } from '../program/index.js';
+import { buildOutputOptions } from './builder.js';
 import { getDependencies } from './package.js';
 
 let browserRunner: string | undefined;
@@ -116,7 +117,7 @@ export function runTests({
 				sources: new Map(),
 				log: console.log.bind(console),
 			});
-			printReportV2(report);
+			printReportV2(report, buildOutputOptions());
 			if (!report.success) throw new Error('Tests failed');
 		} finally {
 			process.chdir(cwd);

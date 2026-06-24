@@ -5,10 +5,15 @@ export { buildLibrary } from './library.js';
 export { audit } from './audit.js';
 export {
 	BuildConfiguration,
+	BuildArtifact,
+	BuildOutputOptions,
 	Output,
 	Task,
 	build,
+	buildOutputOptions,
+	buildTargets,
 	exec,
+	formatArtifactSummary,
 	shell,
 } from './builder.js';
 

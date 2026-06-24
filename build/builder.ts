@@ -19,6 +19,14 @@ export interface BuildConfiguration {
 	tasks: Task[];
 }
 export type Task = Observable<Output>;
+export interface BuildOutputOptions {
+	verbose: boolean;
+}
+
+export interface BuildArtifact {
+	path: string;
+	size: number;
+}
 
 const AppName = colors.green('build');
 export const appLog = log.bind(null, AppName);
@@ -35,6 +43,25 @@ function formatTime(time: bigint) {
 	return s > 0.1 ? (s > 0.5 ? colors.red(str) : colors.yellow(str)) : str;
 }
 
+export function buildOutputOptions(
+	argv = process.argv.slice(2),
+): BuildOutputOptions {
+	return {
+		verbose: argv.includes('--verbose'),
+	};
+}
+
+export function buildTargets(argv = process.argv.slice(2)) {
+	const targets = argv.filter(arg => arg !== '--verbose');
+	return [undefined, ...targets];
+}
+
+export function formatArtifactSummary(artifacts: BuildArtifact[]) {
+	const total = artifacts.reduce((sum, artifact) => sum + artifact.size, 0);
+	const files = artifacts.length === 1 ? 'file' : 'files';
+	return `${artifacts.length} ${files}, ${kb(total)}`;
+}
+
 export function resolveRequire<T>(mod: string) {
 	const result: T = require(require.resolve(mod, {
 		paths: [process.cwd(), import.meta.dirname],
@@ -47,19 +74,19 @@ export async function build(...targets: BuildConfiguration[]) {
 
 	if (BASEDIR !== process.cwd()) {
 		process.chdir(BASEDIR);
-		appLog(`chdir "${BASEDIR}"`);
 	}
 
 	const pkg = readPackage();
+	const options = buildOutputOptions();
 
-	appLog(`${pkg.name} ${pkg.version}`);
+	if (options.verbose) appLog(`${pkg.name} ${pkg.version}`);
 
-	const runTargets = [undefined, ...process.argv];
+	const runTargets = buildTargets();
 	try {
 		for (const targetId of runTargets) {
 			for (const target of targets)
 				if (target.target === targetId)
-					await new Build(appLog, target).build();
+					await new Build(appLog, target, options).build();
 		}
 	} catch (e) {
 		console.error(e);
@@ -69,11 +96,14 @@ export async function build(...targets: BuildConfiguration[]) {
 
 export function exec(cmd: string, options?: SpawnOptions) {
 	return new Observable<never>(subs => {
-		appLog(`sh ${cmd}`);
+		const outputOptions = buildOutputOptions();
+		if (outputOptions.verbose) appLog(`sh ${cmd}`);
 		operation(sh(cmd, options)).then(
 			result => {
-				appLog(`sh ${cmd}`, formatTime(result.time));
-				if (result.result) console.log(result.result);
+				if (outputOptions.verbose) {
+					appLog(`sh ${cmd}`, formatTime(result.time));
+					if (result.result) console.log(result.result);
+				}
 				subs.complete();
 			},
 			e => {
@@ -121,6 +151,7 @@ class Build {
 	constructor(
 		private log: Logger,
 		private config: BuildConfiguration,
+		private options: BuildOutputOptions,
 	) {
 		this.outputDir = config.outputDir || '.';
 	}
@@ -128,20 +159,28 @@ class Build {
 	async build() {
 		try {
 			const target = this.config.target || '';
-			if (target) this.log(`target ${target}`);
+			if (this.options.verbose && target) this.log(`target ${target}`);
 
 			execSync(`mkdir -p ${this.outputDir}`);
 
-			await Promise.all(
-				this.config.tasks.map(task => this.runTask(task)),
-			);
+			const artifacts = (
+				await Promise.all(
+					this.config.tasks.map(task => this.runTask(task)),
+				)
+			).flat();
+
+			if (!this.options.verbose && artifacts.length) {
+				const name = target || 'build';
+				console.log(`${name}: ${formatArtifactSummary(artifacts)}`);
+			}
 		} catch (e) {
-			console.log('BUILD: ', e);
+			console.error('build failed:', e);
 			throw 'Build finished with errors';
 		}
 	}
 
 	private async runTask(task: Task) {
+		const artifacts: BuildArtifact[] = [];
 		await task.tap(result => {
 			const outFile = resolve(this.outputDir, result.path);
 			const source = result.source;
@@ -151,7 +190,9 @@ class Build {
 			if (result.mtime) utimesSync(outFile, result.mtime, result.mtime);
 
 			const printPath = relative(process.cwd(), outFile);
-			this.log(`${printPath} ${kb(source.length)}`);
+			artifacts.push({ path: printPath, size: source.length });
+			if (this.options.verbose) this.log(`${printPath} ${kb(source.length)}`);
 		});
+		return artifacts;
 	}
 }

@@ -7,6 +7,16 @@ import {
 	TestCoverageReport,
 } from './report.js';
 
+export interface ReportOptions {
+	verbose: boolean;
+}
+
+interface FailureSummary {
+	path: string;
+	message: string;
+	stack?: string;
+}
+
 function printError(name: string, fail: TestResult) {
 	const msg = fail.message ?? fail.failureMessage ?? 'Unknown failure';
 	console.error(name, colors.red(msg));
@@ -53,7 +63,7 @@ function printCoverage(coverage: TestCoverageReport[]) {
 function collectFailures(
 	test: TestReport,
 	parentPath: string,
-	out: { path: string; message: string; stack?: string }[],
+	out: FailureSummary[],
 ): void {
 	const path = parentPath ? `${parentPath} > ${test.name}` : test.name;
 	for (const r of test.results) {
@@ -68,7 +78,7 @@ function collectFailures(
 }
 
 function printFailureSummary(report: Report): number {
-	const failures: { path: string; message: string; stack?: string }[] = [];
+	const failures: FailureSummary[] = [];
 	collectFailures(report.testReport, '', failures);
 	if (!failures.length) return 0;
 	console.error(colors.red(`\nFailures (${failures.length}):`));
@@ -83,9 +93,32 @@ function printSuccessSummary(): void {
 	console.log(colors.green(`\nAll tests passed.`));
 }
 
-export default function (report: Report) {
+function printVerboseReport(report: Report) {
 	if (report.coverage) printCoverage(report.coverage);
 	printTest(report.testReport);
 	const failures = printFailureSummary(report);
 	if (!failures) printSuccessSummary();
+}
+
+function printDefaultFailures(failures: FailureSummary[]): void {
+	console.error(`tests: failed (${failures.length})`);
+	for (const failure of failures) {
+		console.error(`${failure.path}: ${failure.message.replace(/\n/g, ' ')}`);
+		if (failure.stack) console.error(failure.stack);
+	}
+}
+
+function printDefaultReport(report: Report): void {
+	const failures: FailureSummary[] = [];
+	collectFailures(report.testReport, '', failures);
+	if (failures.length) {
+		printDefaultFailures(failures);
+		return;
+	}
+	console.log(`tests: passed (${report.summary.testTotal})`);
+}
+
+export default function (report: Report, options: ReportOptions) {
+	if (options.verbose) printVerboseReport(report);
+	else printDefaultReport(report);
 }

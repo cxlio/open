@@ -2,7 +2,12 @@ import { resolve, dirname, relative } from 'path';
 
 import { Observable, fromAsync } from '../rx/index.js';
 import { readJson } from '../program/index.js';
-import { Output, appLog, resolveRequire } from './builder.js';
+import {
+	Output,
+	appLog,
+	buildOutputOptions,
+	resolveRequire,
+} from './builder.js';
 
 import type { TsconfigJson } from './tsc.js';
 import type { ESLint } from 'eslint';
@@ -10,11 +15,12 @@ import type { ESLint } from 'eslint';
 function handleEslintResult(results: ESLint.LintResult[]) {
 	const result: Output[] = [];
 	let hasErrors: boolean = false;
+	const verbose = buildOutputOptions().verbose;
 
 	for (const { errorCount, filePath, messages } of results) {
 		const file = relative(process.cwd(), filePath);
 
-		appLog(`eslint ${file}`);
+		if (verbose) appLog(`eslint ${file}`);
 		if (errorCount) {
 			hasErrors = true;
 			messages.forEach(r =>
@@ -34,7 +40,7 @@ export function eslint(files = ['**/*.ts?(x)'], options?: ESLint.Options) {
 		const { ESLint } = resolveRequire<typeof import('eslint')>('eslint');
 		import('./eslint-config.js').then(
 			config => {
-				appLog(`eslint ${ESLint.version}`);
+				if (buildOutputOptions().verbose) appLog(`eslint ${ESLint.version}`);
 				const linter = new ESLint({
 					cache: true,
 					cwd: process.cwd(),

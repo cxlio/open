@@ -43,6 +43,13 @@ const diagnosticsHost: FormatDiagnosticsHost = {
 
 export const tscVersion = ts.version;
 
+function getErrorProperty(error: object, property: 'message' | 'messageText') {
+	if (!(property in error)) return;
+
+	const value = Object.getOwnPropertyDescriptor(error, property)?.value;
+	return typeof value === 'string' ? value : undefined;
+}
+
 export function buildDiagnostics(program: Program | BuilderProgram) {
 	return [
 		...program.getConfigFileParsingDiagnostics(),
@@ -132,9 +139,10 @@ export function parseTsConfig(tsconfig: string) {
 		);
 	} catch (e) {
 		if (e instanceof Error) throw e;
+		if (!e || typeof e !== 'object') throw new Error('Unknown Error');
 		const msg =
-			(e as { message?: string } | undefined)?.message ??
-			(e as { messageText?: string } | undefined)?.messageText;
+			getErrorProperty(e, 'message') ??
+			getErrorProperty(e, 'messageText');
 
 		throw new Error(msg ?? 'Unknown Error');
 	}

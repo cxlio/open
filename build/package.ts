@@ -21,10 +21,9 @@ const LICENSE_MAP: Record<License, string> = {
 	UNLICENSED: '',
 };
 
-function verifyFields(fields: string[], pkg: Package, pkgPath: string) {
+function verifyFields(fields: (keyof Package)[], pkg: Package, pkgPath: string) {
 	for (const f of fields)
-		if (!pkg[f as keyof Package])
-			throw new Error(`Field "${f}" missing in "${pkgPath}"`);
+		if (!pkg[f]) throw new Error(`Field "${f}" missing in "${pkgPath}"`);
 }
 
 function collectDependencies(
@@ -102,7 +101,7 @@ export function readPackage(base: string = BASEDIR): Package {
 
 	if (!existsSync(pkg)) throw new Error(`"${pkg}" not found`);
 
-	const PACKAGE = JSON.parse(readFileSync(pkg, 'utf8')) as Package;
+	const PACKAGE: Package = JSON.parse(readFileSync(pkg, 'utf8'));
 	verifyFields(['name', 'version', 'description'], PACKAGE, pkg);
 	if (!PACKAGE.private) verifyFields(['license'], PACKAGE, pkg);
 	return PACKAGE;

@@ -46,7 +46,8 @@ export interface PackageInfo extends Package {
 }
 
 export async function readPackage(path: string) {
-	return JSON.parse(await readFile(path, 'utf8')) as Package;
+	const pkg: Package = JSON.parse(await readFile(path, 'utf8'));
+	return pkg;
 }
 
 export async function getLatestVersion(
@@ -150,9 +151,10 @@ export async function publishNpm(dir: string, distDir: string) {
 
 export async function getPackageInfo(name: string): Promise<PackageInfo> {
 	try {
-		return JSON.parse(
+		const info: PackageInfo = JSON.parse(
 			(await sh(`npm show ${name} --json`)).trim(),
-		) as PackageInfo;
+		);
+		return info;
 	} catch (e) {
 		const msg = String(e); //?.stderr ?? e?.stdout ?? e?.message ?? e);
 		// npm uses E404 / "Not Found" when the package doesn't exist
@@ -171,7 +173,7 @@ export async function getPackageInfo(name: string): Promise<PackageInfo> {
 				'dist-tags': {},
 				versions: [],
 				time: {},
-			} as PackageInfo;
+			} satisfies PackageInfo;
 		}
 		throw e;
 	}

@@ -24,18 +24,18 @@ import { Package, publishNpm } from './npm.js';
 
 export function buildLibrary(...extra: BuildConfiguration[]) {
 	const cwd = process.cwd();
-	const tsconfigFile = JSON.parse(
+	const tsconfigFile: TsconfigJson = JSON.parse(
 		readFileSync(cwd + '/tsconfig.json', 'utf8'),
-	) as TsconfigJson;
+	);
 	const outputDir = tsconfigFile.compilerOptions?.outDir;
 	if (!outputDir) throw new Error('Invalid tsconfig file');
 
 	const appId = basename(outputDir);
 	const pkgDir = join(outputDir, 'package');
-	const pkgJson = JSON.parse(readFileSync('package.json', 'utf8')) as Package;
-	const rootPkg = JSON.parse(
+	const pkgJson: Package = JSON.parse(readFileSync('package.json', 'utf8'));
+	const rootPkg: Package = JSON.parse(
 		readFileSync('../package.json', 'utf8'),
-	) as Package;
+	);
 
 	const isBrowser = !!pkgJson.browser;
 	const platform = getPackagePlatform(pkgJson);

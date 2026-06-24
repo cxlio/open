@@ -36,9 +36,10 @@ function formatTime(time: bigint) {
 }
 
 export function resolveRequire<T>(mod: string) {
-	return require(require.resolve(mod, {
+	const result: T = require(require.resolve(mod, {
 		paths: [process.cwd(), import.meta.dirname],
-	})) as T;
+	}));
+	return result;
 }
 
 export async function build(...targets: BuildConfiguration[]) {

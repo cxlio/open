@@ -215,7 +215,7 @@ async function collectUsedPackages(pkg: Package, projectPath: string) {
 		write: false,
 	});
 
-	const outputs = result.metafile?.outputs ?? {};
+	const outputs = result.metafile.outputs;
 
 	for (const output of Object.values(outputs)) {
 		for (const item of output.imports) {

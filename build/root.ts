@@ -31,7 +31,7 @@ type ValidatedPackage = Omit<
 	'description' | 'license' | 'homepage'
 > & {
 	description: string;
-	license: string;
+	license: NonNullable<Package['license']>;
 	homepage: string;
 };
 
@@ -41,6 +41,10 @@ function missingRequiredFields(pkg: Package) {
 	if (!pkg.license) missing.push('license');
 	if (!pkg.homepage) missing.push('homepage');
 	return missing;
+}
+
+function hasRequiredFields(pkg: Package): pkg is ValidatedPackage {
+	return missingRequiredFields(pkg).length === 0;
 }
 
 async function readPkg(dir: string): Promise<ValidatedPackage | void> {
@@ -58,8 +62,9 @@ async function readPkg(dir: string): Promise<ValidatedPackage | void> {
 
 	console.log(`Package: ${dir}`);
 
+	if (hasRequiredFields(pkg)) return pkg;
+
 	const missing = missingRequiredFields(pkg);
-	if (missing.length === 0) return pkg as ValidatedPackage;
 
 	throw new Error(
 		`Invalid package.json in "${dir}" (${pkgPath}): missing ${missing.join(

@@ -1,7 +1,7 @@
 import { resolve, dirname, relative } from 'path';
-import { readFile } from 'fs/promises';
 
 import { Observable, fromAsync } from '../rx/index.js';
+import { readJson } from '../program/index.js';
 import { Output, appLog, resolveRequire } from './builder.js';
 
 import type { TsconfigJson } from './tsc.js';
@@ -57,7 +57,7 @@ export function eslintTsconfig(path: string | TsconfigJson = 'tsconfig.json') {
 	return fromAsync(async () => {
 		if (typeof path === 'string') {
 			cwd = dirname(resolve(path));
-			return JSON.parse(await readFile(path, 'utf8')) as TsconfigJson;
+			return readJson<TsconfigJson>(path);
 		}
 		return path;
 	}).switchMap(tsconfigFile =>

@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Package } from './npm.js';
 import { fromAsync, of } from '../rx/index.js';
+import { readJson } from '../program/index.js';
 import { getDependencies } from './package.js';
 
 let browserRunner: string | undefined;
@@ -97,12 +98,8 @@ export function runTests({
 			await import('../spec-runner/report-stdout.js');
 
 		const cwd = process.cwd();
-		const pkgJson = JSON.parse(
-			readFileSync('package.json', 'utf8'),
-		) as Package;
-		const rootPkg = JSON.parse(
-			readFileSync('../package.json', 'utf8'),
-		) as Package;
+		const pkgJson = await readJson<Package>('package.json');
+		const rootPkg = await readJson<Package>('../package.json');
 		try {
 			process.chdir(outputDir);
 			const report = await runSpec({

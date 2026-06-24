@@ -14,4 +14,3 @@ A utility module for converting glob patterns into regular expressions. It suppo
 ## Installation
 
 	npm install @cxl/glob
-

@@ -78,7 +78,7 @@ function globToRegexString(
 	function matchBrackets(start: number) {
 		let result = '';
 		let hasSlash = false;
-		let a = start;
+		let a: number;
 
 		for (a = start; a < len; a++) {
 			const ch = glob[a];
@@ -133,7 +133,8 @@ function globToRegexString(
 		return true;
 	}
 
-	for (let i = 0; i < len; i++) {
+	let i = 0;
+	while (i < len) {
 		const c = glob[i];
 		const la = glob[i + 1];
 
@@ -337,6 +338,7 @@ function globToRegexString(
 				reStr += c;
 				isStartOfPath = false;
 		}
+		i++;
 	}
 
 	// --- gitignore postprocessing / anchoring ---
@@ -376,6 +378,6 @@ export function globToRegex(
 	try {
 		return new RegExp(reStr);
 	} catch (e) {
-		throw new Error(`Invalid glob "${glob}" (${reStr})`);
+		throw new Error(`Invalid glob "${glob}" (${reStr})`, { cause: e });
 	}
 }

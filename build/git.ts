@@ -17,7 +17,7 @@ export async function checkBranchClean(branch: string) {
 	try {
 		await sh(`git status > /dev/null; git diff-index --quiet ${branch}`);
 	} catch (e) {
-		throw new Error('Not a clean repository');
+		throw new Error('Not a clean repository', { cause: e });
 	}
 }
 
@@ -25,7 +25,7 @@ export async function checkBranchUpToDate(branch: string) {
 	try {
 		await sh(`git diff origin/${branch} ${branch} --quiet`);
 	} catch (e) {
-		throw new Error('Branch has not been merged with origin');
+		throw new Error('Branch has not been merged with origin', { cause: e });
 	}
 }
 

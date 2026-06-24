@@ -455,19 +455,20 @@ async function lintTsconfig({ projectPath, name }: LintData) {
 	};
 }
 
-const MATCH_REGEX = /(.+):(.+)/g;
-
 async function lintImports({ name }: LintData) {
-	const result = cp.spawnSync('git', ['grep', `"from '\\.\\.\\/"`, name], {
+	const result = cp.spawnSync('/usr/bin/git', ['grep', `"from '\\.\\.\\/"`, name], {
 		encoding: 'utf8',
 	});
 	const imports = result.stdout.trim();
 	const violations: { file: string; line: string; newLine: string }[] = [];
 
-	let match;
-	while ((match = MATCH_REGEX.exec(imports))) {
-		const [, file, line] = match;
-		const newLine = line?.replace(/'\.\.\/([^/]+)\/index\.js/, "'@cxl/$1");
+	for (const importLine of imports.split('\n')) {
+		const separator = importLine.indexOf(':');
+		if (separator < 0) continue;
+
+		const file = importLine.slice(0, separator);
+		const line = importLine.slice(separator + 1);
+		const newLine = line.replace(/'\.\.\/([^/]+)\/index\.js/, "'@cxl/$1");
 		if (file && line && newLine && newLine !== line) {
 			violations.push({ file, line, newLine });
 			const contents = await fs.readFile(file, 'utf8');

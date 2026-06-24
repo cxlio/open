@@ -55,7 +55,13 @@ async function readPkg(dir: string): Promise<ValidatedPackage | void> {
 	try {
 		pkg = await readPackage(pkgPath);
 	} catch (e) {
-		/* Ignore */
+		if (
+			!(e instanceof Error) ||
+			!('code' in e) ||
+			(e.code !== 'ENOENT' && e.code !== 'ENOTDIR')
+		)
+			throw e;
+
 		return;
 	}
 	if (pkg.cxl?.ignore) return;

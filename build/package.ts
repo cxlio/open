@@ -159,7 +159,10 @@ function npmLink(pkgName: string, version: string) {
 function readIfExists(file: string) {
 	try {
 		return readFileSync(file, 'utf8');
-	} catch (E) {
+	} catch (e) {
+		if (!(e instanceof Error) || !('code' in e) || e.code !== 'ENOENT')
+			throw e;
+
 		return '';
 	}
 }

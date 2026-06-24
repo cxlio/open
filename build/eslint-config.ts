@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import ts from 'typescript-eslint';
+import { configs as sonarjsConfigs } from 'eslint-plugin-sonarjs';
 
 export default defineConfig([
 	js.configs.recommended,
@@ -87,6 +88,16 @@ export default defineConfig([
 						'Param type `unknown` is banned. Use a concrete type.',
 				},
 			],
+		},
+	},
+	sonarjsConfigs.recommended,
+	{
+		rules: {
+			'sonarjs/cognitive-complexity': 'off',
+			'sonarjs/no-nested-assignment': 'off',
+			'sonarjs/no-nested-conditional': 'off',
+			'sonarjs/no-nested-template-literals': 'off',
+			'sonarjs/prefer-regexp-exec': 'off',
 		},
 	},
 ]);

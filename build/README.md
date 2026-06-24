@@ -14,4 +14,3 @@ A flexible build system that executes configurable build tasks producing output 
 ## Installation
 
 	npm install @cxl/build
-

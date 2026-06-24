@@ -101,6 +101,16 @@ export interface Parameter {
 	many?: boolean;
 }
 
+export interface HelpConfiguration {
+	output?: (help: string) => void;
+}
+
+export interface ParseArgvHelpResult<T extends Record<string, Parameter>> {
+	args: ParametersResult<T>;
+	help: string;
+	handled: boolean;
+}
+
 export interface ProgramConfiguration {
 	name?: string;
 	logColor?: keyof typeof colors;
@@ -142,6 +152,7 @@ export type ParameterDefinition = {
 export const DefaultParameters = {
 	help: {
 		short: 'h',
+		help: 'Show help.',
 	},
 	config: {
 		help: 'Use JSON config file',
@@ -391,6 +402,42 @@ export function parseArgv<T extends Record<string, Parameter>>(
 	argv = process.argv.slice(2),
 ) {
 	return parseArgvTokens(parameters, argv);
+}
+
+function parameterUsage(name: string, parameter: Parameter) {
+	const type =
+		parameter.type === 'string' || parameter.type === 'number'
+			? ` <${parameter.type}>`
+			: '';
+	const long = `--${name}${type}`;
+	return parameter.short ? `-${parameter.short}, ${long}` : long;
+}
+
+export function formatHelp<T extends Record<string, Parameter>>(parameters: T) {
+	const options = Object.keys(parameters).map(name => {
+		const parameter = parameters[name];
+		if (!parameter) throw new Error(`Invalid parameter "${name}"`);
+		return [parameterUsage(name, parameter), parameter.help] as const;
+	});
+	const width = Math.max(...options.map(([usage]) => usage.length), 0);
+	const body = options.map(
+		([usage, help]) => `  ${usage.padEnd(width)}  ${help}`,
+	);
+
+	return body.join('\n');
+}
+
+export function parseArgvHelp<T extends Record<string, Parameter>>(
+	parameters: T,
+	argv = process.argv.slice(2),
+	config: HelpConfiguration = {},
+): ParseArgvHelpResult<T> {
+	const args = parseArgvTokens(parameters, argv);
+	const help = formatHelp(parameters);
+	const handled =
+		(args as ParametersResult<T> & { help?: unknown }).help === true;
+	if (handled) (config.output || console.log)(help);
+	return { args, help, handled };
 }
 
 /**

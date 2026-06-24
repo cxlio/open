@@ -1,7 +1,13 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import * as cp from 'child_process';
+import * as esbuild from 'esbuild';
 import { readJson } from '../program/index.js';
+import {
+	getPackageEntryPoints,
+	getPackageExternal,
+	getPackagePlatform,
+} from './package.js';
 
 import type { Package } from './npm.js';
 
@@ -170,6 +176,59 @@ function rule(valid: boolean, message: string): Rule {
 	return { valid, message };
 }
 
+function getPackageName(specifier: string): string | undefined {
+	if (
+		specifier.startsWith('.') ||
+		specifier.startsWith('/') ||
+		specifier.startsWith('node:')
+	)
+		return;
+
+	if (specifier.startsWith('@')) {
+		const [scope, name] = specifier.split('/');
+		if (scope && name) return `${scope}/${name}`;
+	}
+
+	return specifier.split('/')[0];
+}
+
+async function collectUsedPackages(pkg: Package, projectPath: string) {
+	const used = new Set<string>();
+	const tsconfig = await readJson<Tsconfig | null>(
+		path.join(projectPath, 'tsconfig.json'),
+		null,
+	);
+	const outputDir = tsconfig?.compilerOptions?.outDir;
+	const external = getPackageExternal(pkg);
+
+	if (!outputDir || !external.length) return used;
+
+	const result = await esbuild.build({
+		bundle: true,
+		entryPoints: getPackageEntryPoints(outputDir, pkg),
+		external,
+		format: 'esm',
+		logLevel: 'silent',
+		metafile: true,
+		outdir: path.join(outputDir, 'package'),
+		platform: getPackagePlatform(pkg),
+		write: false,
+	});
+
+	const outputs = result.metafile?.outputs ?? {};
+
+	for (const output of Object.values(outputs)) {
+		for (const item of output.imports) {
+			if (!item.external) continue;
+
+			const packageName = getPackageName(item.path);
+			if (packageName) used.add(packageName);
+		}
+	}
+
+	return used;
+}
+
 async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 	const pkgPath = `${projectPath}/package.json`;
 	const pkg = await readJson<Package>(pkgPath);
@@ -317,8 +376,9 @@ async function lintTest({ projectPath }: LintData) {
 	};
 }
 
-async function lintDependencies({ name, rootPkg, pkg }: LintData) {
+async function lintDependencies({ name, rootPkg, pkg, projectPath }: LintData) {
 	const rules = [];
+	const usedPackages = await collectUsedPackages(pkg, projectPath);
 
 	for (const name in pkg.dependencies) {
 		const pkgValue = pkg.dependencies[name];
@@ -326,6 +386,10 @@ async function lintDependencies({ name, rootPkg, pkg }: LintData) {
 			rootPkg.devDependencies?.[name] || rootPkg.dependencies?.[name];
 
 		rules.push(
+			rule(
+				usedPackages.has(name),
+				`Dependency "${name}" must be used by project source`,
+			),
 			rule(
 				!!(name.startsWith(rootPkg.name) || rootValue),
 				`Dependency "${name}" must be included in root package.json`,

@@ -1,5 +1,10 @@
 import { spec } from '../spec/index.js';
-import { parseArgv, parseParameters } from './index.js';
+import {
+	formatHelp,
+	parseArgv,
+	parseArgvHelp,
+	parseParameters,
+} from './index.js';
 
 export default spec('program', s => {
 	s.test('parseParameters', a => {
@@ -147,6 +152,47 @@ export default spec('program', s => {
 			a.equal(result.grep, 'multiple short');
 			a.equal(result.$[0], 'a');
 		});
+	});
+
+	s.test('formatHelp', a => {
+		const parameters = {
+			help: { short: 'h', type: 'boolean', help: 'Show help.' },
+			grep: { short: 'g', type: 'string', help: 'Filter specs.' },
+			count: { type: 'number', help: 'Number of runs.' },
+		} as const;
+
+		a.equal(
+			formatHelp(parameters),
+			[
+				'  -h, --help           Show help.',
+				'  -g, --grep <string>  Filter specs.',
+				'  --count <number>     Number of runs.',
+			].join('\n'),
+		);
+	});
+
+	s.test('parseArgvHelp', a => {
+		const parameters = {
+			help: { short: 'h', type: 'boolean', help: 'Show help.' },
+			grep: { short: 'g', type: 'string', help: 'Filter specs.' },
+		} as const;
+
+		const result = parseArgvHelp(parameters, ['--help'], {
+			output() {},
+		});
+		a.equal(result.handled, true);
+		a.equal(result.args.help, true);
+		a.equal(
+			result.help,
+			[
+				'  -h, --help           Show help.',
+				'  -g, --grep <string>  Filter specs.',
+			].join('\n'),
+		);
+
+		const next = parseArgvHelp(parameters, ['--grep', 'smoke']);
+		a.equal(next.handled, false);
+		a.equal(next.args.grep, 'smoke');
 	});
 
 	/*s.test('parseParametersArray', a => {

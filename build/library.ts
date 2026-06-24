@@ -4,7 +4,15 @@ import { existsSync, readFileSync } from 'fs';
 import { EMPTY, concat, fromAsync } from '../rx/index.js';
 
 import { BuildConfiguration, build, exec } from './builder.js';
-import { pkg, readme, esbuild } from './package.js';
+import {
+	getPackageBundleEntryPoints,
+	getPackageEntryPoints,
+	getPackageExternal,
+	getPackagePlatform,
+	pkg,
+	readme,
+	esbuild,
+} from './package.js';
 import { file, copyDir } from './file.js';
 import { eslintTsconfig } from './lint.js';
 import { TsconfigJson, tsconfig } from './tsc.js';
@@ -30,6 +38,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	) as Package;
 
 	const isBrowser = !!pkgJson.browser;
+	const platform = getPackagePlatform(pkgJson);
 	// "main" is used mainly by CDNs, bundlers will prefer to use the "exports" config.
 	const pkgMain = isBrowser
 		? (pkgJson.browser ?? pkgJson.exports?.['.'] ?? './index.bundle.js')
@@ -41,23 +50,10 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 		pkgJson.exports &&
 		pkgJson.exports['.'] !== pkgJson.browser;
 
-	const external = [
-		...Object.keys(pkgJson.dependencies ?? {}),
-		...Object.keys(pkgJson.peerDependencies ?? {}),
-		...Object.keys(pkgJson.bundledDependencies ?? {}),
-	];
+	const external = getPackageExternal(pkgJson);
 	const hasScreenshotTests = existsSync('./test-screenshot.ts');
-	const bundleEntryPoint = [
-		{
-			out: isBrowser ? 'index.bundle' : 'index',
-			in: join(outputDir, 'index.js'),
-		},
-	];
-	const entryPoints = pkgJson.exports
-		? Object.values(pkgJson.exports).flatMap(val => {
-				return val ? [join(outputDir, val)] : [];
-			})
-		: bundleEntryPoint;
+	const bundleEntryPoint = getPackageBundleEntryPoints(outputDir, pkgJson);
+	const entryPoints = getPackageEntryPoints(outputDir, pkgJson);
 
 	return build(
 		{
@@ -139,11 +135,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					},
 				]
 			: []),
-		{
-			target: 'audit',
-			outputDir,
-			tasks: [fromAsync(audit).ignoreElements()],
-		},
+
 		{
 			target: 'docs',
 			outputDir: `../docs/${pkgJson.name}`,
@@ -165,6 +157,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				readme(),
 				eslintTsconfig(tsconfigFile),
 				exec(`rm -rf ${pkgDir}`),
+				fromAsync(audit).ignoreElements(),
 			],
 		},
 		{
@@ -177,7 +170,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				copyDir(outputDir, pkgDir, '*.d.ts'),
 				esbuild({
 					entryPoints,
-					platform: isBrowser ? 'browser' : 'node',
+					platform,
 					outdir: pkgDir,
 					external,
 				}),
@@ -191,7 +184,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					? [
 							esbuild({
 								entryPoints: bundleEntryPoint,
-								platform: 'browser',
+								platform,
 								outdir: pkgDir,
 								external,
 							}),

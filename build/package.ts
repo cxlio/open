@@ -43,6 +43,38 @@ export function getDependencies(rootPkg: Package, pkgJson: Package) {
 	return map;
 }
 
+export function getPackageExternal(pkgJson: Package) {
+	return [
+		...Object.keys(pkgJson.dependencies ?? {}),
+		...Object.keys(pkgJson.peerDependencies ?? {}),
+		...Object.keys(pkgJson.bundledDependencies ?? {}),
+	];
+}
+
+export function getPackagePlatform(pkgJson: Package): esbuildApi.Platform {
+	return pkgJson.browser ? 'browser' : 'node';
+}
+
+export function getPackageBundleEntryPoints(
+	outputDir: string,
+	pkgJson: Package,
+) {
+	return [
+		{
+			out: pkgJson.browser ? 'index.bundle' : 'index',
+			in: join(outputDir, 'index.js'),
+		},
+	];
+}
+
+export function getPackageEntryPoints(outputDir: string, pkgJson: Package) {
+	return pkgJson.exports
+		? Object.values(pkgJson.exports).flatMap(val => {
+				return val ? [join(outputDir, val)] : [];
+			})
+		: getPackageBundleEntryPoints(outputDir, pkgJson);
+}
+
 export function esbuild(options: esbuildApi.BuildOptions) {
 	return new Observable<never>(subs => {
 		esbuildApi
@@ -160,8 +192,7 @@ ${pkg.description}
 ## Installation
 
 	npm install ${pkg.name}
-
-${extra}`),
+${extra ? `\n${extra}` : ''}`),
 		});
 	});
 }

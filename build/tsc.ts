@@ -10,7 +10,8 @@ import type {
 	InvalidatedProject,
 	ParseConfigFileHost,
 } from 'typescript';
-import { Output, resolveRequire } from './builder.js';
+import * as ts from 'typescript';
+import { Output } from './builder.js';
 
 export interface TsconfigJson {
 	compilerOptions?: {
@@ -21,7 +22,6 @@ export interface TsconfigJson {
 	exclude?: string[];
 }
 
-const ts = resolveRequire<typeof import('typescript')>('typescript');
 const { readDirectory, getCurrentDirectory, fileExists, readFile } = ts.sys;
 
 const parseConfigHost: ParseConfigFileHost = {

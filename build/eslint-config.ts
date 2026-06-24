@@ -21,6 +21,7 @@ export default defineConfig([
 			'no-mixed-spaces-and-tabs': 'off',
 			'no-prototype-builtins': 'error',
 			'no-dupe-class-members': 'error',
+			'no-extend-native': 'error',
 			'sort-imports': 'off',
 			eqeqeq: 'error',
 			'@typescript-eslint/no-var-requires': 'off',
@@ -42,7 +43,7 @@ export default defineConfig([
 				{ checksVoidReturn: { attributes: false } },
 			],
 			'@typescript-eslint/consistent-type-assertions': [
-				'warn',
+				'error',
 				{
 					assertionStyle: 'never',
 				},
@@ -71,6 +72,21 @@ export default defineConfig([
 			'@typescript-eslint/no-unsafe-member-access': 'error',
 			'@typescript-eslint/no-unsafe-return': 'error',
 			'@typescript-eslint/no-unsafe-argument': 'error',
+			'no-restricted-syntax': [
+				'error',
+				{
+					selector: [
+						// Named params: function foo(x: unknown)
+						'FunctionDeclaration > :matches(Identifier, RestElement)[typeAnnotation.typeAnnotation.type="TSUnknownKeyword"]',
+						'FunctionExpression > :matches(Identifier, RestElement)[typeAnnotation.typeAnnotation.type="TSUnknownKeyword"]',
+						'ArrowFunctionExpression > :matches(Identifier, RestElement)[typeAnnotation.typeAnnotation.type="TSUnknownKeyword"]',
+						// Interface/type method signatures: { foo(x: unknown): void }
+						'TSMethodSignature > :matches(Identifier, RestElement)[typeAnnotation.typeAnnotation.type="TSUnknownKeyword"]',
+					].join(', '),
+					message:
+						'Param type `unknown` is banned. Use a concrete type.',
+				},
+			],
 		},
 	},
 ]);

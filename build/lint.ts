@@ -1,4 +1,4 @@
-import { resolve, dirname, relative, join } from 'path';
+import { resolve, dirname, relative } from 'path';
 import { readFile } from 'fs/promises';
 
 import { Observable, fromAsync } from '../rx/index.js';
@@ -32,20 +32,23 @@ function handleEslintResult(results: ESLint.LintResult[]) {
 export function eslint(files = ['**/*.ts?(x)'], options?: ESLint.Options) {
 	return new Observable<Output>(subs => {
 		const { ESLint } = resolveRequire<typeof import('eslint')>('eslint');
-		appLog(`eslint ${ESLint.version}`);
-		const linter = new ESLint({
-			cache: true,
-			cwd: process.cwd(),
-			overrideConfigFile: join(import.meta.dirname, 'eslint-config.js'),
-			...options,
-		});
-		linter
-			.lintFiles(files)
-			.then(handleEslintResult)
-			.then(
-				() => subs.complete(),
-				e => subs.error(e),
-			);
+		import('./eslint-config.js').then(
+			config => {
+				appLog(`eslint ${ESLint.version}`);
+				const linter = new ESLint({
+					cache: true,
+					cwd: process.cwd(),
+					overrideConfigFile: true,
+					baseConfig: config.default,
+					...options,
+				});
+				return linter.lintFiles(files).then(handleEslintResult);
+			},
+			e => subs.error(e),
+		).then(
+			() => subs.complete(),
+			e => subs.error(e),
+		);
 	});
 }
 

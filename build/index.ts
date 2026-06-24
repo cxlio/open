@@ -14,6 +14,7 @@ export {
 	buildTargets,
 	exec,
 	formatArtifactSummary,
+	formatBuildError,
 	shell,
 } from './builder.js';
 

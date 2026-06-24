@@ -4,6 +4,7 @@ import {
 	buildTargets,
 	exec,
 	formatArtifactSummary,
+	formatBuildError,
 } from './builder.js';
 
 export default spec('build', s => {
@@ -27,6 +28,13 @@ export default spec('build', s => {
 					{ path: 'index.d.ts', size: 500 },
 				]),
 				'2 files, 2.00kb',
+			);
+		});
+
+		it.should('format build error without stack', a => {
+			a.equal(
+				formatBuildError(new Error('eslint errors found.')),
+				'eslint errors found.',
 			);
 		});
 	});

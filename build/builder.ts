@@ -28,6 +28,8 @@ export interface BuildArtifact {
 	size: number;
 }
 
+class ReportedBuildError extends Error {}
+
 const AppName = colors.green('build');
 export const appLog = log.bind(null, AppName);
 export const require = createRequire(import.meta.dirname);
@@ -62,6 +64,11 @@ export function formatArtifactSummary(artifacts: BuildArtifact[]) {
 	return `${artifacts.length} ${files}, ${kb(total)}`;
 }
 
+export function formatBuildError(error: Error | string) {
+	if (error instanceof Error) return error.message;
+	return error;
+}
+
 export function resolveRequire<T>(mod: string) {
 	const result: T = require(require.resolve(mod, {
 		paths: [process.cwd(), import.meta.dirname],
@@ -89,7 +96,7 @@ export async function build(...targets: BuildConfiguration[]) {
 					await new Build(appLog, target, options).build();
 		}
 	} catch (e) {
-		console.error(e);
+		if (!(e instanceof ReportedBuildError)) console.error(e);
 		process.exit(1);
 	}
 }
@@ -174,8 +181,14 @@ class Build {
 				console.log(`${name}: ${formatArtifactSummary(artifacts)}`);
 			}
 		} catch (e) {
-			console.error('build failed:', e);
-			throw 'Build finished with errors';
+			if (this.options.verbose) console.error('build failed:', e);
+			else
+				console.error(
+					`build failed: ${
+						e instanceof Error ? formatBuildError(e) : String(e)
+					}`,
+				);
+			throw new ReportedBuildError('build failed');
 		}
 	}
 

@@ -7,7 +7,9 @@ import {
 	formatBuildError,
 	formatTargetArtifactSummary,
 } from './builder.js';
+import { getPackageBuildOptions } from './npm.js';
 import { enforceCoverageGate } from './spec.js';
+import type { Package } from './npm.js';
 
 export default spec('build', s => {
 	s.test('output', it => {
@@ -93,6 +95,68 @@ export default spec('build', s => {
 			a.throws(() =>
 				enforceCoverageGate(undefined, { blocks: 80 }),
 			);
+		});
+	});
+
+	s.test('package build options', it => {
+		const pkg = {
+			name: '@cxl/test',
+			version: '1.0.0',
+			private: true,
+			bugs: '',
+			repository: '',
+		} satisfies Package;
+
+		it.should('inherit root build options', a => {
+			a.equalValues(
+				getPackageBuildOptions(
+					{
+						...pkg,
+						build: {
+							coverage: { blocks: 80, functions: 70 },
+							dependencyUsageFunctions: ['resolveImport'],
+							tsconfigs: ['tsconfig.worker.json'],
+						},
+					},
+					pkg,
+				),
+				{
+					coverage: { blocks: 80, functions: 70 },
+					dependencyUsageFunctions: ['resolveImport'],
+					tsconfigs: ['tsconfig.worker.json'],
+				},
+			);
+		});
+
+		it.should('merge coverage and override arrays', a => {
+			a.equalValues(
+				getPackageBuildOptions(
+					{
+						...pkg,
+						build: {
+							coverage: { blocks: 80, functions: 70 },
+							dependencyUsageFunctions: ['resolveImport'],
+							tsconfigs: ['tsconfig.worker.json'],
+						},
+					},
+					{
+						...pkg,
+						build: {
+							coverage: { functions: 90 },
+							dependencyUsageFunctions: ['customImport'],
+						},
+					},
+				),
+				{
+					coverage: { blocks: 80, functions: 90 },
+					dependencyUsageFunctions: ['customImport'],
+					tsconfigs: ['tsconfig.worker.json'],
+				},
+			);
+		});
+
+		it.should('leave coverage undefined when unconfigured', a => {
+			a.equal(getPackageBuildOptions(pkg, pkg).coverage, undefined);
 		});
 	});
 });

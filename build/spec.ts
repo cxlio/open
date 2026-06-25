@@ -1,11 +1,12 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { Package } from './npm.js';
+import { getPackageBuildOptions } from './npm.js';
 import { fromAsync, of } from '../rx/index.js';
 import { readJson } from '../program/index.js';
 import { buildOutputOptions } from './builder.js';
 import { getDependencies } from './package.js';
 import type { CoverageSummary } from '../spec-runner/report.js';
+import type { Package } from './npm.js';
 
 let browserRunner: string | undefined;
 
@@ -160,7 +161,7 @@ export function runTests({
 			if (!ignoreCoverage)
 				enforceCoverageGate(
 					report.summary.coverage,
-					pkgJson.build?.coverage,
+					getPackageBuildOptions(rootPkg, pkgJson).coverage,
 				);
 		} finally {
 			process.chdir(cwd);

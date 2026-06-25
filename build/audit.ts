@@ -10,6 +10,7 @@ import {
 	getPackagePlatform,
 } from './package.js';
 import { buildOutputOptions } from './builder.js';
+import { getPackageBuildOptions } from './npm.js';
 
 import type { Package } from './npm.js';
 
@@ -269,11 +270,13 @@ function collectSourceUsedPackages(
 
 async function collectConfiguredUsedPackages(
 	rootPkg: Package,
+	pkg: Package,
 	projectPath: string,
 	used: Set<string>,
 ) {
-	const functions = new Set(rootPkg.build?.dependencyUsageFunctions);
-	const tsconfigs = rootPkg.build?.tsconfigs;
+	const build = getPackageBuildOptions(rootPkg, pkg);
+	const functions = new Set(build.dependencyUsageFunctions);
+	const tsconfigs = build.tsconfigs;
 	if (!functions.size || !tsconfigs?.length) return;
 
 	for (const tsconfig of tsconfigs) {
@@ -454,7 +457,12 @@ async function lintTest({ projectPath }: LintData) {
 async function lintDependencies({ name, rootPkg, pkg, projectPath }: LintData) {
 	const rules = [];
 	const usedPackages = await collectUsedPackages(pkg, projectPath);
-	await collectConfiguredUsedPackages(rootPkg, projectPath, usedPackages);
+	await collectConfiguredUsedPackages(
+		rootPkg,
+		pkg,
+		projectPath,
+		usedPackages,
+	);
 
 	for (const name in pkg.dependencies) {
 		const pkgValue = pkg.dependencies[name];

@@ -53,6 +53,22 @@ export interface PackageInfo extends Package {
 	time: Record<string, string>;
 }
 
+export function getPackageBuildOptions(rootPkg: Package, pkg: Package) {
+	const build: NonNullable<Package['build']> = {
+		...rootPkg.build,
+		...pkg.build,
+	};
+
+	if (rootPkg.build?.coverage || pkg.build?.coverage) {
+		build.coverage = {
+			...rootPkg.build?.coverage,
+			...pkg.build?.coverage,
+		};
+	}
+
+	return build;
+}
+
 export async function readPackage(path: string) {
 	const pkg: Package = JSON.parse(await readFile(path, 'utf8'));
 	return pkg;

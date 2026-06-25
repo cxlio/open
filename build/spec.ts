@@ -5,8 +5,46 @@ import { fromAsync, of } from '../rx/index.js';
 import { readJson } from '../program/index.js';
 import { buildOutputOptions } from './builder.js';
 import { getDependencies } from './package.js';
+import type { CoverageSummary } from '../spec-runner/report.js';
 
 let browserRunner: string | undefined;
+
+interface CoverageGate {
+	blocks?: number;
+	functions?: number;
+}
+
+function formatCoverage(value: number) {
+	return `${value.toFixed(2)}%`;
+}
+
+export function enforceCoverageGate(
+	coverage: CoverageSummary | undefined,
+	gate: CoverageGate | undefined,
+) {
+	if (!gate) return;
+	if (!coverage) throw new Error('Coverage gate failed: missing coverage');
+
+	const failures: string[] = [];
+	if (
+		gate.blocks !== undefined &&
+		coverage.blockCoveragePct < gate.blocks
+	)
+		failures.push(
+			`blocks ${formatCoverage(coverage.blockCoveragePct)} < ${formatCoverage(gate.blocks)}`,
+		);
+
+	if (
+		gate.functions !== undefined &&
+		coverage.functionCoveragePct < gate.functions
+	)
+		failures.push(
+			`functions ${formatCoverage(coverage.functionCoveragePct)} < ${formatCoverage(gate.functions)}`,
+		);
+
+	if (failures.length)
+		throw new Error(`Coverage gate failed: ${failures.join(', ')}`);
+}
 
 export function generateEsmTestFile(
 	dirName: string,
@@ -119,6 +157,11 @@ export function runTests({
 			});
 			printReportV2(report, buildOutputOptions());
 			if (!report.success) throw new Error('Tests failed');
+			if (!ignoreCoverage)
+				enforceCoverageGate(
+					report.summary.coverage,
+					pkgJson.build?.coverage,
+				);
 		} finally {
 			process.chdir(cwd);
 		}

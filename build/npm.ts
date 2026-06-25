@@ -35,6 +35,10 @@ export interface Package {
 	scripts?: Record<string, string>;
 	exports?: Record<string, string>;
 	build?: {
+		coverage?: {
+			blocks?: number;
+			functions?: number;
+		};
 		dependencyUsageFunctions?: string[];
 		tsconfigs?: string[];
 	};

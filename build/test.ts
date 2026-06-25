@@ -7,6 +7,7 @@ import {
 	formatBuildError,
 	formatTargetArtifactSummary,
 } from './builder.js';
+import { enforceCoverageGate } from './spec.js';
 
 export default spec('build', s => {
 	s.test('output', it => {
@@ -57,6 +58,41 @@ export default spec('build', s => {
 			} catch (e) {
 				a.ok(e !== undefined);
 			}
+		});
+	});
+
+	s.test('coverage gate', it => {
+		const coverage = {
+			fileTotal: 1,
+			functionTotal: 2,
+			functionCovered: 1,
+			functionCoveragePct: 50,
+			blockTotal: 4,
+			blockCovered: 3,
+			blockCoveragePct: 75,
+		};
+
+		it.should('pass configured thresholds', a => {
+			enforceCoverageGate(coverage, { blocks: 75, functions: 50 });
+			a.ok(true);
+		});
+
+		it.should('fail configured block threshold', a => {
+			a.throws(() =>
+				enforceCoverageGate(coverage, { blocks: 80 }),
+			);
+		});
+
+		it.should('fail configured function threshold', a => {
+			a.throws(() =>
+				enforceCoverageGate(coverage, { functions: 60 }),
+			);
+		});
+
+		it.should('require coverage for configured gate', a => {
+			a.throws(() =>
+				enforceCoverageGate(undefined, { blocks: 80 }),
+			);
 		});
 	});
 });

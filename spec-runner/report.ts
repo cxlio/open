@@ -1,4 +1,5 @@
 import type { JsonResult, FigureData } from '../spec/index.js';
+import { basename } from 'path';
 
 export interface TestResult {
 	success: boolean;
@@ -61,6 +62,10 @@ export interface Report {
 	summary: ReportSummary;
 	testReport: TestReport;
 	coverage?: TestCoverageReport[];
+}
+
+export interface ReportOptions {
+	entryFile?: string;
 }
 
 export interface TestCoverage {
@@ -137,12 +142,33 @@ function calculateCoverage(coverage: TestCoverage[]) {
 	return result;
 }
 
-async function generateCoverageReport(coverage: Coverage) {
+function normalizePath(path: string) {
+	return path.replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+function isTestCoverageFile(url: string, options?: ReportOptions) {
+	const file = normalizePath(url);
+	const fileName = basename(file);
+	const entryFile = options?.entryFile
+		? normalizePath(options.entryFile)
+		: undefined;
+
+	return (
+		(!!entryFile &&
+			(file === entryFile || fileName === basename(entryFile))) ||
+		/^test(?:-.+)?\.js$/.test(fileName)
+	);
+}
+
+async function generateCoverageReport(
+	coverage: Coverage,
+	options?: ReportOptions,
+) {
 	const filtered: TestCoverage[] = [];
 	const ignoreRegex = /\/node_modules\//;
 	for (const script of coverage) {
 		const url = script.url;
-		if (!ignoreRegex.test(url)) {
+		if (!ignoreRegex.test(url) && !isTestCoverageFile(url, options)) {
 			filtered.push({
 				url: url,
 				functions: script.functions,
@@ -234,9 +260,11 @@ function renderTestReport(test: JsonResult): TestReport {
 export async function generateReport(
 	suite: JsonResult,
 	v8Coverage?: Coverage,
+	options?: ReportOptions,
 ): Promise<Report> {
 	const testReport = renderTestReport(suite);
-	const coverage = v8Coverage && (await generateCoverageReport(v8Coverage));
+	const coverage =
+		v8Coverage && (await generateCoverageReport(v8Coverage, options));
 	return {
 		success: testReport.failureCount === 0,
 		summary: {

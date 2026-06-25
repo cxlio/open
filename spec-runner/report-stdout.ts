@@ -2,6 +2,7 @@ import { colors } from '../program/index.js';
 
 import {
 	Report,
+	CoverageSummary,
 	TestReport,
 	TestResult,
 	TestCoverageReport,
@@ -60,6 +61,14 @@ function printCoverage(coverage: TestCoverageReport[]) {
 	}
 }
 
+function printCoverageSummary(coverage: CoverageSummary) {
+	const blockPct = coverage.blockCoveragePct.toFixed(2);
+	const functionPct = coverage.functionCoveragePct.toFixed(2);
+	console.log(
+		`Average: blocks ${blockPct}% (${coverage.blockCovered}/${coverage.blockTotal}), functions ${functionPct}% (${coverage.functionCovered}/${coverage.functionTotal})`,
+	);
+}
+
 function collectFailures(
 	test: TestReport,
 	parentPath: string,
@@ -94,7 +103,11 @@ function printSuccessSummary(): void {
 }
 
 function printVerboseReport(report: Report) {
-	if (report.coverage) printCoverage(report.coverage);
+	if (report.coverage) {
+		printCoverage(report.coverage);
+		if (report.summary.coverage)
+			printCoverageSummary(report.summary.coverage);
+	}
 	printTest(report.testReport);
 	const failures = printFailureSummary(report);
 	if (!failures) printSuccessSummary();

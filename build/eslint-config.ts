@@ -5,7 +5,7 @@ import { configs as sonarjsConfigs } from 'eslint-plugin-sonarjs';
 
 export default defineConfig([
 	js.configs.recommended,
-	ts.configs.recommended, //TypeChecked,
+	ts.configs.recommended,
 	{
 		files: ['**/*.ts', '**/*.tsx'],
 		languageOptions: {
@@ -99,6 +99,7 @@ export default defineConfig([
 			'sonarjs/no-identical-conditions': 'error',
 			'sonarjs/no-identical-expressions': 'error',
 			'sonarjs/no-identical-functions': 'error',
+			'sonarjs/function-return-type': 'off',
 			'sonarjs/no-nested-assignment': 'off',
 			'sonarjs/no-nested-conditional': 'off',
 			'sonarjs/no-nested-template-literals': 'off',

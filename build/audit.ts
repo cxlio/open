@@ -231,22 +231,34 @@ async function collectUsedPackages(pkg: Package, projectPath: string) {
 	return used;
 }
 
-function collectCallExpressionUsedPackages(
+function collectSourceUsedPackages(
 	sourceFile: ts.SourceFile,
 	functions: Set<string>,
 	used: Set<string>,
 ) {
+	function addSpecifier(specifier: ts.Expression) {
+		if (ts.isStringLiteral(specifier)) {
+			const packageName = getPackageName(specifier.text);
+			if (packageName) used.add(packageName);
+		}
+	}
+
 	function visit(node: ts.Node) {
+		if (
+			(ts.isImportDeclaration(node) ||
+				ts.isExportDeclaration(node)) &&
+			node.moduleSpecifier
+		) {
+			addSpecifier(node.moduleSpecifier);
+		}
+
 		if (
 			ts.isCallExpression(node) &&
 			ts.isIdentifier(node.expression) &&
 			functions.has(node.expression.text)
 		) {
 			const specifier = node.arguments[0];
-			if (specifier && ts.isStringLiteral(specifier)) {
-				const packageName = getPackageName(specifier.text);
-				if (packageName) used.add(packageName);
-			}
+			if (specifier) addSpecifier(specifier);
 		}
 
 		ts.forEachChild(node, visit);
@@ -279,7 +291,7 @@ async function collectConfiguredUsedPackages(
 
 		for (const fileName of parsed.fileNames) {
 			const source = await fs.readFile(fileName, 'utf8');
-			collectCallExpressionUsedPackages(
+			collectSourceUsedPackages(
 				ts.createSourceFile(
 					fileName,
 					source,

@@ -1,4 +1,4 @@
-import { Browser, CoverageEntry, Page, HTTPRequest } from 'puppeteer';
+import { Browser, Page, HTTPRequest, CDPSession } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import { readFile, writeFile, mkdir, mkdtemp, rm } from 'fs/promises';
 import { basename, resolve, relative, join, extname } from 'path';
@@ -15,6 +15,7 @@ import type { SpecRunner } from './index.js';
 import type { PNG } from 'pngjs';
 
 import { TestCoverage, generateReport } from './report.js';
+import type { Protocol } from 'devtools-protocol';
 
 interface HTMLElement {
 	activeElement: HTMLElement | null;
@@ -24,12 +25,14 @@ interface HTMLElement {
 	blur(): void;
 }
 
-async function startTracing(page: Page) {
-	await Promise.all([
-		page.coverage.startJSCoverage({
-			reportAnonymousScripts: true,
-		}),
-	]);
+async function startCoverage(page: Page) {
+	const session = await page.createCDPSession();
+	await session.send('Profiler.enable');
+	await session.send('Profiler.startPreciseCoverage', {
+		callCount: true,
+		detailed: true,
+	});
+	return session;
 }
 
 async function handleConsole(msg: puppeteer.ConsoleMessage, app: SpecRunner) {
@@ -128,6 +131,9 @@ async function createPage(
 
 	const pageError: Result[] = [];
 	const page = await openPage(browser);
+	const coverageSession = app.ignoreCoverage
+		? undefined
+		: await startCoverage(page);
 	const entryFile = app.vfsRoot
 		? `./${relative(app.vfsRoot, app.entryFile)}`
 		: app.entryFile;
@@ -148,8 +154,6 @@ async function createPage(
 	});
 
 	await page.exposeFunction('__cxlRunner', cxlRunner);
-	await startTracing(page);
-
 	if (app.browserUrl) await goto(app, page, app.browserUrl);
 
 	// Prevent unexpected focus behavior
@@ -160,7 +164,7 @@ async function createPage(
 
 	const coverage = app.ignoreCoverage
 		? undefined
-		: await generateCoverage(page, app);
+		: await generateCoverage(coverageSession, app);
 	return { suite, coverage };
 }
 
@@ -347,47 +351,24 @@ async function mjsRunner(
 	) as Promise<JsonResult>;
 }
 
-function Range(startOffset: number, endOffset: number, count: number) {
-	return {
-		startOffset,
-		endOffset,
-		count,
-	};
-}
-
-function generateRanges(entry: CoverageEntry) {
-	const result = [];
-	let index = 0;
-
-	for (const range of entry.ranges) {
-		if (range.start > index) result.push(Range(index, range.start, 0));
-		result.push(Range(range.start, range.end, 1));
-		index = range.end;
-	}
-
-	if (index < entry.text.length) {
-		result.push(Range(index, entry.text.length, 0));
-	}
-	return result;
-}
-
 async function generateCoverage(
-	page: Page,
+	session: CDPSession | undefined,
 	app: SpecRunner,
 ): Promise<TestCoverage[]> {
-	const coverage = await page.coverage.stopJSCoverage();
-	return coverage.flatMap(entry => {
+	if (!session) return [];
+	const coverage =
+		await session.send('Profiler.takePreciseCoverage');
+	await session.send('Profiler.stopPreciseCoverage');
+	await session.send('Profiler.disable');
+
+	return (
+		coverage as Protocol.Profiler.TakePreciseCoverageResponse
+	).result.flatMap(entry => {
 		const sourceFile = app.sources.get(entry.url);
 		return sourceFile
 			? {
 					url: sourceFile.path,
-					functions: [
-						{
-							functionName: '',
-							ranges: generateRanges(entry),
-							isBlockCoverage: true,
-						},
-					],
+					functions: entry.functions,
 				}
 			: [];
 	});

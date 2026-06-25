@@ -56,7 +56,7 @@ cxl-spec ./test.js --reportPath ./artifacts/test-report.json
 
 - **Coverage reporting**
     - **Node**: uses the Node inspector `Profiler.startPreciseCoverage()`.
-    - **Puppeteer**: uses `page.coverage.startJSCoverage()` / `stopJSCoverage()`.
+    - **Puppeteer**: uses Chrome DevTools `Profiler.startPreciseCoverage()`.
 
 - **Virtual file server for browser runs**
     - Resolves bare/aliased imports using `resolveImport()` and redirects to the resolved path when needed.

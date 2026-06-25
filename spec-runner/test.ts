@@ -36,6 +36,11 @@ export default spec('tester', s => {
 							{ startOffset: 75, endOffset: 100, count: 0 },
 						],
 					},
+					{
+						functionName: 'unused',
+						isBlockCoverage: true,
+						ranges: [{ startOffset: 100, endOffset: 120, count: 0 }],
+					},
 				],
 			},
 			{
@@ -57,7 +62,8 @@ export default spec('tester', s => {
 
 			a.equal(report.coverage?.length, 1);
 			a.equal(report.coverage?.[0]?.url, 'index.js');
-			a.equal(report.summary.coverage?.blockCoveragePct, 75);
+			a.equal(report.summary.coverage?.blockCoveragePct, 62.5);
+			a.equal(report.summary.coverage?.functionCoveragePct, 50);
 		});
 	});
 });

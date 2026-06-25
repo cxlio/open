@@ -62,7 +62,7 @@ export default spec('tester', s => {
 
 			a.equal(report.coverage?.length, 1);
 			a.equal(report.coverage?.[0]?.url, 'index.js');
-			a.equal(report.summary.coverage?.blockCoveragePct, 62.5);
+			a.equal(report.summary.coverage?.blockCoveragePct, 33.33333333333333);
 			a.equal(report.summary.coverage?.functionCoveragePct, 50);
 		});
 	});

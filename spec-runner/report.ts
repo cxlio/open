@@ -100,12 +100,11 @@ function calculateCoverage(coverage: TestCoverage[]) {
 			let functionBlockCovered = 0;
 
 			for (const range of fnCov.ranges) {
-				const len = range.endOffset - range.startOffset;
-				functionBlockTotal += len;
-				blockTotal += len;
+				functionBlockTotal++;
+				blockTotal++;
 				if (range.count) {
-					functionBlockCovered += len;
-					blockCovered += len;
+					functionBlockCovered++;
+					blockCovered++;
 				}
 			}
 

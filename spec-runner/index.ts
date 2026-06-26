@@ -12,11 +12,13 @@ import {
 import { run } from './runner.js';
 
 import printReportV2 from './report-stdout.js';
+import type { TestCoverage } from './report.js';
 
 export type SpecRunnerOptions = ParametersResult<typeof parameters>;
 
 export type SpecRunner = Omit<SpecRunnerOptions, '$' | 'grep'> & {
 	entryFile: string;
+	expectedCoverageFiles?: TestCoverage[];
 	importmap?: string;
 	reportPath: string;
 	grep?: RegExp;

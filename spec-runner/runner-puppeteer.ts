@@ -521,7 +521,10 @@ export default async function runPuppeteer(app: SpecRunner) {
 		app.log(`Puppeteer ${await browser.version()}`);
 
 		const { suite, coverage } = await createPage(app, browser, 0);
-		return generateReport(suite, coverage, { entryFile: app.entryFile });
+		return generateReport(suite, coverage, {
+			entryFile: app.entryFile,
+			expectedCoverageFiles: app.expectedCoverageFiles,
+		});
 	} finally {
 		if (browser) await browser.close();
 		await rm(userDataDir, { recursive: true, force: true });

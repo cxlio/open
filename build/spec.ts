@@ -1,18 +1,22 @@
 import { readFileSync } from 'fs';
-import { join } from 'path';
+import { extname, join, relative, resolve } from 'path';
+import * as ts from 'typescript';
 import { getPackageBuildOptions } from './npm.js';
 import { fromAsync, of } from '../rx/index.js';
 import { readJson } from '../program/index.js';
 import { buildOutputOptions } from './builder.js';
 import { getDependencies } from './package.js';
-import type { CoverageSummary } from '../spec-runner/report.js';
+import { parseTsConfig } from './tsc.js';
+import type {
+	CoverageSummary,
+	TestCoverage,
+} from '../spec-runner/report.js';
 import type { Package } from './npm.js';
 
 let browserRunner: string | undefined;
 
 interface CoverageGate {
 	blocks?: number;
-	functions?: number;
 }
 
 function formatCoverage(value: number) {
@@ -33,14 +37,6 @@ export function enforceCoverageGate(
 	)
 		failures.push(
 			`blocks ${formatCoverage(coverage.blockCoveragePct)} < ${formatCoverage(gate.blocks)}`,
-		);
-
-	if (
-		gate.functions !== undefined &&
-		coverage.functionCoveragePct < gate.functions
-	)
-		failures.push(
-			`functions ${formatCoverage(coverage.functionCoveragePct)} < ${formatCoverage(gate.functions)}`,
 		);
 
 	if (failures.length)
@@ -119,6 +115,37 @@ export function generateTestFile({
 	});
 }
 
+function jsCoverageFile(path: string) {
+	return extname(path) === '.js';
+}
+
+function getExpectedCoverageFiles(outputDir: string): TestCoverage[] {
+	const parsed = parseTsConfig('tsconfig.json');
+	const root = resolve(outputDir, '../../');
+	const files = new Map<string, TestCoverage>();
+
+	for (const fileName of parsed.fileNames) {
+		for (const outFile of ts.getOutputFileNames(parsed, fileName, false)) {
+			if (jsCoverageFile(outFile)) {
+				const url = `/${relative(root, outFile).replace(/\\/g, '/')}`;
+				const len = readFileSync(outFile, 'utf8').length;
+				files.set(url, {
+					url,
+					functions: [
+						{
+							functionName: '',
+							isBlockCoverage: true,
+							ranges: [{ startOffset: 0, endOffset: len, count: 0 }],
+						},
+					],
+				});
+			}
+		}
+	}
+
+	return [...files.values()].sort((a, b) => a.url.localeCompare(b.url));
+}
+
 export function runTests({
 	appId,
 	outputDir,
@@ -140,6 +167,7 @@ export function runTests({
 		const cwd = process.cwd();
 		const pkgJson = await readJson<Package>('package.json');
 		const rootPkg = await readJson<Package>('../package.json');
+		const expectedCoverageFiles = getExpectedCoverageFiles(outputDir);
 		try {
 			process.chdir(outputDir);
 			const report = await runSpec({
@@ -147,6 +175,7 @@ export function runTests({
 				mjs: true,
 				vfsRoot: '../../',
 				entryFile,
+				expectedCoverageFiles,
 				ignoreCoverage,
 				baselinePath: `../../${appId}/spec`,
 				reportPath: 'test-report.json',

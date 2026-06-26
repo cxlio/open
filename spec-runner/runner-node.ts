@@ -75,6 +75,9 @@ export default async function runNode(app: SpecRunner) {
 			console.log('Press any key to continue');
 			await new Promise(res => process.stdin.once('data', res));
 		}
-		return generateReport(result, coverage, { entryFile: app.entryFile });
+		return generateReport(result, coverage, {
+			entryFile: app.entryFile,
+			expectedCoverageFiles: app.expectedCoverageFiles,
+		});
 	}
 }

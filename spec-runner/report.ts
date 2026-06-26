@@ -66,6 +66,7 @@ export interface Report {
 
 export interface ReportOptions {
 	entryFile?: string;
+	expectedCoverageFiles?: TestCoverage[];
 }
 
 export interface TestCoverage {
@@ -100,11 +101,12 @@ function calculateCoverage(coverage: TestCoverage[]) {
 			let functionBlockCovered = 0;
 
 			for (const range of fnCov.ranges) {
-				functionBlockTotal++;
-				blockTotal++;
+				const len = range.endOffset - range.startOffset;
+				functionBlockTotal += len;
+				blockTotal += len;
 				if (range.count) {
-					functionBlockCovered++;
-					blockCovered++;
+					functionBlockCovered += len;
+					blockCovered += len;
 				}
 			}
 
@@ -163,19 +165,28 @@ async function generateCoverageReport(
 	coverage: Coverage,
 	options?: ReportOptions,
 ) {
-	const filtered: TestCoverage[] = [];
+	const filtered = new Map<string, TestCoverage>();
 	const ignoreRegex = /\/node_modules\//;
 	for (const script of coverage) {
 		const url = script.url;
 		if (!ignoreRegex.test(url) && !isTestCoverageFile(url, options)) {
-			filtered.push({
+			filtered.set(normalizePath(url), {
 				url: url,
 				functions: script.functions,
 			});
 		}
 	}
 
-	return calculateCoverage(filtered);
+	for (const file of options?.expectedCoverageFiles ?? []) {
+		if (
+			!isTestCoverageFile(file.url, options) &&
+			!filtered.has(normalizePath(file.url))
+		) {
+			filtered.set(normalizePath(file.url), file);
+		}
+	}
+
+	return calculateCoverage([...filtered.values()]);
 }
 
 function summarizeCoverage(

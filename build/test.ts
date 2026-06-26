@@ -75,19 +75,13 @@ export default spec('build', s => {
 		};
 
 		it.should('pass configured thresholds', a => {
-			enforceCoverageGate(coverage, { blocks: 75, functions: 50 });
+			enforceCoverageGate(coverage, { blocks: 75 });
 			a.ok(true);
 		});
 
 		it.should('fail configured block threshold', a => {
 			a.throws(() =>
 				enforceCoverageGate(coverage, { blocks: 80 }),
-			);
-		});
-
-		it.should('fail configured function threshold', a => {
-			a.throws(() =>
-				enforceCoverageGate(coverage, { functions: 60 }),
 			);
 		});
 

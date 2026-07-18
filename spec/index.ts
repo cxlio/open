@@ -323,7 +323,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		this.$test.addTest(test);
 	}
 
-	throws = (fn: () => Value, matchError?: Value) => {
+	throws = (fn: () => void, matchError?: Value) => {
 		let success = false;
 		try {
 			fn();

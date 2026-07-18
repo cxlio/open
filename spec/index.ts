@@ -7,6 +7,15 @@ type EventType =
 	| 'beforeEach'
 	| 'syncComplete';
 type TestEvent = { type: EventType; promises: Promise<unknown>[] };
+type Value =
+	| object
+	| string
+	| number
+	| boolean
+	| bigint
+	| symbol
+	| null
+	| undefined;
 
 export type TestFn<T = TestApi> = (test: T) => void | Promise<unknown>;
 
@@ -15,8 +24,6 @@ type FunctionsOf<T> = {
 	[K in keyof T]: T[K] extends (...args: any[]) => any ? T[K] : never;
 };
 
-type ParametersOf<T, K extends keyof T> = Parameters<FunctionsOf<T>[K]>;
-
 export interface JsonResult {
 	name: string;
 	results: Result[];
@@ -24,6 +31,7 @@ export interface JsonResult {
 	only: JsonResult[];
 	runTime: number;
 	timeout: number;
+	level?: number;
 	skipped?: boolean;
 }
 interface Spy<EventT> {
@@ -31,7 +39,7 @@ interface Spy<EventT> {
 	destroy(): void;
 	then(
 		resolve: (ev: EventT | undefined) => void,
-		reject: (e: unknown) => void,
+		reject: (e: Value) => void,
 	): Promise<EventT | undefined>;
 }
 
@@ -109,22 +117,32 @@ let actionId = 0;
 const setTimeout = globalThis.setTimeout;
 const clearTimeout = globalThis.clearTimeout;
 
-function isIterator(val: unknown): val is Iterator<unknown> {
-	return !!val && typeof (val as Iterator<unknown>).next === 'function';
+function isIterator(val: Value): val is Iterator<Value> {
+	return typeof val === 'object' && val !== null && 'next' in val;
 }
 
-function isIterable(val: unknown): val is Iterable<unknown> {
+function isIterable(val: Value): val is Iterable<Value> {
 	return (
-		!!val &&
-		typeof (val as Iterable<unknown>)[Symbol.iterator] === 'function'
+		typeof val === 'object' &&
+		val !== null &&
+		Symbol.iterator in val &&
+		typeof val[Symbol.iterator] === 'function'
 	);
 }
 
-function isIterableOrIterator(val: unknown): boolean {
+function isIterableOrIterator(val: Value): boolean {
 	return isIterator(val) || isIterable(val);
 }
 
-function getIterator(val: unknown): Iterator<unknown> {
+function isValueArray(val: Value): val is Value[] {
+	return Array.isArray(val);
+}
+
+function isRecord(val: Value): val is Record<string, Value> {
+	return typeof val === 'object' && val !== null;
+}
+
+function getIterator(val: Value): Iterator<Value> {
 	if (isIterator(val)) return val;
 	if (isIterable(val)) return val[Symbol.iterator]();
 	throw new Error('Value is not iterable');
@@ -193,12 +211,12 @@ function toPromise<T>(
 	);
 }
 
-function inspect(val: unknown) {
+function inspect(val: Value): string {
 	if (typeof val === 'string') return '"' + val + '"';
 	if (typeof Element !== 'undefined' && val instanceof Element)
 		return val.outerHTML;
 
-	return val;
+	return String(val);
 }
 
 function matchesGrep(grep: RegExp, value: string) {
@@ -206,7 +224,7 @@ function matchesGrep(grep: RegExp, value: string) {
 	return grep.test(value);
 }
 
-export abstract class TestApiBase<T> {
+export abstract class TestApiBase<T extends TestApiBase<T>> {
 	abstract createTest: (name: string, testFn: TestFn<T>) => Test<T>;
 
 	constructor(public $test: Test<T>) {}
@@ -223,7 +241,7 @@ export abstract class TestApiBase<T> {
 		if (!this.$test.domContainer?.parentNode)
 			document.body.appendChild((this.$test.domContainer = el));
 
-		return el as HTMLElement;
+		return el;
 	}
 
 	/**
@@ -247,7 +265,7 @@ export abstract class TestApiBase<T> {
 	h = (name: string, testFn: TestFn<T>) =>
 		this.test(name, testFn, this.$test.level ? this.$test.level + 1 : 1);
 
-	log = (object: unknown) => {
+	log = (object: Value) => {
 		console.log(object);
 	};
 
@@ -263,7 +281,7 @@ export abstract class TestApiBase<T> {
 		});
 	};
 
-	assert = (condition: unknown, message?: string): asserts condition => {
+	assert = (condition: Value, message?: string): asserts condition => {
 		if (!condition) throw new Error(message);
 		this.$test.push({
 			success: !!condition,
@@ -272,7 +290,7 @@ export abstract class TestApiBase<T> {
 		});
 	};
 
-	equal = <T,>(a: T, b: T, desc?: string) => {
+	equal = (a: Value, b: Value, desc?: string) => {
 		return this.ok(
 			a === b,
 			`${desc ? desc + ': ' : ''}${inspect(a)} should equal ${inspect(
@@ -293,11 +311,11 @@ export abstract class TestApiBase<T> {
 		for (const i in valB) this.equal(valA[i], valB[i], desc);
 	};
 
-	equalPartial = <T,>(a: T, b: Partial<T>, desc?: string) => {
+	equalPartial = (a: Value, b: Value, desc?: string) => {
 		this.equalDeep(a, b, true, desc);
 	};
 
-	equalValues = <T,>(a: T, b: T, desc?: string) => {
+	equalValues = (a: Value, b: Value, desc?: string) => {
 		this.equalDeep(a, b, false, desc);
 	};
 
@@ -305,13 +323,17 @@ export abstract class TestApiBase<T> {
 		this.$test.addTest(test);
 	}
 
-	throws = (fn: () => unknown, matchError?: unknown) => {
+	throws = (fn: () => Value, matchError?: Value) => {
 		let success = false;
 		try {
 			fn();
 		} catch (e) {
 			success = true;
-			if (matchError) this.equalPartial(e, matchError);
+			if (matchError)
+				this.equalPartial(
+					typeof e === 'object' && e !== null ? e : String(e),
+					matchError,
+				);
 		}
 		return this.ok(success, `Expected function to throw`);
 	};
@@ -347,7 +369,7 @@ export abstract class TestApiBase<T> {
 
 	testElement = (name: string, testFn: TestFn<T>) => {
 		return this.test(name, async b => {
-			const a = b as TestApi;
+			const a = b;
 			a.setTimeout(60000);
 			if (
 				typeof __cxlRunner === 'undefined' ||
@@ -386,7 +408,10 @@ export abstract class TestApiBase<T> {
 		return fn;
 	};
 
-	spyFn = <T, K extends keyof FunctionsOf<T>>(object: T, method: K) => {
+	spyFn = <A extends Value[], B, K extends PropertyKey>(
+		object: Record<K, (...args: A) => B>,
+		method: K,
+	) => {
 		const spy = spyFn(object, method);
 		this.$test.events.subscribe({
 			complete: spy.destroy,
@@ -516,7 +541,7 @@ export abstract class TestApiBase<T> {
 		if (typeof __cxlRunner !== 'undefined')
 			return new Promise<void>(resolve => {
 				this.test(name, async b => {
-					const a = b as TestApi;
+					const a = b;
 					const domId = (a.dom.id = `dom${a.id}`);
 					const style = a.dom.style;
 					style.position = 'absolute';
@@ -549,30 +574,32 @@ export abstract class TestApiBase<T> {
 	};
 
 	mockSetInterval = () => {
-		/*eslint @typescript-eslint/no-unsafe-function-type:off */
 		this.mockTimeCheck();
 
 		let id = 0;
 		const intervals: Record<
 			number,
 			{
-				cb: () => void;
+				cb: TimerHandler;
 				delay: number;
 				lastFired: number;
 			}
 		> = {};
 
-		this.mock(globalThis, 'setInterval', ((
-			cb: string | (() => void),
+		const setInterval: typeof globalThis.setInterval = (
+			cb: TimerHandler,
 			delay = 0,
-		): number => {
-			if (typeof cb === 'string') cb = new Function(cb) as () => void;
+		) => {
+			if (typeof cb !== 'function')
+				throw new Error('String interval handlers are not supported');
 			intervals[++id] = { cb, delay, lastFired: 0 };
 			return id;
-		}) as typeof globalThis.setInterval);
-		this.mock(globalThis, 'clearInterval', (id => {
+		};
+		const clearInterval: typeof globalThis.clearInterval = id => {
 			if (id !== undefined) delete intervals[id];
-		}) as typeof globalThis.clearInterval);
+		};
+		this.mock(globalThis, 'setInterval', setInterval);
+		this.mock(globalThis, 'clearInterval', clearInterval);
 
 		return {
 			advance(ms: number) {
@@ -580,7 +607,8 @@ export abstract class TestApiBase<T> {
 					const { cb, delay, lastFired } = int;
 					const elapsedTime = ms - lastFired;
 					const timesToFire = Math.floor(elapsedTime / (delay || 1));
-					for (let i = 0; i < timesToFire; i++) cb();
+					for (let i = 0; i < timesToFire; i++)
+						if (typeof cb === 'function') Reflect.apply(cb, globalThis, []);
 					int.lastFired = Math.floor(ms / delay) * delay;
 				}
 			},
@@ -591,21 +619,24 @@ export abstract class TestApiBase<T> {
 		this.mockTimeCheck();
 
 		let id = 0;
-		const timeouts: Record<number, { cb: Function; time: number }> = {};
+		const timeouts: Record<number, { cb: TimerHandler; time: number }> = {};
 
-		this.mock(globalThis, 'setTimeout', ((cb: TimerHandler, time = 0) => {
-			if (typeof cb === 'string') cb = new Function(cb) as () => void;
+		const setTimeout: typeof globalThis.setTimeout = (cb, time = 0) => {
+			if (typeof cb !== 'function')
+				throw new Error('String timeout handlers are not supported');
 			timeouts[++id] = { cb, time };
 			return id;
-		}) as typeof globalThis.setTimeout);
-		this.mock(globalThis, 'clearTimeout', ((id: number | undefined) => {
+		};
+		const clearTimeout: typeof globalThis.clearTimeout = id => {
 			if (id !== undefined) delete timeouts[id];
-		}) as typeof globalThis.clearTimeout);
+		};
+		this.mock(globalThis, 'setTimeout', setTimeout);
+		this.mock(globalThis, 'clearTimeout', clearTimeout);
 		return {
 			advance(ms: number) {
 				for (const [key, { cb, time }] of Object.entries(timeouts)) {
 					if (time <= ms) {
-						(cb as () => void)();
+						if (typeof cb === 'function') Reflect.apply(cb, globalThis, []);
 						delete timeouts[+key];
 					} else {
 						const to = timeouts[+key];
@@ -622,17 +653,17 @@ export abstract class TestApiBase<T> {
 		let id = 0;
 		const rafs: Record<number, FrameRequestCallback> = {};
 
-		this.mock(globalThis, 'requestAnimationFrame', ((
-			cb: FrameRequestCallback,
-		) => {
+		const requestAnimationFrame: typeof globalThis.requestAnimationFrame = cb => {
 			id++;
 			rafs[id] = cb;
 			return id;
-		}) as typeof globalThis.requestAnimationFrame);
+		};
 
-		this.mock(globalThis, 'cancelAnimationFrame', ((rafId: number) => {
+		const cancelAnimationFrame: typeof globalThis.cancelAnimationFrame = rafId => {
 			delete rafs[rafId];
-		}) as typeof globalThis.cancelAnimationFrame);
+		};
+		this.mock(globalThis, 'requestAnimationFrame', requestAnimationFrame);
+		this.mock(globalThis, 'cancelAnimationFrame', cancelAnimationFrame);
 
 		return {
 			advance() {
@@ -666,12 +697,17 @@ export abstract class TestApiBase<T> {
 		return this.action({ type: 'tap', element });
 	};
 
-	protected equalDeep<T>(a: T, b: T, partial: boolean, desc?: string) {
+	protected equalDeep(
+		a: Value,
+		b: Value,
+		partial: boolean,
+		desc?: string,
+	) {
 		if (a instanceof ArrayBuffer && b instanceof ArrayBuffer) {
 			return this.equalBuffer(a, b, desc);
 		}
 
-		if (Array.isArray(a) && Array.isArray(b)) {
+		if (isValueArray(a) && isValueArray(b)) {
 			return this.equalArray(a, b, desc);
 		}
 
@@ -705,13 +741,8 @@ export abstract class TestApiBase<T> {
 			return this.equalIterable(a, b, desc);
 		}
 
-		if (typeof a === 'object' && typeof b === 'object') {
-			return this.equalObject(
-				a as Record<string, unknown>,
-				b as Record<string, unknown>,
-				partial,
-				desc,
-			);
+		if (isRecord(a) && isRecord(b)) {
+			return this.equalObject(a, b, partial, desc);
 		}
 
 		this.equal(
@@ -733,7 +764,7 @@ export abstract class TestApiBase<T> {
 			);
 	}
 
-	private equalArray(a: unknown[], b: unknown[], desc?: string) {
+	private equalArray(a: Value[], b: Value[], desc?: string) {
 		this.equal(
 			a.length,
 			b.length,
@@ -754,7 +785,7 @@ export abstract class TestApiBase<T> {
 		}
 	}
 
-	private equalIterable(a: unknown, b: unknown, desc?: string) {
+	private equalIterable(a: Value, b: Value, desc?: string) {
 		const iteratorA = getIterator(a);
 		const iteratorB = getIterator(b);
 		let i = 0;
@@ -782,14 +813,14 @@ export abstract class TestApiBase<T> {
 	}
 
 	private equalObject(
-		a: Record<string, unknown>,
-		b: Record<string, unknown>,
+		a: Record<string, Value>,
+		b: Record<string, Value>,
 		partial: boolean,
 		desc?: string,
 	) {
 		let count = 0;
 
-		for (const key in b) {
+		for (const key of Object.keys(b)) {
 			count++;
 			this.equalDeep(
 				a[key],
@@ -800,7 +831,7 @@ export abstract class TestApiBase<T> {
 		}
 
 		if (!partial)
-			for (const key in a) {
+			for (const key of Object.keys(a)) {
 				count++;
 				if (!(key in b)) {
 					this.ok(
@@ -820,14 +851,14 @@ export class TestApi extends TestApiBase<TestApi> {
 		new Test(name, testFn, TestApi, this.$test);
 }
 
-export class Test<T = TestApi> {
+export class Test<T extends TestApiBase<T> = TestApi> {
 	name: string;
 	promise?: Promise<unknown>;
 	results: Result[] = [];
 	tests: Test<T>[] = [];
 	only: Test<T>[] = [];
 	timeout = 5 * 1000;
-	domContainer?: Element;
+	domContainer?: HTMLElement;
 	events = new Subject<TestEvent>();
 	completed = false;
 	runTime = 0;
@@ -861,7 +892,7 @@ export class Test<T = TestApi> {
 		this.results.push(result);
 	}
 
-	pushError(e: unknown) {
+	pushError(e: Value) {
 		if (this.skipped) return;
 		const failureMessage =
 			typeof e === 'string'
@@ -917,12 +948,13 @@ export class Test<T = TestApi> {
 		return this.parent ? `${this.parent.path()} ${this.name}` : this.name;
 	}
 
-	async run(grep?: RegExp): Promise<Result[]> {
+	async run(grep?: RegExp, targetPath?: string): Promise<Result[]> {
 		const start = performance.now();
 		let syncCompleteNeeded = true;
 		this.completed = false;
 		this.promise = undefined;
-		this.skipped = !!grep && !!this.parent && !matchesGrep(grep, this.path());
+		this.skipped = this.shouldSkip(grep, targetPath);
+		if (this.skipped) return this.results;
 		const testApi = new this.TestApiFn(this);
 
 		try {
@@ -930,22 +962,13 @@ export class Test<T = TestApi> {
 			const promise = result ? this.doTimeout(result) : this.promise;
 
 			if (!promise) await this.emit('syncComplete');
+			else await promise;
 			syncCompleteNeeded = false;
-			await promise;
-
-			if (promise && (this.completed as boolean) === false)
-				throw new Error('Never completed');
 			if (this.only.length) {
-				await Promise.all(this.only.map(test => test.run(grep)));
+				await Promise.all(this.only.map(test => test.run(grep, targetPath)));
 				throw new Error('"only" was used');
 			} else if (this.tests.length)
-				await Promise.all(this.tests.map(test => test.run(grep)));
-
-			if (
-				this.skipped &&
-				[...this.only, ...this.tests].some(test => !test.skipped)
-			)
-				this.skipped = false;
+				await Promise.all(this.tests.map(test => test.run(grep, targetPath)));
 
 			if (
 				!this.parent &&
@@ -956,7 +979,9 @@ export class Test<T = TestApi> {
 			)
 				this.skipped = true;
 		} catch (e) {
-			this.pushError(e);
+			this.pushError(
+				typeof e === 'object' && e !== null ? e : String(e),
+			);
 			console.error(String(e));
 		} finally {
 			if (syncCompleteNeeded) await this.emit('syncComplete');
@@ -978,6 +1003,7 @@ export class Test<T = TestApi> {
 			only: this.only.filter(r => !r.skipped).map(r => r.toJSON()),
 			runTime: this.runTime,
 			timeout: this.timeout,
+			level: this.level,
 			skipped: this.skipped,
 		};
 	}
@@ -987,9 +1013,15 @@ export class Test<T = TestApi> {
 		this.events.next(ev);
 		await Promise.all(ev.promises);
 	}
+
+	private shouldSkip(grep?: RegExp, targetPath?: string) {
+		return targetPath
+			? targetPath !== this.path() && !targetPath.startsWith(`${this.path()} `)
+			: !!grep && !!this.parent && !matchesGrep(grep, this.path());
+	}
 }
 
-export type MockFn<A extends unknown[], B> = {
+export type MockFn<A extends Value[], B> = {
 	(...args: A): B;
 	calls: number;
 	lastResult?: B;
@@ -997,10 +1029,10 @@ export type MockFn<A extends unknown[], B> = {
 };
 
 export function stub() {
-	return mockFn<unknown[], unknown>(() => {});
+	return mockFn<Value[], void>(() => {});
 }
 
-export function mockFn<A extends unknown[], B>(
+export function mockFn<A extends Value[], B>(
 	fn: (...args: A) => B,
 ): MockFn<A, B> {
 	const result: MockFn<A, B> = (...args: A) => {
@@ -1014,10 +1046,13 @@ export function mockFn<A extends unknown[], B>(
 	return result;
 }
 
-function spyFn<T, K extends keyof FunctionsOf<T>>(object: T, method: K) {
-	const sub = new Subject<SpyFn<ParametersOf<T, K>, T[K]>>();
-	const originalFn = object[method] as FunctionsOf<T>[K];
-	const spy: Spy<SpyFn<ParametersOf<T, K>, T[K]>> = {
+function spyFn<A extends Value[], B, K extends PropertyKey>(
+	object: Record<K, (...args: A) => B>,
+	method: K,
+) {
+	const sub = new Subject<SpyFn<A, B>>();
+	const originalFn = object[method];
+	const spy: Spy<SpyFn<A, B>> = {
 		destroy() {
 			object[method] = originalFn;
 			sub.complete();
@@ -1029,21 +1064,22 @@ function spyFn<T, K extends keyof FunctionsOf<T>>(object: T, method: K) {
 					return ev;
 				},
 				e => {
-					reject(e);
-					throw e;
+					const error = e instanceof Error ? e : String(e);
+					reject(error);
+					throw error;
 				},
 			);
 		},
 	};
 	let called = 0;
 
-	const spyFn = function (this: T, ...args: Parameters<FunctionsOf<T>[K]>) {
+	const spyFn = function (this: Record<K, (...args: A) => B>, ...args: A) {
 		called++;
-		const result = originalFn.apply(this, args) as T[K];
+		const result = originalFn.apply(this, args);
 		sub.next((spy.lastEvent = { called, arguments: args, result }));
 		return result;
 	};
-	object[method] = spyFn as unknown as T[K];
+	object[method] = spyFn;
 
 	return spy;
 }
@@ -1065,8 +1101,9 @@ function spyProp<T, K extends keyof T>(object: T, prop: K) {
 					return ev;
 				},
 				e => {
-					reject(e);
-					throw e;
+					const error = e instanceof Error ? e : String(e);
+					reject(error);
+					throw error;
 				},
 			);
 		},
@@ -1093,8 +1130,7 @@ function spyProp<T, K extends keyof T>(object: T, prop: K) {
  * Emulates a keydown event
  */
 export function triggerKeydown(el: Element, key: string) {
-	const ev = new CustomEvent('keydown', { bubbles: true });
-	(ev as unknown as { key: string }).key = key;
+	const ev = new KeyboardEvent('keydown', { bubbles: true, key });
 	el.dispatchEvent(ev);
 	return ev;
 }

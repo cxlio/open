@@ -21,12 +21,24 @@ interface AttributeMeta {
 	type: string;
 	allowEmpty?: boolean;
 	global?: boolean;
-	values?: string[];
+	values?: readonly string[];
 }
 
 type Roles = typeof ariaRoles;
 type RoleName = keyof Roles;
 type AriaAttributeName = keyof typeof ariaAttrs;
+
+function isRoleName(name: string): name is RoleName {
+	return name in ariaRoles;
+}
+
+function isAriaAttributeName(name: string): name is AriaAttributeName {
+	return name in ariaAttrs;
+}
+
+function getRole(name: string | null): RoleMeta | null {
+	return name && isRoleName(name) ? ariaRoles[name] : null;
+}
 
 const ariaRoles = {
 	alert: {
@@ -2088,8 +2100,8 @@ export function testAccessibility(
 	root: Element | ShadowRoot = node,
 	result: Result[] = [],
 ) {
-	const roleName = node.getAttribute('role') as RoleName | null;
-	const role: RoleMeta | null = roleName && ariaRoles[roleName];
+	const roleName = node.getAttribute('role');
+	const role = getRole(roleName);
 
 	function ok(success: boolean, message: string) {
 		result.push({
@@ -2127,11 +2139,11 @@ export function testAccessibility(
 
 		const isNative = node.tagName.toLowerCase() in htmlElms;
 
-		function validateAriaAttribute(name: AriaAttributeName, value: string) {
-			const attr = ariaAttrs[name] as AttributeMeta | undefined;
-
-			ok(!!attr, `"${name}" must be a valid aria attribute`);
-			if (!attr) return;
+		function validateAriaAttribute(name: string, value: string) {
+			const validName = isAriaAttributeName(name);
+			ok(validName, `"${name}" must be a valid aria attribute`);
+			if (!validName) return;
+			const attr: AttributeMeta = ariaAttrs[name];
 
 			if (attr.values)
 				ok(
@@ -2151,7 +2163,7 @@ export function testAccessibility(
 
 		for (const { name, value } of node.attributes) {
 			if (name.startsWith('aria-')) {
-				validateAriaAttribute(name as AriaAttributeName, value);
+				validateAriaAttribute(name, value);
 			}
 		}
 		if (!isNative && notGlobalCount)

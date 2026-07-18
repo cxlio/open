@@ -52,7 +52,7 @@ export function generateEsmTestFile(
 	return Buffer.from(`<!DOCTYPE html>
 <title>${pkgName} Test Suite</title>
 <script type="importmap">${importmap}</script>
-<script type="module">
+<script type="text/plain" id="spec-browser-runner">
 	${(browserRunner ??= readFileSync(
 		join(import.meta.dirname, 'spec-browser.js'),
 		'utf8',
@@ -61,6 +61,36 @@ export function generateEsmTestFile(
 		testFile: new URL('${testFile}', import.meta.url).href,
 		baselinePath: '../../${dirName}/spec',
 	}).run()
+</script>
+<script type="module">
+	const params = new URLSearchParams(location.hash.slice(1));
+	const testFile = params.get('__cxlSpecBrowserFile');
+	if (testFile) {
+		window.__cxlRunner = data => parent.__cxlRunner(data);
+		try {
+			const suite = (await import(testFile)).default;
+			await suite.run(
+				undefined,
+				params.get('__cxlSpecBrowserTarget') || undefined,
+			);
+			parent.postMessage(
+				{ type: 'spec-browser-result', result: suite.toJSON() },
+				location.origin,
+			);
+		} catch (e) {
+			parent.postMessage(
+				{ type: 'spec-browser-result', error: String(e) },
+				location.origin,
+			);
+		}
+	} else {
+		const source = document.querySelector('#spec-browser-runner')?.textContent;
+		if (!source) throw new Error('Missing browser runner');
+		const script = document.createElement('script');
+		script.type = 'module';
+		script.textContent = source;
+		document.head.append(script);
+	}
 </script>`);
 }
 

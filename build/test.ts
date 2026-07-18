@@ -180,7 +180,14 @@ export default spec('build', s => {
 			a.assert(normal);
 			a.assert(screenshot);
 			a.equal(normal.path, 'test.html');
-			a.ok(normal.source.toString().includes("new URL('./test.js'"));
+			const normalSource = normal.source.toString();
+			a.ok(normalSource.includes("new URL('./test.js'"));
+			a.ok(
+				normalSource.includes(
+					'<script type="text/plain" id="spec-browser-runner">',
+				),
+			);
+			a.ok(normalSource.includes("params.get('__cxlSpecBrowserFile')"));
 			a.equal(screenshot.path, 'test-screenshot.html');
 			a.ok(
 				screenshot.source

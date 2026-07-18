@@ -1,4 +1,5 @@
 import { spec } from '../spec/index.js';
+import '@cxl/ui';
 
 export default spec('iframe URL', s => {
 	s.test('resolves relative URLs from browser document URLs', a => {

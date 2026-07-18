@@ -82,10 +82,6 @@ interface FrameMessage {
 	error?: string;
 }
 
-interface TestModule {
-	default: Test;
-}
-
 const FRAME_FILE_PARAMETER = '__cxlSpecBrowserFile';
 const FRAME_TARGET_PARAMETER = '__cxlSpecBrowserTarget';
 
@@ -460,15 +456,6 @@ class BrowserRunner {
 	}
 
 	async run(targetPath?: string) {
-		const params = new URLSearchParams(location.hash.slice(1));
-		const testFile = params.get(FRAME_FILE_PARAMETER);
-		if (testFile) {
-			await this.runFrame(
-				testFile,
-				params.get(FRAME_TARGET_PARAMETER) || undefined,
-			);
-			return;
-		}
 		if (this.testFile) await this.runSuite(undefined, targetPath);
 		else await Promise.all(this.suites?.map(suite => this.runSuite(suite)) ?? []);
 		if (!page.parentNode) {
@@ -476,24 +463,6 @@ class BrowserRunner {
 				onClick(this, ev).catch(e => console.error(e));
 			});
 			document.body.appendChild(page);
-		}
-	}
-
-	async runFrame(testFile: string, targetPath?: string) {
-		try {
-			window.__cxlRunner = data => parent.__cxlRunner(data);
-			const module: TestModule = await import(testFile);
-			const suite = module.default;
-			await suite.run(undefined, targetPath);
-			parent.postMessage(
-				{ type: 'spec-browser-result', result: suite.toJSON() },
-				location.origin,
-			);
-		} catch (e) {
-			parent.postMessage(
-				{ type: 'spec-browser-result', error: String(e) },
-				location.origin,
-			);
 		}
 	}
 }

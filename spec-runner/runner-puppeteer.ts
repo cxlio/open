@@ -275,7 +275,11 @@ function virtualFileServer(
 				await req.respond({
 					status: 200,
 					contentType:
-						ext === '.js' ? 'text/javascript' : 'text/plain',
+						ext === '.js'
+							? 'text/javascript'
+							: ext === '.html'
+								? 'text/html'
+								: 'text/plain',
 					body,
 				});
 			} else {

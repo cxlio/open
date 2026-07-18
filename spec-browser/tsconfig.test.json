@@ -3,6 +3,7 @@
 	"files": [
 		"test.ts",
 		"isolation-fixture.ts",
+		"url-fixture.ts",
 		"viewport-fixture.ts"
 	],
 	"references": [

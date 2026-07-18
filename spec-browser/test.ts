@@ -23,11 +23,23 @@ export default spec('tester', s => {
 		a.ok(result.tests[0]?.results.every(result => result.success));
 	});
 
+	s.test('resolves relative URLs from the iframe document', async a => {
+		const testFile = new URL('./url-fixture.js', import.meta.url).href;
+		const result = await runTestFile(testFile);
+		a.ok(result.tests[0]?.results.every(result => result.success));
+	});
+
 	s.test('runs the configured test file', async a => {
 		const runner = new browserRunner({
 			testFile: new URL('./isolation-fixture.js', import.meta.url).href,
 		});
 		await runner.run('iframe fixture has a fresh global scope');
 		a.ok(document.body.textContent?.includes('iframe fixture'));
+		const assertions = document.querySelector(
+			'.specification-assertions',
+		) as HTMLDetailsElement | null;
+		a.ok(assertions);
+		a.equal(assertions?.open, false);
+		a.ok(assertions?.textContent?.includes('assertions'));
 	});
 });

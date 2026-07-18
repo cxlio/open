@@ -1,11 +1,8 @@
 import type { JsonResult, Result, RunnerCommand, Test } from '../spec';
-import type { TestResult } from '../spec-runner/report';
 import {
-	Alert,
 	Component,
 	Page,
 	Layout,
-	T,
 	attribute,
 	component,
 	css,
@@ -35,10 +32,21 @@ interface RunnerConfig {
 }
 
 theme.globalCss += `
-c-t[font=h1] { font-size: 24px; line-height: 24px; margin: 24px 0; }
-c-t[font=h2] { font-size: 22px; line-height: 22px; margin: 22px 0; }
-c-t[font=h3] { font-size: 20px; line-height: 20px; margin: 20px 0; }
-c-t[font=h4] { font-size: 18px; line-height: 18px; margin: 18px 0; }
+.specification { max-width: 960px; margin: 48px auto; }
+.specification-header { border-bottom: 2px solid var(--cxl-color-outline, #777); margin-bottom: 32px; padding-bottom: 16px; }
+.specification-header h1 { margin: 0 0 8px; }
+.specification-summary { color: var(--cxl-color-on-surface-variant, #555); margin: 0; }
+.specification-section { border-left: 2px solid var(--cxl-color-outline-variant, #ddd); margin: 24px 0; padding-left: 20px; }
+.specification-section h2, .specification-section h3, .specification-section h4, .specification-section h5, .specification-section h6 { margin: 0 0 12px; }
+.specification-section a { color: inherit; text-decoration: none; }
+.specification-section a:hover { text-decoration: underline; }
+.specification-evidence { margin: 0; padding-left: 28px; }
+.specification-evidence > li { border-top: 1px solid var(--cxl-color-outline-variant, #ddd); padding: 10px 0; }
+.specification-evidence > li::marker { color: var(--cxl-color-primary, #1769aa); font-weight: 700; }
+.specification-evidence .failure { color: var(--cxl-color-error, #b3261e); }
+.specification-evidence pre { overflow: auto; white-space: pre-wrap; }
+.specification-assertions { margin-top: 12px; }
+.specification-assertions > summary { cursor: pointer; color: var(--cxl-color-on-surface-variant, #555); }
 `;
 
 window.__cxlRunner = data => {
@@ -74,35 +82,27 @@ interface FrameMessage {
 	error?: string;
 }
 
-function frameSource(testFile: string, targetPath?: string) {
-	const importmap = document.querySelector('script[type="importmap"]')?.textContent;
-	const config = JSON.stringify({
-		testFile,
-		targetPath,
-		parentOrigin: location.origin,
-	}).replace(/</g, '\\u003c');
-	return `<!DOCTYPE html>
-<base href="${location.href}">
-${importmap ? `<script type="importmap">${importmap}</script>` : ''}
-<script type="module">
-	const config = ${config};
-	window.__cxlRunner = data => parent.__cxlRunner(data);
-	try {
-		const suite = (await import(config.testFile)).default;
-		await suite.run(undefined, config.targetPath);
-		parent.postMessage({ type: 'spec-browser-result', result: suite.toJSON() }, config.parentOrigin);
-	} catch (e) {
-		parent.postMessage({ type: 'spec-browser-result', error: String(e) }, config.parentOrigin);
-	}
-</script>`;
+interface TestModule {
+	default: Test;
 }
+
+const FRAME_FILE_PARAMETER = '__cxlSpecBrowserFile';
+const FRAME_TARGET_PARAMETER = '__cxlSpecBrowserTarget';
 
 export function runTestFile(testFile: string, targetPath?: string) {
 	return new Promise<BrowserTestResult>((resolve, reject) => {
 		const frame = document.createElement('iframe');
 		frame.style.cssText =
 			'position:fixed;inset:0;z-index:-1;width:100vw;height:100vh;border:0;pointer-events:none';
-		frame.srcdoc = frameSource(testFile, targetPath);
+		const frameUrl =
+			location.pathname === '/'
+				? new URL('./test.html', document.baseURI)
+				: new URL(location.href);
+		const params = new URLSearchParams([[FRAME_FILE_PARAMETER, testFile]]);
+		if (targetPath)
+			params.set(FRAME_TARGET_PARAMETER, targetPath);
+		frameUrl.hash = params.toString();
+		frame.src = frameUrl.href;
 
 		const onMessage = (ev: MessageEvent<FrameMessage>) => {
 			if (ev.source !== frame.contentWindow) return;
@@ -119,59 +119,17 @@ export function runTestFile(testFile: string, targetPath?: string) {
 }
 
 const output = tsx(Layout, { type: 'block', center: true });
+output.className = 'specification';
 const page = tsx(
 	Page,
 	{},
 	tsx(
 		'style',
 		undefined,
-		`
-.thumb{vertical-align:middle;display:inline-block;overflow:hidden;width:320px;position:relative;vertical-align:top}
-body {tab-size:4}
-`,
+		`.thumb{display:inline-block;overflow:hidden;width:320px;position:relative;vertical-align:top} body {tab-size:4}`,
 	),
 	output,
 );
-
-function group(
-	testPath: string,
-	title: string,
-	level: number | undefined,
-	children: Node[],
-) {
-	if (level === undefined) output.append(tsx('p', {}, title), ...children);
-	else {
-		const link = tsx('a', { href: '#' }, title);
-		link.dataset.test = testPath;
-		const head = tsx(T, { font: headingFont(level) }, link);
-		const ol = tsx('ol', undefined, children);
-
-		if (level > 1) {
-			const li = tsx('li', undefined, head);
-			li.append(ol);
-			output.append(li);
-		} else output.append(head, ol);
-	}
-}
-
-function groupEnd() {}
-
-function headingFont(level: number) {
-	switch (level) {
-		case 2:
-			return 'h2';
-		case 3:
-			return 'h3';
-		case 4:
-			return 'h4';
-		case 5:
-			return 'h5';
-		case 6:
-			return 'h6';
-		default:
-			return 'h1';
-	}
-}
 
 const ENTITIES_REGEX = /[&<>]/g,
 	ENTITIES_MAP: Record<string, string> = {
@@ -187,38 +145,13 @@ export function escapeHtml(str: string) {
 	);
 }
 
-function error(msg: string | Error) {
-	if (msg instanceof Error) {
-		output.append(
-			tsx(
-				Alert,
-				{ color: 'error' },
-				msg.message,
-				tsx('pre', undefined, msg.stack ?? ''),
-			),
-		);
-	} else output.append(tsx(Alert, { color: 'error' }, msg));
-}
-
-function success(r: TestResult): string {
-	return r.message ?? '';
-}
-
-function failure(r: TestResult): string {
-	printError(r);
-	return '';
-}
-
-function printError(fail: Result) {
-	const msg = fail.failureMessage;
-	console.error(msg);
-	if (fail.stack) console.error(fail.stack);
-	error(msg);
-}
-
 function printResult(result: Result, baselinePath = 'spec') {
-	const div = tsx('div');
-	div.append(result.success ? success(result) : failure(result));
+	const div = tsx('div', {
+		className: result.success ? 'success' : 'failure',
+	});
+	div.append(result.success ? result.message ?? '' : result.failureMessage);
+	if (!result.success && result.stack)
+		div.append(tsx('pre', undefined, result.stack));
 
 	const data = result.data;
 	if (data?.type === 'figure') {
@@ -402,10 +335,52 @@ class BrowserRunner {
 			await suite.run();
 			result = suite;
 		}
-		this.renderTestReport(result);
+		this.renderSpecification(result);
 	}
 
-	renderTestReport(test: Test | BrowserTestResult, parentPath = '') {
+	renderSpecification(test: Test | BrowserTestResult) {
+		const summary = this.getSummary(test);
+		output.append(
+			tsx(
+				'header',
+				{ className: 'specification-header' },
+				tsx('h1', undefined, `Specification: ${test.name}`),
+				tsx(
+					'p',
+					{ className: 'specification-summary' },
+					`${summary.tests} requirements · ${summary.failures} failures`,
+				),
+			),
+		);
+		this.renderTestReport(test, '', 1, output);
+	}
+
+	getSummary(test: Test | BrowserTestResult): {
+		tests: number;
+		failures: number;
+	} {
+		const children = test.only.length ? test.only : test.tests;
+		return children.reduce(
+			(summary, child) => {
+				const childSummary = this.getSummary(child);
+				return {
+					tests: summary.tests + childSummary.tests,
+					failures: summary.failures + childSummary.failures,
+				};
+			},
+			{
+				tests: 1,
+				failures: test.results.filter(result => !result.success).length,
+			},
+		);
+	}
+
+	renderTestReport(
+		test: Test | BrowserTestResult,
+		parentPath: string,
+		depth: number,
+		parent: Element,
+	) {
 		let failureCount = 0;
 		const results = test.results;
 
@@ -428,22 +403,72 @@ class BrowserRunner {
 		}
 
 		const testPath = parentPath ? `${parentPath} ${test.name}` : test.name;
-		group(
-			testPath,
-			`${test.name}${
-				failureCount > 0 ? ` (${failureCount} failures)` : ''
-			}`,
-			test.level,
-			results.map(r => printResult(r, this.baselinePath)),
+		const section = tsx('section', { className: 'specification-section' });
+		const link = tsx(
+			'a',
+			{ href: '#' },
+			`${test.name}${failureCount > 0 ? ` (${failureCount} failures)` : ''}`,
 		);
+		link.dataset.test = testPath;
+		section.append(tsx(headingTag(depth), undefined, link));
+		const evidence = results.filter(result => result.data?.type === 'figure');
+		if (evidence.length)
+			section.append(
+				tsx(
+					'ol',
+					{ className: 'specification-evidence' },
+					...evidence.map(result =>
+						tsx('li', undefined, printResult(result, this.baselinePath)),
+					),
+				),
+			);
+		const assertions = results.filter(result => result.data?.type !== 'figure');
+		if (assertions.length) {
+			const failures = assertions.filter(result => !result.success).length;
+			section.append(
+				tsx(
+					'details',
+					{
+						className: 'specification-assertions',
+						open: failures > 0,
+					},
+					tsx(
+						'summary',
+						undefined,
+						`${assertions.length} assertions${failures ? ` · ${failures} failures` : ''}`,
+					),
+					tsx(
+						'ol',
+						{ className: 'specification-evidence' },
+						...assertions.map(result =>
+							tsx('li', undefined, printResult(result, this.baselinePath)),
+						),
+					),
+				),
+			);
+		}
+		parent.append(section);
 
 		if (test.only.length)
-			test.only.forEach(test => this.renderTestReport(test, testPath));
-		else test.tests.forEach(test => this.renderTestReport(test, testPath));
-		groupEnd();
+			test.only.forEach(child =>
+				this.renderTestReport(child, testPath, depth + 1, section),
+			);
+		else
+			test.tests.forEach(child =>
+				this.renderTestReport(child, testPath, depth + 1, section),
+			);
 	}
 
 	async run(targetPath?: string) {
+		const params = new URLSearchParams(location.hash.slice(1));
+		const testFile = params.get(FRAME_FILE_PARAMETER);
+		if (testFile) {
+			await this.runFrame(
+				testFile,
+				params.get(FRAME_TARGET_PARAMETER) || undefined,
+			);
+			return;
+		}
 		if (this.testFile) await this.runSuite(undefined, targetPath);
 		else await Promise.all(this.suites?.map(suite => this.runSuite(suite)) ?? []);
 		if (!page.parentNode) {
@@ -452,6 +477,39 @@ class BrowserRunner {
 			});
 			document.body.appendChild(page);
 		}
+	}
+
+	async runFrame(testFile: string, targetPath?: string) {
+		try {
+			window.__cxlRunner = data => parent.__cxlRunner(data);
+			const module: TestModule = await import(testFile);
+			const suite = module.default;
+			await suite.run(undefined, targetPath);
+			parent.postMessage(
+				{ type: 'spec-browser-result', result: suite.toJSON() },
+				location.origin,
+			);
+		} catch (e) {
+			parent.postMessage(
+				{ type: 'spec-browser-result', error: String(e) },
+				location.origin,
+			);
+		}
+	}
+}
+
+function headingTag(depth: number) {
+	switch (Math.min(depth + 1, 6)) {
+		case 3:
+			return 'h3';
+		case 4:
+			return 'h4';
+		case 5:
+			return 'h5';
+		case 6:
+			return 'h6';
+		default:
+			return 'h2';
 	}
 }
 

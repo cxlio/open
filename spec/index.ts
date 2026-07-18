@@ -24,6 +24,9 @@ type FunctionsOf<T> = {
 	[K in keyof T]: T[K] extends (...args: any[]) => any ? T[K] : never;
 };
 
+type ParametersOf<T, K extends keyof T> = Parameters<FunctionsOf<T>[K]>;
+type ResultOf<T, K extends keyof T> = ReturnType<FunctionsOf<T>[K]>;
+
 export interface JsonResult {
 	name: string;
 	results: Result[];
@@ -117,11 +120,11 @@ let actionId = 0;
 const setTimeout = globalThis.setTimeout;
 const clearTimeout = globalThis.clearTimeout;
 
-function isIterator(val: Value): val is Iterator<Value> {
+function isIterator<T>(val: T): val is T & Iterator<Value> {
 	return typeof val === 'object' && val !== null && 'next' in val;
 }
 
-function isIterable(val: Value): val is Iterable<Value> {
+function isIterable<T>(val: T): val is T & Iterable<Value> {
 	return (
 		typeof val === 'object' &&
 		val !== null &&
@@ -130,19 +133,19 @@ function isIterable(val: Value): val is Iterable<Value> {
 	);
 }
 
-function isIterableOrIterator(val: Value): boolean {
+function isIterableOrIterator<T>(val: T): boolean {
 	return isIterator(val) || isIterable(val);
 }
 
-function isValueArray(val: Value): val is Value[] {
+function isValueArray<T>(val: T): val is T & Value[] {
 	return Array.isArray(val);
 }
 
-function isRecord(val: Value): val is Record<string, Value> {
+function isRecord<T>(val: T): val is T & Record<string, Value> {
 	return typeof val === 'object' && val !== null;
 }
 
-function getIterator(val: Value): Iterator<Value> {
+function getIterator<T>(val: T): Iterator<Value> {
 	if (isIterator(val)) return val;
 	if (isIterable(val)) return val[Symbol.iterator]();
 	throw new Error('Value is not iterable');
@@ -211,7 +214,7 @@ function toPromise<T>(
 	);
 }
 
-function inspect(val: Value): string {
+function inspect<T>(val: T): string {
 	if (typeof val === 'string') return '"' + val + '"';
 	if (typeof Element !== 'undefined' && val instanceof Element)
 		return val.outerHTML;
@@ -290,7 +293,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		});
 	};
 
-	equal = (a: Value, b: Value, desc?: string) => {
+	equal = <T,>(a: T, b: T, desc?: string) => {
 		return this.ok(
 			a === b,
 			`${desc ? desc + ': ' : ''}${inspect(a)} should equal ${inspect(
@@ -311,11 +314,11 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		for (const i in valB) this.equal(valA[i], valB[i], desc);
 	};
 
-	equalPartial = (a: Value, b: Value, desc?: string) => {
+	equalPartial = <T,>(a: T, b: Partial<T>, desc?: string) => {
 		this.equalDeep(a, b, true, desc);
 	};
 
-	equalValues = (a: Value, b: Value, desc?: string) => {
+	equalValues = <T,>(a: T, b: T, desc?: string) => {
 		this.equalDeep(a, b, false, desc);
 	};
 
@@ -330,9 +333,10 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		} catch (e) {
 			success = true;
 			if (matchError)
-				this.equalPartial(
+				this.equalDeep(
 					typeof e === 'object' && e !== null ? e : String(e),
 					matchError,
+					true,
 				);
 		}
 		return this.ok(success, `Expected function to throw`);
@@ -408,8 +412,8 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		return fn;
 	};
 
-	spyFn = <A extends Value[], B, K extends PropertyKey>(
-		object: Record<K, (...args: A) => B>,
+	spyFn = <T extends object, K extends keyof FunctionsOf<T>>(
+		object: T & Record<K, FunctionsOf<T>[K]>,
 		method: K,
 	) => {
 		const spy = spyFn(object, method);
@@ -697,9 +701,9 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		return this.action({ type: 'tap', element });
 	};
 
-	protected equalDeep(
-		a: Value,
-		b: Value,
+	protected equalDeep<T, U>(
+		a: T,
+		b: U,
 		partial: boolean,
 		desc?: string,
 	) {
@@ -717,7 +721,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 			b === null ||
 			b === undefined
 		) {
-			return this.equal(
+			return this.equal<T | U>(
 				a,
 				b,
 				`${desc ? desc + ': ' : ''}Expected ${inspect(
@@ -734,7 +738,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 			typeof a === 'boolean' ||
 			typeof b === 'boolean'
 		) {
-			return this.equal(a, b, desc);
+			return this.equal<T | U>(a, b, desc);
 		}
 
 		if (isIterableOrIterator(a) && isIterableOrIterator(b)) {
@@ -745,7 +749,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 			return this.equalObject(a, b, partial, desc);
 		}
 
-		this.equal(
+		this.equal<T | U>(
 			a,
 			b,
 			`${desc ? desc + ': ' : ''}Expected ${inspect(
@@ -1046,15 +1050,15 @@ export function mockFn<A extends Value[], B>(
 	return result;
 }
 
-function spyFn<A extends Value[], B, K extends PropertyKey>(
-	object: Record<K, (...args: A) => B>,
+function spyFn<T extends object, K extends keyof FunctionsOf<T>>(
+	object: T & Record<K, FunctionsOf<T>[K]>,
 	method: K,
 ) {
-	const sub = new Subject<SpyFn<A, B>>();
+	const sub = new Subject<SpyFn<ParametersOf<T, K>, ResultOf<T, K>>>();
 	const originalFn = object[method];
-	const spy: Spy<SpyFn<A, B>> = {
+	const spy: Spy<SpyFn<ParametersOf<T, K>, ResultOf<T, K>>> = {
 		destroy() {
-			object[method] = originalFn;
+			Reflect.set(object, method, originalFn);
 			sub.complete();
 		},
 		then(resolve, reject) {
@@ -1073,13 +1077,16 @@ function spyFn<A extends Value[], B, K extends PropertyKey>(
 	};
 	let called = 0;
 
-	const spyFn = function (this: Record<K, (...args: A) => B>, ...args: A) {
+	const spyFn = function (
+		this: T,
+		...args: ParametersOf<T, K>
+	): ResultOf<T, K> {
 		called++;
 		const result = originalFn.apply(this, args);
 		sub.next((spy.lastEvent = { called, arguments: args, result }));
 		return result;
 	};
-	object[method] = spyFn;
+	Reflect.set(object, method, spyFn);
 
 	return spy;
 }

@@ -14,4 +14,3 @@ Browser test runner and HTML reporter for spec tests. Renders results, error sta
 ## Installation
 
 	npm install @cxl/spec-browser
-

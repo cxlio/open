@@ -1,4 +1,4 @@
-import type { Result, RunnerCommand, Test } from '../spec';
+import type { JsonResult, Result, RunnerCommand, Test } from '../spec';
 import type { TestResult } from '../spec-runner/report';
 import {
 	Alert,
@@ -18,12 +18,19 @@ import {
 
 declare global {
 	interface Window {
-		__cxlRunner: (data: RunnerCommand) => void;
+		__cxlRunner: (data: RunnerCommand) => RunnerResult | Promise<RunnerResult>;
 	}
 }
 
+interface RunnerResult {
+	success: boolean;
+	message: string;
+	data?: RunnerCommand;
+}
+
 interface RunnerConfig {
-	suites: Test[];
+	testFile?: string;
+	suites?: Test[];
 	baselinePath?: string;
 }
 
@@ -57,6 +64,60 @@ window.__cxlRunner = data => {
 	};
 };
 
+interface BrowserTestResult extends JsonResult {
+	level?: number;
+}
+
+interface FrameMessage {
+	type: 'spec-browser-result';
+	result?: BrowserTestResult;
+	error?: string;
+}
+
+function frameSource(testFile: string, targetPath?: string) {
+	const importmap = document.querySelector('script[type="importmap"]')?.textContent;
+	const config = JSON.stringify({
+		testFile,
+		targetPath,
+		parentOrigin: location.origin,
+	}).replace(/</g, '\\u003c');
+	return `<!DOCTYPE html>
+<base href="${location.href}">
+${importmap ? `<script type="importmap">${importmap}</script>` : ''}
+<script type="module">
+	const config = ${config};
+	window.__cxlRunner = data => parent.__cxlRunner(data);
+	try {
+		const suite = (await import(config.testFile)).default;
+		await suite.run(undefined, config.targetPath);
+		parent.postMessage({ type: 'spec-browser-result', result: suite.toJSON() }, config.parentOrigin);
+	} catch (e) {
+		parent.postMessage({ type: 'spec-browser-result', error: String(e) }, config.parentOrigin);
+	}
+</script>`;
+}
+
+export function runTestFile(testFile: string, targetPath?: string) {
+	return new Promise<BrowserTestResult>((resolve, reject) => {
+		const frame = document.createElement('iframe');
+		frame.style.cssText =
+			'position:fixed;inset:0;z-index:-1;width:100vw;height:100vh;border:0;pointer-events:none';
+		frame.srcdoc = frameSource(testFile, targetPath);
+
+		const onMessage = (ev: MessageEvent<FrameMessage>) => {
+			if (ev.source !== frame.contentWindow) return;
+			window.removeEventListener('message', onMessage);
+			frame.remove();
+			if (ev.data.error) reject(new Error(ev.data.error));
+			else if (ev.data.result) resolve(ev.data.result);
+			else reject(new Error('Test iframe returned no result'));
+		};
+
+		window.addEventListener('message', onMessage);
+		document.body.append(frame);
+	});
+}
+
 const output = tsx(Layout, { type: 'block', center: true });
 const page = tsx(
 	Page,
@@ -73,7 +134,7 @@ body {tab-size:4}
 );
 
 function group(
-	testId: number,
+	testPath: string,
 	title: string,
 	level: number | undefined,
 	children: Node[],
@@ -81,8 +142,8 @@ function group(
 	if (level === undefined) output.append(tsx('p', {}, title), ...children);
 	else {
 		const link = tsx('a', { href: '#' }, title);
-		link.dataset.test = `${testId}`;
-		const head = tsx(T, { font: `h${level}` as 'h1' }, link);
+		link.dataset.test = testPath;
+		const head = tsx(T, { font: headingFont(level) }, link);
 		const ol = tsx('ol', undefined, children);
 
 		if (level > 1) {
@@ -95,8 +156,25 @@ function group(
 
 function groupEnd() {}
 
+function headingFont(level: number) {
+	switch (level) {
+		case 2:
+			return 'h2';
+		case 3:
+			return 'h3';
+		case 4:
+			return 'h4';
+		case 5:
+			return 'h5';
+		case 6:
+			return 'h6';
+		default:
+			return 'h1';
+	}
+}
+
 const ENTITIES_REGEX = /[&<>]/g,
-	ENTITIES_MAP = {
+	ENTITIES_MAP: Record<string, string> = {
 		'&': '&amp;',
 		'<': '&lt;',
 		'>': '&gt;',
@@ -105,7 +183,7 @@ const ENTITIES_REGEX = /[&<>]/g,
 export function escapeHtml(str: string) {
 	return str.replace(
 		ENTITIES_REGEX,
-		e => ENTITIES_MAP[e as keyof typeof ENTITIES_MAP] || '',
+		e => ENTITIES_MAP[e] || '',
 	);
 }
 
@@ -156,28 +234,15 @@ function printResult(result: Result, baselinePath = 'spec') {
 	return div;
 }
 
-function findTest(tests: Test[], id: number): Test | void {
-	for (const test of tests) {
-		if (test.id === id) return test;
-		const childTest = findTest(test.tests, id);
-		if (childTest) return childTest;
-	}
-}
-
-async function onClick(suite: Test[], ev: Event) {
-	const testId = (ev.target as HTMLElement).dataset.test;
-	if (testId) {
+async function onClick(runner: BrowserRunner, ev: Event) {
+	if (!(ev.target instanceof HTMLElement)) return;
+	const testPath = ev.target.dataset.test;
+	if (testPath) {
 		ev.stopPropagation();
 		ev.preventDefault();
 
-		const test = findTest(suite, +testId);
-
-		if (test) {
-			console.log(`Running test "${test.name}"`);
-			test.results = [];
-			await test.run();
-			console.log(test.results);
-		}
+		console.log(`Running test "${testPath}"`);
+		await runner.run(testPath);
 	}
 }
 
@@ -319,28 +384,34 @@ component(ImageDiff, {
 });
 
 class BrowserRunner {
-	suites;
+	testFile?: string;
+	suites?: Test[];
 	baselinePath;
 
 	constructor(config: RunnerConfig) {
+		this.testFile = config.testFile;
 		this.suites = config.suites;
 		this.baselinePath = config.baselinePath;
 	}
 
-	async runSuite(suite: Test) {
-		await suite.run();
-		this.renderTestReport(suite);
+	async runSuite(suite?: Test | BrowserTestResult, targetPath?: string) {
+		let result: Test | BrowserTestResult;
+		if (this.testFile) result = await runTestFile(this.testFile, targetPath);
+		else {
+			if (!suite || !('run' in suite)) throw new Error('Missing test suite');
+			await suite.run();
+			result = suite;
+		}
+		this.renderTestReport(result);
 	}
 
-	renderTestReport(test: Test) {
+	renderTestReport(test: Test | BrowserTestResult, parentPath = '') {
 		let failureCount = 0;
-		const failures: TestResult[] = [];
 		const results = test.results;
 
 		results.forEach(r => {
 			if (r.success === false) {
 				failureCount++;
-				failures.push(r);
 			}
 		});
 
@@ -356,8 +427,9 @@ class BrowserRunner {
 			});
 		}
 
+		const testPath = parentPath ? `${parentPath} ${test.name}` : test.name;
 		group(
-			test.id,
+			testPath,
 			`${test.name}${
 				failureCount > 0 ? ` (${failureCount} failures)` : ''
 			}`,
@@ -366,17 +438,20 @@ class BrowserRunner {
 		);
 
 		if (test.only.length)
-			test.only.forEach((test: Test) => this.renderTestReport(test));
-		else test.tests.forEach((test: Test) => this.renderTestReport(test));
+			test.only.forEach(test => this.renderTestReport(test, testPath));
+		else test.tests.forEach(test => this.renderTestReport(test, testPath));
 		groupEnd();
 	}
 
-	async run() {
-		await Promise.all(this.suites.map(suite => this.runSuite(suite)));
-		document.body.addEventListener('click', ev => {
-			onClick(this.suites, ev).catch(e => console.error(e));
-		});
-		document.body.appendChild(page);
+	async run(targetPath?: string) {
+		if (this.testFile) await this.runSuite(undefined, targetPath);
+		else await Promise.all(this.suites?.map(suite => this.runSuite(suite)) ?? []);
+		if (!page.parentNode) {
+			document.body.addEventListener('click', ev => {
+				onClick(this, ev).catch(e => console.error(e));
+			});
+			document.body.appendChild(page);
+		}
 	}
 }
 

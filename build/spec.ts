@@ -53,12 +53,14 @@ export function generateEsmTestFile(
 <title>${pkgName} Test Suite</title>
 <script type="importmap">${importmap}</script>
 <script type="module">
-	import suite from '${testFile}';
 	${(browserRunner ??= readFileSync(
 		join(import.meta.dirname, 'spec-browser.js'),
 		'utf8',
 	))}
-	__cxlRunner({ type: 'run', suites: [suite], baselinePath: '../../${dirName}/spec' })
+	new BrowserRunner({
+		testFile: new URL('${testFile}', import.meta.url).href,
+		baselinePath: '../../${dirName}/spec',
+	}).run()
 </script>`);
 }
 

@@ -1,7 +1,9 @@
 {
 	"extends": "./tsconfig.json",
 	"files": [
-		"test.ts"
+		"test.ts",
+		"isolation-fixture.ts",
+		"viewport-fixture.ts"
 	],
 	"references": [
 		{

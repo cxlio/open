@@ -1,4 +1,4 @@
-import { spec } from '../spec/index.js';
+import { spec, TestApi } from '../spec/index.js';
 import {
 	buildOutputOptions,
 	buildTargets,
@@ -8,7 +8,7 @@ import {
 	formatTargetArtifactSummary,
 } from './builder.js';
 import { getPackageBuildOptions } from './npm.js';
-import { enforceCoverageGate } from './spec.js';
+import { enforceCoverageGate, generateTestFile } from './spec.js';
 import type { Package } from './npm.js';
 
 export default spec('build', s => {
@@ -151,6 +151,42 @@ export default spec('build', s => {
 
 		it.should('leave coverage undefined when unconfigured', a => {
 			a.equal(getPackageBuildOptions(pkg, pkg).coverage, undefined);
+		});
+	});
+
+	s.test('test file generation', it => {
+		const pkg = {
+			name: '@cxl/test',
+			version: '1.0.0',
+			private: true,
+			bugs: '',
+			repository: '',
+		} satisfies Package;
+
+		it.should('keep screenshot tests separate', async (a: TestApi) => {
+			const normal = await generateTestFile({
+				appId: 'test',
+				pkgJson: pkg,
+				rootPkg: pkg,
+			});
+			const screenshot = await generateTestFile({
+				appId: 'test',
+				pkgJson: pkg,
+				rootPkg: pkg,
+				testFile: './test-screenshot.js',
+				outFile: 'test-screenshot.html',
+			});
+
+			a.assert(normal);
+			a.assert(screenshot);
+			a.equal(normal.path, 'test.html');
+			a.ok(normal.source.toString().includes("new URL('./test.js'"));
+			a.equal(screenshot.path, 'test-screenshot.html');
+			a.ok(
+				screenshot.source
+					.toString()
+					.includes("new URL('./test-screenshot.js'"),
+			);
 		});
 	});
 });

@@ -95,6 +95,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 								pkgJson,
 								rootPkg,
 								testFile: './test-screenshot.js',
+								outFile: 'test-screenshot.html',
 							}),
 							concat(
 								fromAsync(async () => {

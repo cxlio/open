@@ -119,6 +119,7 @@ let actionId = 0;
 
 const setTimeout = globalThis.setTimeout;
 const clearTimeout = globalThis.clearTimeout;
+const DEFAULT_ASSERTION_MESSAGE = 'Expected value to be truthy';
 
 function isIterator<T>(val: T): val is T & Iterator<Value> {
 	return typeof val === 'object' && val !== null && 'next' in val;
@@ -276,7 +277,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		this.$test.onEvent('afterAll', fn);
 	};
 
-	ok = <T,>(condition: T, message?: string) => {
+	ok = <T,>(condition: T, message = DEFAULT_ASSERTION_MESSAGE) => {
 		this.$test.push({
 			success: !!condition,
 			message,
@@ -284,7 +285,10 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		});
 	};
 
-	assert = (condition: Value, message?: string): asserts condition => {
+	assert = (
+		condition: Value,
+		message = DEFAULT_ASSERTION_MESSAGE,
+	): asserts condition => {
 		if (!condition) throw new Error(message);
 		this.$test.push({
 			success: !!condition,

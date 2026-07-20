@@ -19,10 +19,23 @@ export default spec('build', s => {
 		});
 
 		it.should('exclude verbose flag from targets', a => {
-			a.equalValues(buildTargets(['test', '--verbose']), [
+			a.equalValues(buildTargets(['test', '--verbose'], ['test']), [
 				undefined,
 				'test',
 			]);
+		});
+
+		it.should('reject unknown target', a => {
+			a.throws(() => buildTargets(['tset'], ['test']), {
+				message: 'Unknown build target "tset". Available targets: test',
+			});
+		});
+
+		it.should('reject unknown option', a => {
+			a.throws(() => buildTargets(['--json'], ['test', 'lint']), {
+				message:
+					'Unknown build option "--json". Available targets: test, lint',
+			});
 		});
 
 		it.should('format artifact summary', a => {

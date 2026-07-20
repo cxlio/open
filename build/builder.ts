@@ -53,8 +53,21 @@ export function buildOutputOptions(
 	};
 }
 
-export function buildTargets(argv = process.argv.slice(2)) {
+export function buildTargets(
+	argv = process.argv.slice(2),
+	availableTargets?: readonly string[],
+) {
 	const targets = argv.filter(arg => arg !== '--verbose');
+	if (availableTargets) {
+		const available = new Set(availableTargets);
+		const unknown = targets.find(target => !available.has(target));
+		if (unknown) {
+			const type = unknown.startsWith('--') ? 'option' : 'target';
+			throw new Error(
+				`Unknown build ${type} "${unknown}". Available targets: ${[...available].join(', ')}`,
+			);
+		}
+	}
 	return [undefined, ...targets];
 }
 
@@ -95,8 +108,13 @@ export async function build(...targets: BuildConfiguration[]) {
 
 	if (options.verbose) appLog(`${pkg.name} ${pkg.version}`);
 
-	const runTargets = buildTargets();
 	try {
+		const runTargets = buildTargets(
+			process.argv.slice(2),
+			targets.flatMap(config =>
+				config.target ? [config.target] : [],
+			),
+		);
 		for (const targetId of runTargets) {
 			const artifacts: BuildArtifact[] = [];
 			for (const target of targets)
@@ -108,7 +126,8 @@ export async function build(...targets: BuildConfiguration[]) {
 				console.log(formatTargetArtifactSummary(targetId, artifacts));
 		}
 	} catch (e) {
-		if (!(e instanceof ReportedBuildError)) console.error(e);
+		if (!(e instanceof ReportedBuildError))
+			console.error(formatBuildError(e instanceof Error ? e : String(e)));
 		process.exit(1);
 	}
 }

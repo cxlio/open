@@ -15,7 +15,9 @@ import {
 
 declare global {
 	interface Window {
-		__cxlRunner: (data: RunnerCommand) => RunnerResult | Promise<RunnerResult>;
+		__cxlRunner: (
+			data: RunnerCommand,
+		) => RunnerResult | Promise<RunnerResult>;
 	}
 }
 
@@ -32,7 +34,7 @@ interface RunnerConfig {
 }
 
 theme.globalCss += `
-.specification { max-width: 960px; margin: 48px auto; }
+.specification { max-width: 960px; margin: 48px auto; width:100%; }
 .specification-header { border-bottom: 2px solid var(--cxl-color-outline, #777); margin-bottom: 32px; padding-bottom: 16px; }
 .specification-header h1 { margin: 0 0 8px; }
 .specification-summary { color: var(--cxl-color-on-surface-variant, #555); margin: 0; }
@@ -95,8 +97,7 @@ export function runTestFile(testFile: string, targetPath?: string) {
 				? new URL('./test.html', document.baseURI)
 				: new URL(location.href);
 		const params = new URLSearchParams([[FRAME_FILE_PARAMETER, testFile]]);
-		if (targetPath)
-			params.set(FRAME_TARGET_PARAMETER, targetPath);
+		if (targetPath) params.set(FRAME_TARGET_PARAMETER, targetPath);
 		frameUrl.hash = params.toString();
 		frame.src = frameUrl.href;
 
@@ -135,17 +136,14 @@ const ENTITIES_REGEX = /[&<>]/g,
 	};
 
 export function escapeHtml(str: string) {
-	return str.replace(
-		ENTITIES_REGEX,
-		e => ENTITIES_MAP[e] || '',
-	);
+	return str.replace(ENTITIES_REGEX, e => ENTITIES_MAP[e] || '');
 }
 
 function printResult(result: Result, baselinePath = 'spec') {
 	const div = tsx('div', {
 		className: result.success ? 'success' : 'failure',
 	});
-	div.append(result.success ? result.message ?? '' : result.failureMessage);
+	div.append(result.success ? (result.message ?? '') : result.failureMessage);
 	if (!result.success && result.stack)
 		div.append(tsx('pre', undefined, result.stack));
 
@@ -325,9 +323,11 @@ class BrowserRunner {
 
 	async runSuite(suite?: Test | BrowserTestResult, targetPath?: string) {
 		let result: Test | BrowserTestResult;
-		if (this.testFile) result = await runTestFile(this.testFile, targetPath);
+		if (this.testFile)
+			result = await runTestFile(this.testFile, targetPath);
 		else {
-			if (!suite || !('run' in suite)) throw new Error('Missing test suite');
+			if (!suite || !('run' in suite))
+				throw new Error('Missing test suite');
 			await suite.run();
 			result = suite;
 		}
@@ -407,20 +407,30 @@ class BrowserRunner {
 		);
 		link.dataset.test = testPath;
 		section.append(tsx(headingTag(depth), undefined, link));
-		const evidence = results.filter(result => result.data?.type === 'figure');
+		const evidence = results.filter(
+			result => result.data?.type === 'figure',
+		);
 		if (evidence.length)
 			section.append(
 				tsx(
 					'ol',
 					{ className: 'specification-evidence' },
 					...evidence.map(result =>
-						tsx('li', undefined, printResult(result, this.baselinePath)),
+						tsx(
+							'li',
+							undefined,
+							printResult(result, this.baselinePath),
+						),
 					),
 				),
 			);
-		const assertions = results.filter(result => result.data?.type !== 'figure');
+		const assertions = results.filter(
+			result => result.data?.type !== 'figure',
+		);
 		if (assertions.length) {
-			const failures = assertions.filter(result => !result.success).length;
+			const failures = assertions.filter(
+				result => !result.success,
+			).length;
 			section.append(
 				tsx(
 					'details',
@@ -437,7 +447,11 @@ class BrowserRunner {
 						'ol',
 						{ className: 'specification-evidence' },
 						...assertions.map(result =>
-							tsx('li', undefined, printResult(result, this.baselinePath)),
+							tsx(
+								'li',
+								undefined,
+								printResult(result, this.baselinePath),
+							),
 						),
 					),
 				),
@@ -457,7 +471,10 @@ class BrowserRunner {
 
 	async run(targetPath?: string) {
 		if (this.testFile) await this.runSuite(undefined, targetPath);
-		else await Promise.all(this.suites?.map(suite => this.runSuite(suite)) ?? []);
+		else
+			await Promise.all(
+				this.suites?.map(suite => this.runSuite(suite)) ?? [],
+			);
 		if (!page.parentNode) {
 			document.body.addEventListener('click', ev => {
 				onClick(this, ev).catch(e => console.error(e));

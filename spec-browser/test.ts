@@ -42,4 +42,16 @@ export default spec('tester', s => {
 		a.equal(assertions?.open, false);
 		a.ok(assertions?.textContent?.includes('assertions'));
 	});
+
+	s.test('renders specification prose as paragraph text', async a => {
+		const suite = spec('document', ({ p }) => {
+			p('Paragraph text', a => a.ok(true));
+		});
+		const runner = new browserRunner({ suites: [suite] });
+		await runner.run();
+		const prose = document.querySelector('.specification-prose');
+		a.equal(prose?.tagName, 'P');
+		a.equal(prose?.textContent, 'Paragraph text');
+		a.equal(prose?.querySelector('a'), null);
+	});
 });

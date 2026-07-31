@@ -34,14 +34,20 @@ interface RunnerConfig {
 }
 
 theme.globalCss += `
-.specification { max-width: 960px; margin: 48px auto; width:100%; }
-.specification-header { border-bottom: 2px solid var(--cxl-color-outline, #777); margin-bottom: 32px; padding-bottom: 16px; }
-.specification-header h1 { margin: 0 0 8px; }
-.specification-summary { color: var(--cxl-color-on-surface-variant, #555); margin: 0; }
-.specification-section { border-left: 2px solid var(--cxl-color-outline-variant, #ddd); margin: 24px 0; padding-left: 20px; }
-.specification-section h2, .specification-section h3, .specification-section h4, .specification-section h5, .specification-section h6 { margin: 0 0 12px; }
+.specification { box-sizing: border-box; max-width: 840px; margin: 64px auto 96px; padding: 0 32px; width: 100%; }
+.specification-header { border-bottom: 1px solid var(--cxl-color-outline-variant, #ddd); margin-bottom: 48px; padding-bottom: 24px; }
+.specification-header h1 { font-size: 2.25rem; letter-spacing: -0.025em; line-height: 1.15; margin: 0 0 12px; }
+.specification-summary { color: var(--cxl-color-on-surface-variant, #555); font-size: 0.9375rem; margin: 0; }
+.specification-section { margin: 32px 0; }
+.specification-section .specification-section { margin: 24px 0 0; }
+.specification-section h2, .specification-section h3, .specification-section h4, .specification-section h5, .specification-section h6 { line-height: 1.3; margin: 0 0 12px; }
+.specification-section h2 { border-bottom: 1px solid var(--cxl-color-outline-variant, #ddd); font-size: 1.5rem; padding-bottom: 10px; }
+.specification-section h3 { font-size: 1.25rem; }
+.specification-section h4 { font-size: 1.0625rem; }
+.specification-section h5, .specification-section h6 { font-size: 1rem; }
 .specification-section a { color: inherit; text-decoration: none; }
 .specification-section a:hover { text-decoration: underline; }
+.specification-prose { line-height: 1.7; margin: 0 0 16px; }
 .specification-evidence { margin: 0; padding-left: 28px; }
 .specification-evidence > li { border-top: 1px solid var(--cxl-color-outline-variant, #ddd); padding: 10px 0; }
 .specification-evidence > li::marker { color: var(--cxl-color-primary, #1769aa); font-weight: 700; }
@@ -376,6 +382,7 @@ class BrowserRunner {
 		parentPath: string,
 		depth: number,
 		parent: Element,
+		parentLevel?: number,
 	) {
 		let failureCount = 0;
 		const results = test.results;
@@ -400,13 +407,24 @@ class BrowserRunner {
 
 		const testPath = parentPath ? `${parentPath} ${test.name}` : test.name;
 		const section = tsx('section', { className: 'specification-section' });
-		const link = tsx(
-			'a',
-			{ href: '#' },
-			`${test.name}${failureCount > 0 ? ` (${failureCount} failures)` : ''}`,
-		);
-		link.dataset.test = testPath;
-		section.append(tsx(headingTag(depth), undefined, link));
+		if (
+			test.level === 0 ||
+			(test.level === undefined && parentLevel !== undefined)
+		)
+			section.append(
+				tsx('p', { className: 'specification-prose' }, test.name),
+			);
+		else {
+			const link = tsx(
+				'a',
+				{ href: '#' },
+				`${test.name}${failureCount > 0 ? ` (${failureCount} failures)` : ''}`,
+			);
+			link.dataset.test = testPath;
+			section.append(
+				tsx(headingTag(test.level ?? depth), undefined, link),
+			);
+		}
 		const evidence = results.filter(
 			result => result.data?.type === 'figure',
 		);
@@ -461,11 +479,23 @@ class BrowserRunner {
 
 		if (test.only.length)
 			test.only.forEach(child =>
-				this.renderTestReport(child, testPath, depth + 1, section),
+				this.renderTestReport(
+					child,
+					testPath,
+					depth + 1,
+					section,
+					test.level,
+				),
 			);
 		else
 			test.tests.forEach(child =>
-				this.renderTestReport(child, testPath, depth + 1, section),
+				this.renderTestReport(
+					child,
+					testPath,
+					depth + 1,
+					section,
+					test.level,
+				),
 			);
 	}
 

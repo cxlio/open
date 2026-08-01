@@ -48,6 +48,16 @@ Write report to a custom path:
 cxl-spec ./test.js --reportPath ./artifacts/test-report.json
 ```
 
+Run benchmarks directly:
+
+```sh
+cxl-spec ./test-benchmark.js --ignoreCoverage --baselinePath ./spec
+```
+
+Benchmark results are written into the JSON report. `--updateBaselines` stores
+the current environment in `benchmark.json` without removing baselines recorded
+for other environments.
+
 ### Feature list
 
 - **Two execution backends**

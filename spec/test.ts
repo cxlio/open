@@ -42,4 +42,31 @@ export default spec('spec', s => {
 
 		a.equal(spy.lastEvent?.arguments[0], settings);
 	});
+
+	s.test('benchmark', it => {
+		it.should('measure the current test', async a => {
+			await a.benchmark(() => 1, {
+				warmup: 0,
+				sampleTime: 1,
+				samples: 3,
+			});
+			const result = a.$test.results[0];
+			a.equal(result?.data?.type, 'benchmark');
+			if (result?.data?.type !== 'benchmark') return;
+			a.equal(result.data.values.length, 3);
+			a.ok(result.data.iterations > 0);
+			a.ok(result.data.median >= 0);
+		});
+
+		it.should('reject multiple measurements', async a => {
+			await a.benchmark(() => 1, {
+				warmup: 0,
+				sampleTime: 1,
+				samples: 1,
+			});
+			a.throws(() => a.benchmark(() => 1), {
+				message: 'benchmark() called multiple times',
+			});
+		});
+	});
 });

@@ -35,6 +35,26 @@ export interface JsonResult {
 	level?: number;
 	skipped?: boolean;
 }
+
+export interface BenchmarkOptions {
+	warmup?: number;
+	sampleTime?: number;
+	samples?: number;
+	maxRegression?: number;
+}
+
+export interface BenchmarkData {
+	type: 'benchmark';
+	iterations: number;
+	values: number[];
+	median: number;
+	mad: number;
+	p75: number;
+	p95: number;
+	operationsPerSecond: number;
+	options: Required<Omit<BenchmarkOptions, 'maxRegression'>> &
+		Pick<BenchmarkOptions, 'maxRegression'>;
+}
 interface Spy<EventT> {
 	lastEvent?: EventT;
 	destroy(): void;
@@ -103,7 +123,7 @@ export interface Result {
 	message?: string;
 	failureMessage: string;
 	concurrency?: number;
-	data?: FigureData;
+	data?: FigureData | BenchmarkData;
 	stack?: string;
 }
 
@@ -114,6 +134,90 @@ interface TestConfig {
 let lastTestId = 1;
 let testQueue: Promise<unknown> = Promise.resolve();
 let actionId = 0;
+
+const DEFAULT_BENCHMARK_OPTIONS = {
+	warmup: 250,
+	sampleTime: 50,
+	samples: 30,
+} as const;
+
+function percentile(values: number[], value: number) {
+	const index = (values.length - 1) * value;
+	const lower = Math.floor(index);
+	const upper = Math.ceil(index);
+	const lowerValue = values[lower] ?? 0;
+	const upperValue = values[upper] ?? lowerValue;
+	return lowerValue + (upperValue - lowerValue) * (index - lower);
+}
+
+function isPromiseLike(value: Value): value is PromiseLike<Value> {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		'then' in value &&
+		typeof value.then === 'function'
+	);
+}
+
+async function measureBenchmark(
+	run: () => Value | PromiseLike<Value>,
+	options: BenchmarkOptions,
+): Promise<BenchmarkData> {
+	const resolved = { ...DEFAULT_BENCHMARK_OPTIONS, ...options };
+	if (resolved.warmup < 0) throw new Error('Benchmark warmup must not be negative');
+	if (resolved.sampleTime <= 0)
+		throw new Error('Benchmark sampleTime must be positive');
+	if (!Number.isInteger(resolved.samples) || resolved.samples <= 0)
+		throw new Error('Benchmark samples must be a positive integer');
+
+	const first = run();
+	const asyncRun = isPromiseLike(first);
+	if (asyncRun) await first;
+
+	async function measure(iterations: number) {
+		const start = performance.now();
+		if (asyncRun) {
+			for (let i = 0; i < iterations; i++) await run();
+		} else {
+			for (let i = 0; i < iterations; i++) run();
+		}
+		return performance.now() - start;
+	}
+
+	const warmupEnd = performance.now() + resolved.warmup;
+	let iterations = 1;
+	let elapsed = 0;
+	do {
+		elapsed = await measure(iterations);
+		const ratio = resolved.sampleTime / Math.max(elapsed, 0.001);
+		iterations = Math.max(iterations + 1, Math.ceil(iterations * ratio));
+	} while (
+		performance.now() < warmupEnd ||
+		elapsed < resolved.sampleTime / 2
+	);
+
+	const values: number[] = [];
+	for (let i = 0; i < resolved.samples; i++)
+		values.push((await measure(iterations)) / iterations);
+
+	const sorted = [...values].sort((a, b) => a - b);
+	const median = percentile(sorted, 0.5);
+	const deviations = values
+		.map(value => Math.abs(value - median))
+		.sort((a, b) => a - b);
+
+	return {
+		type: 'benchmark',
+		iterations,
+		values,
+		median,
+		mad: percentile(deviations, 0.5),
+		p75: percentile(sorted, 0.75),
+		p95: percentile(sorted, 0.95),
+		operationsPerSecond: median ? 1000 / median : Infinity,
+		options: resolved,
+	};
+}
 
 const setTimeout = globalThis.setTimeout;
 const clearTimeout = globalThis.clearTimeout;
@@ -233,6 +337,7 @@ function matchesGrep(grep: RegExp, value: string) {
 }
 
 export abstract class TestApiBase<T extends TestApiBase<T>> {
+	private benchmarkCalled = false;
 	abstract createTest: (name: string, testFn: TestFn<T>) => Test<T>;
 
 	constructor(public $test: Test<T>) {}
@@ -279,6 +384,24 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 
 	afterAll = (fn: () => Promise<unknown> | void) => {
 		this.$test.onEvent('afterAll', fn);
+	};
+
+	benchmark = (
+		run: () => Value | PromiseLike<Value>,
+		options: BenchmarkOptions = {},
+	) => {
+		if (this.benchmarkCalled)
+			throw new Error('benchmark() called multiple times');
+		this.benchmarkCalled = true;
+		const measurement = testQueue.then(() => measureBenchmark(run, options));
+		testQueue = measurement.catch(() => undefined);
+		return measurement.then(data => {
+			this.$test.push({
+				success: true,
+				failureMessage: 'Benchmark completed',
+				data,
+			});
+		});
 	};
 
 	ok = <T,>(condition: T, message = DEFAULT_ASSERTION_MESSAGE) => {

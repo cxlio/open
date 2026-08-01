@@ -9,6 +9,7 @@
 -   Advanced time mocking for `setTimeout`, `setInterval`, and `requestAnimationFrame`.
 -   Actions like hover, tap, click, type, and press with runner command integration.
 -   Figure-based visual testing support.
+-   Calibrated synchronous and asynchronous browser benchmarks.
 -   Structured JSON result output for tests.
 
 ### Defining Tests
@@ -26,3 +27,21 @@ spec('Example test', async test => {
 	});
 });
 ```
+
+### Benchmarks
+
+Benchmark identity comes from the enclosing test path. The callback is repeated
+during warmup and sampling, so it must be safe to run multiple times.
+
+```ts
+import { spec } from '@cxl/spec';
+
+export default spec('compiler benchmarks', s => {
+	s.test('compile module', a =>
+		a.benchmark(() => compile(source)),
+	);
+});
+```
+
+Projects using `@cxl/build` place benchmarks in `test-benchmark.ts` and run them
+with `npm run build benchmark`.

@@ -131,7 +131,28 @@ function printDefaultReport(report: Report): void {
 	console.log(`tests: passed (${report.summary.testTotal})`);
 }
 
+function formatBenchmarkTime(value: number) {
+	if (value < 0.001) return `${(value * 1_000_000).toFixed(2)} ns/op`;
+	if (value < 1) return `${(value * 1000).toFixed(2)} µs/op`;
+	return `${value.toFixed(2)} ms/op`;
+}
+
+function printBenchmarks(report: Report) {
+	if (!report.benchmark) return;
+	for (const [name, value] of Object.entries(report.benchmark.benchmarks)) {
+		const variation = value.median ? (value.mad / value.median) * 100 : 0;
+		const change =
+			value.comparison.change === undefined
+				? ''
+				: `, ${value.comparison.change >= 0 ? '+' : ''}${value.comparison.change.toFixed(2)}%`;
+		console.log(
+			`${name}: ${formatBenchmarkTime(value.median)}, p95 ${formatBenchmarkTime(value.p95)}, ±${variation.toFixed(2)}% (${value.values.length} samples, ${value.comparison.status}${change})`,
+		);
+	}
+}
+
 export default function (report: Report, options: ReportOptions) {
 	if (options.verbose) printVerboseReport(report);
 	else printDefaultReport(report);
+	printBenchmarks(report);
 }

@@ -7,6 +7,7 @@
 	"type": "module",
 	"files": [
 		"index.ts",
+		"benchmark.ts",
 		"report.ts",
 		"runner.ts",
 		"runner-node.ts",

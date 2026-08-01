@@ -1,4 +1,5 @@
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import { writeFile } from 'fs/promises';
 import { extname, join, relative, resolve } from 'path';
 import * as ts from 'typescript';
 import { getPackageBuildOptions } from './npm.js';
@@ -224,6 +225,46 @@ export function runTests({
 					report.summary.coverage,
 					getPackageBuildOptions(rootPkg, pkgJson).coverage,
 				);
+		} finally {
+			process.chdir(cwd);
+		}
+	}).ignoreElements();
+}
+
+export function runBenchmarks({
+	appId,
+	outputDir,
+}: {
+	appId: string;
+	outputDir: string;
+}) {
+	return fromAsync(async () => {
+		if (!existsSync(resolve(outputDir, 'test-benchmark.js'))) return;
+		const { run: runSpec } = await import('../spec-runner/runner.js');
+		const { default: printReport } =
+			await import('../spec-runner/report-stdout.js');
+
+		const cwd = process.cwd();
+		const pkgJson = await readJson<Package>('package.json');
+		const rootPkg = await readJson<Package>('../package.json');
+		try {
+			process.chdir(outputDir);
+			const report = await runSpec({
+				node: false,
+				mjs: true,
+				vfsRoot: '../../',
+				entryFile: './test-benchmark.js',
+				ignoreCoverage: true,
+				updateBaselines: false,
+				baselinePath: `../../${appId}/spec`,
+				reportPath: 'benchmark-report.json',
+				importmap: generateImportMap(rootPkg, pkgJson),
+				sources: new Map(),
+				log: console.log.bind(console),
+			});
+			printReport(report, buildOutputOptions());
+			await writeFile('benchmark-report.json', JSON.stringify(report, null, 2));
+			if (!report.success) throw new Error('Benchmarks failed');
 		} finally {
 			process.chdir(cwd);
 		}

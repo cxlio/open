@@ -1,6 +1,15 @@
 import { spec } from '../spec/index.js';
+import type {
+	BenchmarkData,
+	JsonResult,
+} from '../spec/index.js';
 import browserRunner from './runner-puppeteer.js';
 import { Coverage, generateReport } from './report.js';
+import { processBenchmarks } from './benchmark.js';
+import { run } from './runner.js';
+import { mkdtemp, readFile, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const suite = {
 	name: 'suite',
@@ -16,6 +25,59 @@ const suite = {
 	only: [],
 	runTime: 0,
 	timeout: 1000,
+};
+
+const benchmarkOptions = {
+	warmup: 0,
+	sampleTime: 1,
+	samples: 3,
+	maxRegression: 10,
+};
+
+function benchmarkSuite(median: number, sampleTime = 1): JsonResult {
+	const data: BenchmarkData = {
+		type: 'benchmark',
+		iterations: 10,
+		values: [median, median, median],
+		median,
+		mad: 0,
+		p75: median,
+		p95: median,
+		operationsPerSecond: 1000 / median,
+		options: { ...benchmarkOptions, sampleTime },
+	};
+	return {
+		name: 'suite',
+		results: [],
+		tests: [
+			{
+				name: 'case',
+				results: [
+					{
+						success: true,
+						failureMessage: 'Benchmark completed',
+						data,
+					},
+				],
+				tests: [],
+				only: [],
+				runTime: 0,
+				timeout: 1000,
+			},
+		],
+		only: [],
+		runTime: 0,
+		timeout: 1000,
+	};
+}
+
+const environment = {
+	browser: 'Chrome/1',
+	platform: 'test',
+	architecture: 'arm64',
+	cpu: 'cpu-a',
+	gpu: 'gpu-a',
+	profile: 'default',
 };
 
 export default spec('tester', s => {
@@ -96,5 +158,69 @@ export default spec('tester', s => {
 			a.equal(report.summary.coverage?.blockCoveragePct, 37.5);
 			a.equal(report.summary.coverage?.functionCoveragePct, 33.33333333333333);
 		});
+	});
+
+	s.test('benchmark baselines', async a => {
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-benchmark-'));
+		try {
+			await processBenchmarks(benchmarkSuite(1), environment, dir, true);
+			await processBenchmarks(
+				benchmarkSuite(2),
+				{ ...environment, cpu: 'cpu-b' },
+				dir,
+				true,
+			);
+			const baseline = JSON.parse(
+				await readFile(join(dir, 'benchmark.json'), 'utf8'),
+			) as { environments: Record<string, unknown> };
+			a.equal(Object.keys(baseline.environments).length, 2);
+
+			const regressionSuite = benchmarkSuite(2);
+			const regression = await processBenchmarks(
+				regressionSuite,
+				environment,
+				dir,
+			);
+			a.equal(
+				regression?.benchmarks['suite > case']?.comparison.status,
+				'regressed',
+			);
+			a.equal(regressionSuite.tests[0]?.results[0]?.success, false);
+
+			const incompatible = await processBenchmarks(
+				benchmarkSuite(1, 2),
+				environment,
+				dir,
+			);
+			a.equal(
+				incompatible?.benchmarks['suite > case']?.comparison.status,
+				'incompatible',
+			);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	s.test('browser benchmark execution', async a => {
+		a.setTimeout(60000);
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-benchmark-browser-'));
+		try {
+			const report = await run({
+				node: false,
+				mjs: true,
+				entryFile: './test-benchmark-fixture.js',
+				vfsRoot: '../',
+				ignoreCoverage: true,
+				updateBaselines: false,
+				baselinePath: dir,
+				reportPath: 'benchmark-report.json',
+				sources: new Map(),
+				log: console.log.bind(console),
+			});
+			a.equal(report.success, true);
+			a.equal(Object.keys(report.benchmark?.benchmarks ?? {}).length, 2);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
 	});
 });

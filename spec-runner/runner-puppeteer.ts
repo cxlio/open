@@ -2,8 +2,13 @@ import { Browser, Page, HTTPRequest, CDPSession } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import { readFile, writeFile, mkdir, mkdtemp, rm } from 'fs/promises';
 import { basename, resolve, relative, join, extname } from 'path';
-import { tmpdir } from 'os';
+import { cpus, tmpdir } from 'os';
 import { resolveImport } from './resolve.js';
+import {
+	BenchmarkEnvironment,
+	hasBenchmarks,
+	processBenchmarks,
+} from './benchmark.js';
 
 import type {
 	FigureData,
@@ -58,6 +63,26 @@ async function handleConsole(msg: puppeteer.ConsoleMessage, app: SpecRunner) {
 
 async function openPage(browser: Browser) {
 	return await browser.newPage();
+}
+
+async function getBenchmarkEnvironment(
+	browser: Browser,
+	profile: string,
+): Promise<BenchmarkEnvironment> {
+	const session = await browser.target().createCDPSession();
+	try {
+		const { gpu } = await session.send('SystemInfo.getInfo');
+		return {
+			browser: await browser.version(),
+			platform: process.platform,
+			architecture: process.arch,
+			cpu: cpus()[0]?.model ?? '',
+			gpu: gpu.devices[0]?.deviceString ?? '',
+			profile,
+		};
+	} finally {
+		await session.detach();
+	}
 }
 
 async function createPage(
@@ -525,10 +550,20 @@ export default async function runPuppeteer(app: SpecRunner) {
 		app.log(`Puppeteer ${await browser.version()}`);
 
 		const { suite, coverage } = await createPage(app, browser, 0);
-		return generateReport(suite, coverage, {
+		const benchmark = hasBenchmarks(suite)
+			? await processBenchmarks(
+					suite,
+					await getBenchmarkEnvironment(browser, args.join(' ')),
+					app.baselinePath,
+					!!app.updateBaselines,
+				)
+			: undefined;
+		const report = await generateReport(suite, coverage, {
 			entryFile: app.entryFile,
 			expectedCoverageFiles: app.expectedCoverageFiles,
 		});
+		report.benchmark = benchmark;
+		return report;
 	} finally {
 		if (browser) await browser.close();
 		await rm(userDataDir, { recursive: true, force: true });

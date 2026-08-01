@@ -17,7 +17,7 @@ import { file, copyDir } from './file.js';
 import { eslintTsconfig } from './lint.js';
 import { TsconfigJson, tsconfig } from './tsc.js';
 import { buildDocs } from './docs.js';
-import { generateTestFile, runTests } from './spec.js';
+import { generateTestFile, runBenchmarks, runTests } from './spec.js';
 import { audit } from './audit.js';
 
 import { Package, publishNpm } from './npm.js';
@@ -83,6 +83,11 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					node: !isBrowser,
 				}),
 			],
+		},
+		{
+			target: 'benchmark',
+			outputDir,
+			tasks: [runBenchmarks({ appId, outputDir })],
 		},
 		...(hasScreenshotTests
 			? [

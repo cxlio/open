@@ -1,4 +1,9 @@
-import type { JsonResult, FigureData } from '../spec/index.js';
+import type {
+	BenchmarkData,
+	JsonResult,
+	FigureData,
+} from '../spec/index.js';
+import type { BenchmarkReport } from './benchmark.js';
 import { basename } from 'path';
 
 export interface TestResult {
@@ -6,7 +11,7 @@ export interface TestResult {
 	failureMessage: string;
 	message?: string;
 	stack?: string;
-	data?: FigureData;
+	data?: FigureData | BenchmarkData;
 }
 
 export interface CoverageRange {
@@ -62,6 +67,7 @@ export interface Report {
 	summary: ReportSummary;
 	testReport: TestReport;
 	coverage?: TestCoverageReport[];
+	benchmark?: BenchmarkReport;
 }
 
 export interface ReportOptions {

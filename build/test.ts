@@ -8,7 +8,11 @@ import {
 	formatTargetArtifactSummary,
 } from './builder.js';
 import { getPackageBuildOptions } from './npm.js';
-import { enforceCoverageGate, generateTestFile } from './spec.js';
+import {
+	enforceCoverageGate,
+	generateTestFile,
+	runBenchmarks,
+} from './spec.js';
 import type { Package } from './npm.js';
 
 export default spec('build', s => {
@@ -208,5 +212,13 @@ export default spec('build', s => {
 					.includes("new URL('./test-screenshot.js'"),
 			);
 		});
+	});
+
+	s.test('benchmark target', async a => {
+		await runBenchmarks({
+			appId: 'missing-benchmark',
+			outputDir: '../dist/missing-benchmark',
+		});
+		a.ok(true);
 	});
 });

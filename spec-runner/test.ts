@@ -163,12 +163,11 @@ export default spec('tester', s => {
 	s.test('benchmark baselines', async a => {
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-benchmark-'));
 		try {
-			await processBenchmarks(benchmarkSuite(1), environment, dir, true);
+			await processBenchmarks(benchmarkSuite(1), environment, dir);
 			await processBenchmarks(
 				benchmarkSuite(2),
 				{ ...environment, cpu: 'cpu-b' },
 				dir,
-				true,
 			);
 			const baseline = JSON.parse(
 				await readFile(join(dir, 'benchmark.json'), 'utf8'),

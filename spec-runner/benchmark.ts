@@ -137,6 +137,9 @@ export async function processBenchmarks(
 	const baseline = path ? await readBaseline(path) : emptyBaseline();
 	const environmentBaseline = baseline.environments[id];
 	const benchmarks: Record<string, BenchmarkResult> = {};
+	const current = Object.fromEntries(
+		Object.entries(collected).map(([name, value]) => [name, value.data]),
+	);
 
 	for (const [name, value] of Object.entries(collected)) {
 		const comparison = environmentBaseline
@@ -152,15 +155,18 @@ export async function processBenchmarks(
 		}
 	}
 
-	if (path && updateBaselines) {
-		baseline.environments[id] = {
-			fingerprint: environment,
-			benchmarks: Object.fromEntries(
-				Object.entries(collected).map(([name, value]) => [name, value.data]),
-			),
-		};
+	if (path && (updateBaselines || !environmentBaseline)) {
+		baseline.environments[id] = { fingerprint: environment, benchmarks: current };
 		await mkdir(baselinePath, { recursive: true });
 		await writeFile(path, JSON.stringify(baseline, null, 2));
+	} else if (path && environmentBaseline) {
+		const additions = Object.entries(current).filter(
+			([name]) => !environmentBaseline.benchmarks[name],
+		);
+		if (additions.length) {
+			Object.assign(environmentBaseline.benchmarks, Object.fromEntries(additions));
+			await writeFile(path, JSON.stringify(baseline, null, 2));
+		}
 	}
 
 	return {

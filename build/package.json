@@ -14,7 +14,8 @@
 	},
 	"exports": {
 		".": "./index.js",
-		"./cli.js": "./cli.js"
+		"./cli.js": "./cli.js",
+		"./eslint-config.js": "./eslint-config.js"
 	},
 	"dependencies": {
 		"@eslint/js": "^9.39.1",

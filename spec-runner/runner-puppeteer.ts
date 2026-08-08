@@ -532,7 +532,6 @@ export default async function runPuppeteer(app: SpecRunner) {
 		'--disable-renderer-backgrounding',
 		'--mute-audio', // avoid potentially different audio stack warnings
 		'--disable-extensions',
-		'--single-process',
 	];
 	if (app.disableSecurity) args.push('--disable-web-security');
 

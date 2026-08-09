@@ -1,6 +1,11 @@
-import { input, sh } from '../program/index.js';
+import { sh } from '../program/index.js';
 import { readFile } from 'fs/promises';
-import { /*checkBranchClean,*/ getBranch, getMainBranch } from './git.js';
+import {
+	checkBranchClean,
+	checkBranchUpToDate,
+	getBranch,
+	getMainBranch,
+} from './git.js';
 import { resolve } from 'path';
 
 export type License =
@@ -100,11 +105,33 @@ export async function testPackage(dir: string, distDir: string) {
 	}
 }
 
+export function npmPublishCommand(tag: string, dryRun = false) {
+	return `npm publish --access=public --tag ${tag}${dryRun ? ' --dry-run' : ''}`;
+}
+
+export function npmDistTagCommand(
+	name: string,
+	version: string,
+	tag: string,
+) {
+	return `npm dist-tag add ${name}@${version} ${tag}`;
+}
+
+export function npmUnpublishCommand(name: string, version: string) {
+	return `npm unpublish ${name}@${version}`;
+}
+
+function runNpmMutation(command: string, cwd?: string) {
+	return sh(command, { cwd, stdio: 'inherit' });
+}
+
 export async function publishNpm(dir: string, distDir: string) {
 	const branch = await getBranch(process.cwd());
 	const mainBranch = await getMainBranch(process.cwd());
 	if (branch !== mainBranch)
 		throw `Active branch "${branch}" is not main branch`;
+	await checkBranchClean(mainBranch, process.cwd());
+	await checkBranchUpToDate(mainBranch, process.cwd());
 
 	const pkg = await readPackage(`${dir}/package.json`);
 	const pkgName = pkg.name.split('/')[1];
@@ -129,32 +156,20 @@ export async function publishNpm(dir: string, distDir: string) {
 				: 'latest';
 		const removeVersion =
 			tag === 'alpha' ? info['dist-tags'].alpha : undefined;
-		const otp = await input({ prompt: 'NPM OTP: ', mask: true });
-		if (!otp) throw new Error('Invalid otp');
-
-		console.log(
-			await sh(`npm publish --access=public --tag ${tag} --otp ${otp}`, {
-				cwd: distDir,
-			}),
-		);
+		await runNpmMutation(npmPublishCommand(tag, true), distDir);
+		await runNpmMutation(npmPublishCommand(tag), distDir);
 
 		if (tag === 'beta' || tag === 'alpha') {
-			const otp2 = await input({ prompt: 'NPM OTP: ', mask: true });
 			const baseTag = `${pkg.version.split('.')[0]}-${tag}`;
-			console.log(
-				await sh(
-					`npm dist-tag add ${pkg.name}@${pkg.version} ${baseTag} --otp ${otp2}`,
-				),
+			await runNpmMutation(
+				npmDistTagCommand(pkg.name, pkg.version, baseTag),
 			);
 		}
 
 		if (removeVersion) {
-			const otp = await input({ prompt: 'NPM OTP: ', mask: true });
 			try {
-				console.log(
-					await sh(
-						`npm unpublish ${pkg.name}@${removeVersion} --otp ${otp}`,
-					),
+				await runNpmMutation(
+					npmUnpublishCommand(pkg.name, removeVersion),
 				);
 			} catch (e) {
 				console.error(

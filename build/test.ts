@@ -1,4 +1,8 @@
 import { spec, TestApi } from '../spec/index.js';
+import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { sh } from '../program/index.js';
 import {
 	buildOutputOptions,
 	buildTargets,
@@ -7,13 +11,28 @@ import {
 	formatBuildError,
 	formatTargetArtifactSummary,
 } from './builder.js';
-import { getPackageBuildOptions } from './npm.js';
+import {
+	getPackageBuildOptions,
+	npmDistTagCommand,
+	npmPublishCommand,
+	npmUnpublishCommand,
+} from './npm.js';
 import {
 	enforceCoverageGate,
 	generateTestFile,
 	runBenchmarks,
 } from './spec.js';
 import type { Package } from './npm.js';
+import { checkBranchClean, checkBranchUpToDate } from './git.js';
+
+async function errorMessage(fn: () => Promise<unknown>) {
+	try {
+		await fn();
+	} catch (e) {
+		return e instanceof Error ? e.message : String(e);
+	}
+	throw new Error('Expected operation to fail');
+}
 
 export default spec('build', s => {
 	s.test('output', it => {
@@ -168,6 +187,75 @@ export default spec('build', s => {
 
 		it.should('leave coverage undefined when unconfigured', a => {
 			a.equal(getPackageBuildOptions(pkg, pkg).coverage, undefined);
+		});
+	});
+
+	s.test('npm publish authentication', it => {
+		it.should('delegate authentication to npm', a => {
+			a.equal(
+				npmPublishCommand('beta'),
+				'npm publish --access=public --tag beta',
+			);
+			a.equal(
+				npmPublishCommand('beta', true),
+				'npm publish --access=public --tag beta --dry-run',
+			);
+			a.equal(
+				npmDistTagCommand('@cxl/test', '1.2.3-beta.1', '1-beta'),
+				'npm dist-tag add @cxl/test@1.2.3-beta.1 1-beta',
+			);
+			a.equal(
+				npmUnpublishCommand('@cxl/test', '1.2.3-alpha.1'),
+				'npm unpublish @cxl/test@1.2.3-alpha.1',
+			);
+		});
+	});
+
+	s.test('npm publish git verification', it => {
+		it.should('reject dirty and unsynchronized repositories', async a => {
+			const baseDir = await mkdtemp(join(tmpdir(), 'cxl-build-git-'));
+			const remoteDir = join(baseDir, 'remote.git');
+			const dir = join(baseDir, 'project');
+			const otherDir = join(baseDir, 'other');
+			try {
+				await sh(`git init --bare ${remoteDir}`);
+				await sh('git symbolic-ref HEAD refs/heads/main', {
+					cwd: remoteDir,
+				});
+				await sh(`git init -b main ${dir}`);
+				await sh('git config user.email build@example.com', { cwd: dir });
+				await sh('git config user.name Build', { cwd: dir });
+				await writeFile(join(dir, 'file.txt'), 'initial');
+				await sh('git add file.txt && git commit -m initial', { cwd: dir });
+				await sh(`git remote add origin ${remoteDir}`, { cwd: dir });
+				await sh('git push -u origin main', { cwd: dir });
+
+				await checkBranchClean('main', dir);
+				await checkBranchUpToDate('main', dir);
+
+				await writeFile(join(dir, 'file.txt'), 'dirty');
+				a.equal(
+					await errorMessage(() => checkBranchClean('main', dir)),
+					'Not a clean repository',
+				);
+				await sh('git checkout -- file.txt', { cwd: dir });
+				await sh(`git clone ${remoteDir} ${otherDir}`);
+				await sh('git config user.email build@example.com', {
+					cwd: otherDir,
+				});
+				await sh('git config user.name Build', { cwd: otherDir });
+				await writeFile(join(otherDir, 'file.txt'), 'remote change');
+				await sh('git add file.txt && git commit -m changed', {
+					cwd: otherDir,
+				});
+				await sh('git push origin main', { cwd: otherDir });
+				a.equal(
+					await errorMessage(() => checkBranchUpToDate('main', dir)),
+					'Branch has not been merged with origin',
+				);
+			} finally {
+				await rm(baseDir, { recursive: true, force: true });
+			}
 		});
 	});
 

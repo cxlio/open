@@ -13,17 +13,18 @@ export async function getRefHash(cwd?: string) {
 	).trim();
 }
 
-export async function checkBranchClean(branch: string) {
-	try {
-		await sh(`git status > /dev/null; git diff-index --quiet ${branch}`);
-	} catch (e) {
-		throw new Error('Not a clean repository', { cause: e });
-	}
+export async function checkBranchClean(_branch: string, cwd?: string) {
+	const status = await sh('git status --porcelain', { cwd });
+	if (status.trim()) throw new Error('Not a clean repository');
 }
 
-export async function checkBranchUpToDate(branch: string) {
+export async function checkBranchUpToDate(branch: string, cwd?: string) {
 	try {
-		await sh(`git diff origin/${branch} ${branch} --quiet`);
+		const [local, remote] = await Promise.all([
+			sh(`git rev-parse ${branch}`, { cwd }),
+			sh(`git ls-remote --exit-code origin refs/heads/${branch}`, { cwd }),
+		]);
+		if (local.trim() !== remote.trim().split(/\s+/)[0]) throw new Error();
 	} catch (e) {
 		throw new Error('Branch has not been merged with origin', { cause: e });
 	}

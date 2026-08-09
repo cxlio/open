@@ -32,7 +32,7 @@
 	"homepage": "https://cxlio.github.io/docs/@cxl/build",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/cxlio/cxl.git",
+		"url": "git+https://github.com/cxlio/open.git",
 		"directory": "build"
 	}
 }

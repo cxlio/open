@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import * as cp from 'child_process';
-import * as esbuild from 'esbuild';
+import * as esbuild from 'esbuild-wasm';
 import * as ts from 'typescript';
 import { readJson } from '../program/index.js';
 import {

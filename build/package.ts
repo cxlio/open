@@ -5,7 +5,7 @@ import { file } from './file.js';
 import { execSync } from 'child_process';
 import { Output } from './builder.js';
 import { License, Package } from './npm.js';
-import * as esbuildApi from 'esbuild';
+import * as esbuildApi from 'esbuild-wasm';
 
 const SCRIPTDIR = process.cwd();
 

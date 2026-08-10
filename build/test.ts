@@ -14,6 +14,7 @@ import {
 import {
 	getPackageBuildOptions,
 	npmDistTagCommand,
+	npmMutationOptions,
 	npmPublishCommand,
 	npmUnpublishCommand,
 } from './npm.js';
@@ -208,6 +209,16 @@ export default spec('build', s => {
 				npmUnpublishCommand('@cxl/test', '1.2.3-alpha.1'),
 				'npm unpublish @cxl/test@1.2.3-alpha.1',
 			);
+		});
+
+		it.should('only inherit output in verbose mode', a => {
+			a.equalValues(npmMutationOptions(false, '/package'), {
+				cwd: '/package',
+			});
+			a.equalValues(npmMutationOptions(true, '/package'), {
+				cwd: '/package',
+				stdio: 'inherit',
+			});
 		});
 	});
 

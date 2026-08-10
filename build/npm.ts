@@ -1,5 +1,7 @@
 import { sh } from '../program/index.js';
 import { readFile } from 'fs/promises';
+import type { SpawnOptions } from 'child_process';
+import { buildOutputOptions } from './builder.js';
 import {
 	checkBranchClean,
 	checkBranchUpToDate,
@@ -121,8 +123,15 @@ export function npmUnpublishCommand(name: string, version: string) {
 	return `npm unpublish ${name}@${version}`;
 }
 
+export function npmMutationOptions(
+	verbose: boolean,
+	cwd?: string,
+): SpawnOptions {
+	return verbose ? { cwd, stdio: 'inherit' } : { cwd };
+}
+
 function runNpmMutation(command: string, cwd?: string) {
-	return sh(command, { cwd, stdio: 'inherit' });
+	return sh(command, npmMutationOptions(buildOutputOptions().verbose, cwd));
 }
 
 export async function publishNpm(dir: string, distDir: string) {

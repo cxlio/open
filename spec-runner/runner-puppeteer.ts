@@ -131,6 +131,20 @@ async function createPage(
 						failureMessage: 'Element',
 					};
 				});
+		} else if (type === 'keyDown' || type === 'keyUp') {
+			return element(cmd.element)
+				.then(el => el.focus())
+				.then(() =>
+					page.keyboard[type === 'keyDown' ? 'down' : 'up'](
+						cmd.value as puppeteer.KeyInput,
+					),
+				)
+				.then(() => {
+					return {
+						success: true,
+						failureMessage: 'Element',
+					};
+				});
 		} else if (type === 'drag') {
 			return Promise.all([element(cmd.element), element(cmd.target)])
 				.then(([element, target]) => {

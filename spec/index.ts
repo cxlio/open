@@ -83,7 +83,7 @@ export type RunnerAction =
 			element?: string | Element;
 	  }
 	| {
-			type: 'type' | 'press';
+			type: 'type' | 'press' | 'keyDown' | 'keyUp';
 			value: string;
 			element?: string | Element;
 	  }
@@ -100,7 +100,7 @@ export type RunnerCommand =
 			element: string;
 	  }
 	| {
-			type: 'type' | 'press';
+			type: 'type' | 'press' | 'keyDown' | 'keyUp';
 			value: string;
 			element: string;
 	  }

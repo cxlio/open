@@ -6,7 +6,8 @@
 	"files": [
 		"test.ts",
 		"test-benchmark-fixture.ts",
-		"test-drag-fixture.ts"
+		"test-drag-fixture.ts",
+		"test-keyboard-fixture.ts"
 	],
 	"references": [
 		{

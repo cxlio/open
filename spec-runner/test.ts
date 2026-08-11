@@ -238,4 +238,20 @@ export default spec('tester', s => {
 		});
 		a.equal(report.success, true);
 	});
+
+	s.test('browser keyboard execution', async a => {
+		a.setTimeout(60000);
+		const report = await run({
+			node: false,
+			mjs: true,
+			entryFile: './test-keyboard-fixture.js',
+			vfsRoot: '../',
+			ignoreCoverage: true,
+			updateBaselines: false,
+			reportPath: 'keyboard-report.json',
+			sources: new Map(),
+			log: console.log.bind(console),
+		});
+		a.equal(report.success, true);
+	});
 });

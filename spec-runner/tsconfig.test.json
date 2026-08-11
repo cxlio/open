@@ -1,6 +1,13 @@
 {
 	"extends": "./tsconfig.json",
-	"files": ["test.ts", "test-benchmark-fixture.ts"],
+	"compilerOptions": {
+		"lib": ["dom", "es2023"]
+	},
+	"files": [
+		"test.ts",
+		"test-benchmark-fixture.ts",
+		"test-drag-fixture.ts"
+	],
 	"references": [
 		{
 			"path": "."

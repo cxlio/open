@@ -86,6 +86,11 @@ export type RunnerAction =
 			type: 'type' | 'press';
 			value: string;
 			element?: string | Element;
+	  }
+	| {
+			type: 'drag';
+			element: string | Element;
+			target: string | Element;
 	  };
 
 export type RunnerCommand =
@@ -98,6 +103,11 @@ export type RunnerCommand =
 			type: 'type' | 'press';
 			value: string;
 			element: string;
+	  }
+	| {
+			type: 'drag';
+			element: string;
+			target: string;
 	  }
 	| {
 			type: 'testElement';
@@ -134,6 +144,15 @@ interface TestConfig {
 let lastTestId = 1;
 let testQueue: Promise<unknown> = Promise.resolve();
 let actionId = 0;
+
+function actionElement(
+	test: { readonly id: number; readonly dom: Element },
+	selector?: string | Element,
+) {
+	return selector instanceof Element
+		? `#${(selector.id ||= `dom${test.id}-${actionId++}`)}`
+		: `#${(test.dom.id ||= `dom${test.id}`)} ${selector ?? ''}`;
+}
 
 const DEFAULT_BENCHMARK_OPTIONS = {
 	warmup: 250,
@@ -812,12 +831,15 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 	};
 
 	action = (action: RunnerAction) => {
-		const selector = action.element;
-		const element =
-			selector instanceof Element
-				? `#${(selector.id ||= `dom${this.id}-${actionId++}`)}`
-				: `#${(this.dom.id ||= `dom${this.id}`)} ${selector ?? ''}`;
-		return __cxlRunner({ ...action, element });
+		const element = actionElement(this, action.element);
+		if (action.type !== 'drag')
+			return __cxlRunner({ ...action, element });
+
+		return __cxlRunner({
+			...action,
+			element,
+			target: actionElement(this, action.target),
+		});
 	};
 
 	proxy = (route: string, target: string) => {
@@ -830,6 +852,10 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 
 	tap = (element?: string | Element) => {
 		return this.action({ type: 'tap', element });
+	};
+
+	drag = (element: string | Element, target: string | Element) => {
+		return this.action({ type: 'drag', element, target });
 	};
 
 	protected equalDeep<T>(

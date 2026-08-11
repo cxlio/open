@@ -222,4 +222,20 @@ export default spec('tester', s => {
 			await rm(dir, { recursive: true, force: true });
 		}
 	});
+
+	s.test('browser drag execution', async a => {
+		a.setTimeout(60000);
+		const report = await run({
+			node: false,
+			mjs: true,
+			entryFile: './test-drag-fixture.js',
+			vfsRoot: '../',
+			ignoreCoverage: true,
+			updateBaselines: false,
+			reportPath: 'drag-report.json',
+			sources: new Map(),
+			log: console.log.bind(console),
+		});
+		a.equal(report.success, true);
+	});
 });

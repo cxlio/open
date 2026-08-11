@@ -91,6 +91,12 @@ async function createPage(
 	concurrency: number,
 ) {
 	const proxies = new Map<string, string>();
+	const element = (selector: string) =>
+		page.$(selector).then(element => {
+			if (!element)
+				throw new Error(`Element for selector "${selector}" not found.`);
+			return element;
+		});
 
 	function cxlRunner(cmd: RunnerCommand): Promise<Result> | Result {
 		const type = cmd.type;
@@ -104,13 +110,8 @@ async function createPage(
 				};
 			}
 		} else if (type === 'hover' || type === 'tap' || type === 'click') {
-			return page
-				.$(cmd.element)
+			return element(cmd.element)
 				.then(el => {
-					if (!el)
-						throw new Error(
-							`Element for selector "${cmd.element}" not found.`,
-						);
 					return el[type]();
 				})
 				.then(() => {
@@ -120,14 +121,20 @@ async function createPage(
 					};
 				});
 		} else if (type === 'type' || type === 'press') {
-			return page
-				.$(cmd.element)
+			return element(cmd.element)
 				.then(el => {
-					if (!el)
-						throw new Error(
-							`Element for selector "${cmd.element}" not found.`,
-						);
 					return el[type](cmd.value as puppeteer.KeyInput);
+				})
+				.then(() => {
+					return {
+						success: true,
+						failureMessage: 'Element',
+					};
+				});
+		} else if (type === 'drag') {
+			return Promise.all([element(cmd.element), element(cmd.target)])
+				.then(([element, target]) => {
+					return target.drop(element);
 				})
 				.then(() => {
 					return {

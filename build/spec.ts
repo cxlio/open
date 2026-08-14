@@ -32,13 +32,16 @@ export function enforceCoverageGate(
 	if (!coverage) throw new Error('Coverage gate failed: missing coverage');
 
 	const failures: string[] = [];
-	if (
-		gate.blocks !== undefined &&
-		coverage.blockCoveragePct < gate.blocks
-	)
-		failures.push(
-			`blocks ${formatCoverage(coverage.blockCoveragePct)} < ${formatCoverage(gate.blocks)}`,
-		);
+	if (gate.blocks !== undefined) {
+		if (coverage.blockCoveragePct < gate.blocks)
+			failures.push(
+				`blocks ${formatCoverage(coverage.blockCoveragePct)} < ${formatCoverage(gate.blocks)}`,
+			);
+		else if (coverage.blockCoveragePct - gate.blocks > 1)
+			failures.push(
+				`blocks gate ${formatCoverage(gate.blocks)} is more than 1% below actual ${formatCoverage(coverage.blockCoveragePct)}`,
+			);
+	}
 
 	if (failures.length)
 		throw new Error(`Coverage gate failed: ${failures.join(', ')}`);

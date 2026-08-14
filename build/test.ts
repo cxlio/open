@@ -116,6 +116,18 @@ export default spec('build', s => {
 			a.ok(true);
 		});
 
+		it.should('pass when gate is one point below coverage', a => {
+			enforceCoverageGate(coverage, { blocks: 74 });
+			a.ok(true);
+		});
+
+		it.should('fail when gate is over one point below coverage', a => {
+			a.throws(() => enforceCoverageGate(coverage, { blocks: 73.99 }), {
+				message:
+					'Coverage gate failed: blocks gate 73.99% is more than 1% below actual 75.00%',
+			});
+		});
+
 		it.should('fail configured block threshold', a => {
 			a.throws(() =>
 				enforceCoverageGate(coverage, { blocks: 80 }),

@@ -124,6 +124,7 @@ export interface FigureData {
 	type: 'figure';
 	name: string;
 	html: string;
+	actual?: string;
 	baseline?: string;
 	domId: string;
 }

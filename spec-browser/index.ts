@@ -8,6 +8,7 @@ import {
 	css,
 	get,
 	merge,
+	onVisible,
 	styleAttribute,
 	tsx,
 	theme,
@@ -24,6 +25,7 @@ declare global {
 interface RunnerResult {
 	success: boolean;
 	message: string;
+	failureMessage?: string;
 	data?: RunnerCommand;
 }
 
@@ -55,15 +57,46 @@ theme.globalCss += `
 .specification-evidence pre { overflow: auto; white-space: pre-wrap; }
 .specification-assertions { margin-top: 12px; }
 .specification-assertions > summary { cursor: pointer; color: var(--cxl-color-on-surface-variant, #555); }
+.screenshot-evidence { color: var(--cxl-color-on-surface, #222); margin: 0; }
+.screenshot-evidence > figcaption { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; margin-bottom: 12px; }
+.screenshot-evidence-title { font-weight: 700; }
+.screenshot-status { color: var(--cxl-color-on-surface-variant, #555); font-size: 0.875rem; }
+.failure .screenshot-status { color: var(--cxl-color-error, #b3261e); }
+.screenshot-comparison { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
+.screenshot-passing-image { display: block; height: auto; margin: 0 auto; max-width: 100%; }
+.screenshot-panel { background: var(--cxl-color-surface-container-low, #f7f7f7); border: 1px solid var(--cxl-color-outline-variant, #ddd); border-radius: 4px; margin: 0; min-width: 0; overflow: hidden; }
+.screenshot-panel > figcaption { color: var(--cxl-color-on-surface-variant, #555); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; padding: 8px 10px; text-transform: uppercase; }
+.screenshot-panel > img, .screenshot-panel > spec-image-diff { border-top: 1px solid var(--cxl-color-outline-variant, #ddd); display: block; width: 100%; }
+.screenshot-panel > img { height: auto; }
+.screenshot-preview { margin-top: 12px; }
+.screenshot-preview button { background: none; border: 0; color: var(--cxl-color-primary, #1769aa); cursor: pointer; font: inherit; padding: 4px 0; text-decoration: underline; }
+.screenshot-preview iframe { background: white; border: 1px solid var(--cxl-color-outline-variant, #ddd); box-sizing: border-box; display: block; height: 320px; margin-top: 8px; width: 100%; }
 `;
 
-window.__cxlRunner = data => {
-	if (data.type === 'figure')
-		return {
-			success: true,
-			message: 'Screenshot should match baseline',
-			data,
-		};
+let browserBaselinePath = 'spec';
+
+window.__cxlRunner = async data => {
+	if (data.type === 'figure') {
+		const actual = (data.actual ??= `spec/${data.name}.png`);
+		const baseline = (data.baseline ??= `${browserBaselinePath}/${data.name}.png`);
+		try {
+			const comparison = await imageDiff(actual, baseline);
+			const success = comparison.diffBytes === 0;
+			return {
+				success,
+				message: '',
+				failureMessage: 'Screenshot should match baseline',
+				data,
+			};
+		} catch {
+			return {
+				success: false,
+				message: '',
+				failureMessage: 'Screenshot comparison unavailable',
+				data,
+			};
+		}
+	}
 
 	if (data.type === 'run') {
 		new BrowserRunner(data).run().catch(e => console.error(e));
@@ -126,43 +159,135 @@ output.className = 'specification';
 const page = tsx(
 	Page,
 	{},
-	tsx(
-		'style',
-		undefined,
-		`.thumb{display:inline-block;overflow:hidden;width:320px;position:relative;vertical-align:top} body {tab-size:4}`,
-	),
+	tsx('style', undefined, 'body { tab-size: 4; }'),
 	output,
 );
 
-const ENTITIES_REGEX = /[&<>]/g,
+const ENTITIES_REGEX = /[&<>"]/g,
 	ENTITIES_MAP: Record<string, string> = {
 		'&': '&amp;',
 		'<': '&lt;',
 		'>': '&gt;',
+		'"': '&quot;',
 	};
 
 export function escapeHtml(str: string) {
 	return str.replace(ENTITIES_REGEX, e => ENTITIES_MAP[e] || '');
 }
 
-function printResult(result: Result, baselinePath = 'spec') {
+function previewDocument(html: string, testFile?: string) {
+	const resources = Array.from(
+		document.head.querySelectorAll(
+			'link[rel="stylesheet"], script[type="importmap"], script[src]',
+		),
+	)
+		.map(node => node.outerHTML)
+		.join('\n');
+	const testModule = testFile
+		? `<script type="module">import ${JSON.stringify(testFile).replace(/</g, '\\u003c')}</script>`
+		: '';
+	return `<!doctype html><html><head><base href="${escapeHtml(document.baseURI)}">${resources}${testModule}</head><body>${html}</body></html>`;
+}
+
+function screenshotPanel(label: string, content: Element) {
+	return tsx(
+		'figure',
+		{ className: 'screenshot-panel' },
+		tsx('figcaption', undefined, label),
+		content,
+	);
+}
+
+function printFigureResult(
+	result: Result,
+	baselinePath = 'spec',
+	testFile?: string,
+) {
+	const data = result.data;
+	if (data?.type !== 'figure') throw new Error('Missing figure data');
+	const actual = data.actual ?? `spec/${data.name}.png`;
+	const baseline = data.baseline ?? `${baselinePath}/${data.name}.png`;
+	const screenshot = result.success
+		? tsx('img', {
+				className: 'screenshot-passing-image',
+				src: actual,
+				alt: `${data.name} screenshot`,
+			})
+		: tsx(
+				'div',
+				{ className: 'screenshot-comparison' },
+				screenshotPanel(
+					'Actual',
+					tsx('img', {
+						src: actual,
+						alt: `${data.name} actual screenshot`,
+					}),
+				),
+				screenshotPanel(
+					'Baseline',
+					tsx('img', {
+						src: baseline,
+						alt: `${data.name} baseline screenshot`,
+					}),
+				),
+				screenshotPanel(
+					'Difference',
+					tsx(ImageDiff, { src1: actual, src2: baseline }),
+				),
+			);
+	const preview = tsx(
+		'div',
+		{ className: 'screenshot-preview' },
+		tsx('button', { type: 'button' }, 'Preview HTML'),
+	);
+	const button = preview.querySelector('button');
+	button?.addEventListener('click', () => {
+		const existing = preview.querySelector('iframe');
+		if (existing) {
+			existing.hidden = !existing.hidden;
+			button.textContent = existing.hidden ? 'Preview HTML' : 'Hide preview';
+			return;
+		}
+		const frame = tsx('iframe', {
+			title: `${data.name} HTML preview`,
+		});
+		frame.setAttribute('sandbox', 'allow-same-origin allow-scripts');
+		frame.srcdoc = previewDocument(data.html, testFile);
+		preview.append(frame);
+		button.textContent = 'Hide preview';
+	});
+	const caption = tsx(
+		'figcaption',
+		undefined,
+		tsx('span', { className: 'screenshot-evidence-title' }, data.name),
+	);
+	const status = result.success ? result.message : result.failureMessage;
+	if (status)
+		caption.append(
+			tsx('span', { className: 'screenshot-status' }, status),
+		);
+
+	const figure = tsx(
+		'figure',
+		{
+			className: `screenshot-evidence ${result.success ? 'success' : 'failure'}`,
+		},
+		caption,
+		screenshot,
+		preview,
+	);
+	if (!result.success && result.stack)
+		figure.append(tsx('pre', undefined, result.stack));
+	return figure;
+}
+
+function printResult(result: Result) {
 	const div = tsx('div', {
 		className: result.success ? 'success' : 'failure',
 	});
 	div.append(result.success ? (result.message ?? '') : result.failureMessage);
 	if (!result.success && result.stack)
 		div.append(tsx('pre', undefined, result.stack));
-
-	const data = result.data;
-	if (data?.type === 'figure') {
-		div.append(
-			tsx('div', { className: 'thumb', innerHTML: data.html }),
-			tsx(ImageDiff, {
-				src1: `spec/${data.name}.png`,
-				src2: `${baselinePath}/${data.name}.png`,
-			}),
-		);
-	}
 
 	return div;
 }
@@ -222,14 +347,23 @@ export async function imageDataDiff(A: ImageData, B: ImageData) {
 	const diff = new Uint8ClampedArray(size);
 	let diffBytes = 0;
 
-	for (let i = 0; i < size; i += 4) {
-		const match =
-			A.data[i] === B.data[i] &&
-			A.data[i + 1] === B.data[i + 1] &&
-			A.data[i + 2] === B.data[i + 2] &&
-			A.data[i + 3] === B.data[i + 3];
-		if (!match) diffBytes += 4;
-		diff[i] = diff[i + 3] = match ? 0 : 0xff;
+	for (let y = 0; y < h; y++) {
+		for (let x = 0; x < w; x++) {
+			const i = (y * w + x) * 4;
+			const indexA = (y * A.width + x) * 4;
+			const indexB = (y * B.width + x) * 4;
+			const match =
+				x < A.width &&
+				y < A.height &&
+				x < B.width &&
+				y < B.height &&
+				A.data[indexA] === B.data[indexB] &&
+				A.data[indexA + 1] === B.data[indexB + 1] &&
+				A.data[indexA + 2] === B.data[indexB + 2] &&
+				A.data[indexA + 3] === B.data[indexB + 3];
+			if (!match) diffBytes += 4;
+			diff[i] = diff[i + 3] = match ? 0 : 0xff;
+		}
 	}
 
 	return {
@@ -269,48 +403,65 @@ component(ImageDiff, {
 	augment: [
 		css(`
 	:host {
-		display: inline-block;
-		position: relative;
-		fontSize: 0;
+		display: block;
 	}
-	.absolute {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: '100%';
-		height: '100%';
+	.diff {
+		display: block;
+		height: auto;
+		max-width: 100%;
+		width: 100%;
 	}
-	:host([hidediff]) .diff { opacity: 0 },
+	:host([hidediff]) .diff { opacity: 0 }
+	.summary {
+		color: var(--cxl-color-on-surface-variant, #555);
+		font-size: 0.75rem;
+		margin: 0;
+		padding: 8px 10px;
+	}
 `),
 		$ => {
 			const C = document.createElement('canvas');
-			C.className = 'absolute diff';
+			C.className = 'diff';
 			C.ariaLabel = 'rendered diff';
-			const A = tsx('img', { alt: 'source a', className: 'absolute' });
-			const B = tsx('img', { alt: 'source b', className: 'absolute' });
+			C.role = 'img';
+			const summary = tsx('p', { className: 'summary' }, 'Comparing images…');
+			summary.ariaLive = 'polite';
 			const ctx = C.getContext('2d');
 
 			function render() {
 				if (!ctx) throw new Error('No rendering context');
 				if (!$.src1 || !$.src2) return;
 
-				A.src = $.src2;
-				B.src = $.src1;
 				imageDiff($.src1, $.src2).then(
-					({ diff }) => {
-						$.style.width = `${(C.width = diff.width)}px`;
-						$.style.height = `${(C.height = diff.height)}px`;
-						ctx.putImageData(diff, 0, 0);
+					value => {
+						$.value = value;
+						C.width = value.diff.width;
+						C.height = value.diff.height;
+						ctx.putImageData(value.diff, 0, 0);
+						const changed = value.diffBytes / 4;
+						const pixels = value.size / 4;
+						const percentage = pixels ? (changed / pixels) * 100 : 0;
+						const formatted =
+							percentage > 0 && percentage < 0.01
+								? '<0.01'
+								: percentage.toFixed(2).replace(/\.00$/, '');
+						summary.textContent = `${changed.toLocaleString()} changed pixels (${formatted}%) · actual ${value.imageA.width}×${value.imageA.height} · baseline ${value.imageB.width}×${value.imageB.height}`;
+						C.ariaLabel = summary.textContent;
 					},
-					e => console.error(e),
+					e => {
+						summary.textContent = 'Comparison unavailable';
+						console.error(e);
+					},
 				);
 			}
 
-			$.shadowRoot?.append(B, A, C);
+			$.shadowRoot?.append(C, summary);
 
 			return merge(
-				merge(get($, 'src1'), get($, 'src2')).raf(render),
-				get($, 'ratio').raf(val => (A.style.opacity = val.toString())),
+				onVisible($).switchMap(() =>
+					merge(get($, 'src1'), get($, 'src2')).raf(render),
+				),
+				get($, 'ratio').raf(val => (C.style.opacity = val.toString())),
 			);
 		},
 	],
@@ -325,6 +476,7 @@ class BrowserRunner {
 		this.testFile = config.testFile;
 		this.suites = config.suites;
 		this.baselinePath = config.baselinePath;
+		browserBaselinePath = config.baselinePath ?? 'spec';
 	}
 
 	async runSuite(suite?: Test | BrowserTestResult, targetPath?: string) {
@@ -437,7 +589,11 @@ class BrowserRunner {
 						tsx(
 							'li',
 							undefined,
-							printResult(result, this.baselinePath),
+							printFigureResult(
+								result,
+								this.baselinePath,
+								this.testFile,
+							),
 						),
 					),
 				),
@@ -468,7 +624,7 @@ class BrowserRunner {
 							tsx(
 								'li',
 								undefined,
-								printResult(result, this.baselinePath),
+								printResult(result),
 							),
 						),
 					),

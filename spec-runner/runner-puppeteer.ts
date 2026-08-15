@@ -487,7 +487,7 @@ async function handleFigureRequest(
 		app.baselinePath ?? 'spec',
 		`${name}.png`,
 	));
-	const filename = `spec/${name}.png`;
+	const filename = (data.actual = `spec/${name}.png`);
 	const [original, buffer] = await Promise.all([
 		readFile(baseline).catch(() => undefined),
 		screenshot(page, domId, html),

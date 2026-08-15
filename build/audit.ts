@@ -614,12 +614,15 @@ export async function audit() {
 			}
 			if (result.hasErrors && result.fix && result.data) {
 				const { data, fix } = result;
-				fixes.push(() => {
-					if (verbose)
-						console.log(
-							`${result.data?.name}: Attempting fix for "${result.id}"`,
-						);
-					return fix(data);
+				fixes.push({
+					id: `${data.name}/${result.id}`,
+					run: () => {
+						if (verbose)
+							console.log(
+								`${result.data?.name}: Attempting fix for "${result.id}"`,
+							);
+						return fix(data);
+					},
 				});
 			}
 		}
@@ -628,9 +631,11 @@ export async function audit() {
 	}
 
 	let validation = await validate();
+	let appliedFixes: string[] = [];
 	// Run again after fixes have been applied.
 	if (validation.hasErrors && validation.fixes.length) {
-		for (const fix of validation.fixes) await fix();
+		appliedFixes = validation.fixes.map(fix => fix.id);
+		for (const fix of validation.fixes) await fix.run();
 		validation = await validate();
 	}
 
@@ -638,4 +643,7 @@ export async function audit() {
 		reportErrors(validation.results);
 		throw new Error('Errors detected, check logs for details.');
 	}
+
+	if (!verbose && appliedFixes.length)
+		console.log(`audit fixed: ${appliedFixes.join(',')}`);
 }

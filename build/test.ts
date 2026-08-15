@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
+import { execFileSync } from 'child_process';
 import { build as esbuild } from 'esbuild-wasm';
 import { formatHelp, sh } from '../program/index.js';
 import {
@@ -123,6 +124,66 @@ export default spec('build', s => {
 			a.ok(/tests: passed \([1-9]\d*\)/.test(output));
 			a.ok(!output.includes('Unknown cli config'));
 			a.ok(!output.includes('Unknown build'));
+		});
+	});
+
+	s.test('audit output', it => {
+		it.should('report applied fixes in quiet mode', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-audit-'));
+			const packageDir = join(dir, 'pkg');
+			try {
+				await mkdir(packageDir);
+				await writeFile(
+					join(dir, 'package.json'),
+					JSON.stringify({
+						homepage: 'https://example.com/docs/',
+						bugs: 'https://example.com/issues',
+					}),
+				);
+				await writeFile(
+					join(packageDir, 'package.json'),
+					JSON.stringify({
+						name: '@test/pkg',
+						version: '1.0.0',
+						description: 'test package',
+						license: 'GPL-3.0',
+						homepage: 'https://example.com/docs/@test/pkg',
+						bugs: 'https://example.com/issues',
+						repository: {
+							type: 'git',
+							url: 'https://example.com/repo.git',
+						},
+						scripts: {
+							build: 'cxl-build',
+							test: 'npm run build -- test',
+						},
+					}),
+				);
+				await writeFile(
+					join(packageDir, 'tsconfig.json'),
+					JSON.stringify({
+						compilerOptions: { outDir: '../dist/pkg' },
+					}),
+				);
+				await writeFile(
+					join(packageDir, 'tsconfig.test.json'),
+					JSON.stringify({
+						extends: './tsconfig.json',
+					}),
+				);
+				await writeFile(join(packageDir, 'test.ts'), '');
+
+				const script = `process.chdir(${JSON.stringify(packageDir)}); await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'audit.js')).href)}).then(module => module.audit())`;
+				const output = execFileSync(
+					process.execPath,
+					['--input-type=module', '--eval', script],
+					{ encoding: 'utf8' },
+				);
+
+				a.equal(output.trim(), 'audit fixed: pkg/package');
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
 		});
 	});
 

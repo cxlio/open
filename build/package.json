@@ -9,7 +9,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "./build.sh",
-		"test": "npm run build test",
+		"test": "npm run build -- test",
 		"publish": "npm run build publish"
 	},
 	"exports": {

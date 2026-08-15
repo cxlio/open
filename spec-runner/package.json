@@ -9,7 +9,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "node ../dist/build/cli.js",
-		"test": "npm run build test"
+		"test": "npm run build -- test"
 	},
 	"dependencies": {
 		"puppeteer": "^24.22.3",

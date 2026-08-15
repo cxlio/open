@@ -4,8 +4,9 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { build as esbuild } from 'esbuild-wasm';
-import { sh } from '../program/index.js';
+import { formatHelp, sh } from '../program/index.js';
 import {
+	buildParameters,
 	buildOutputOptions,
 	buildTargets,
 	exec,
@@ -42,16 +43,34 @@ async function errorMessage(fn: () => Promise<unknown>) {
 
 export default spec('build', s => {
 	s.test('output', it => {
-		it.should('parse verbose option', a => {
+		it.should('parse build options', a => {
 			a.equal(buildOutputOptions(['test']).verbose, false);
 			a.equal(buildOutputOptions(['test', '--verbose']).verbose, true);
+			a.equal(
+				buildOutputOptions(['test', '--grep', 'declaration bundle']).grep,
+				'declaration bundle',
+			);
 		});
 
-		it.should('exclude verbose flag from targets', a => {
-			a.equalValues(buildTargets(['test', '--verbose'], ['test']), [
-				undefined,
-				'test',
-			]);
+		it.should('exclude build options from targets', a => {
+			a.equalValues(
+				buildTargets(
+					['test', '--verbose', '--grep', 'declaration bundle'],
+					['test'],
+				),
+				[undefined, 'test'],
+			);
+		});
+
+		it.should('generate build help', a => {
+			a.equal(
+				formatHelp(buildParameters),
+				[
+					'  -h, --help       Show help.',
+					'  --verbose        Print detailed build output.',
+					'  --grep <string>  Run only tests whose full name matches the pattern.',
+				].join('\n'),
+			);
 		});
 
 		it.should('reject unknown target', a => {

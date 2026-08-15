@@ -7,7 +7,7 @@
 	"type": "module",
 	"scripts": {
 		"build": "node ../dist/build/cli.js",
-		"test": "npm run build test"
+		"test": "npm run build -- test"
 	},
 	"dependencies": {},
 	"license": "GPL-3.0",

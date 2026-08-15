@@ -3,7 +3,14 @@ import { existsSync, utimesSync, writeFileSync } from 'fs';
 import { SpawnOptions, spawn, execSync } from 'child_process';
 import { createRequire } from 'module';
 
-import { Logger, colors, sh, log, operation } from '../program/index.js';
+import {
+	Logger,
+	colors,
+	sh,
+	log,
+	operation,
+	parseArgv,
+} from '../program/index.js';
 import { Observable } from '../rx/index.js';
 import { BASEDIR, readPackage } from './package.js';
 
@@ -21,6 +28,7 @@ export interface BuildConfiguration {
 export type Task = Observable<Output>;
 export interface BuildOutputOptions {
 	verbose: boolean;
+	grep?: string;
 }
 
 export interface BuildArtifact {
@@ -33,6 +41,21 @@ class ReportedBuildError extends Error {}
 const AppName = colors.green('build');
 export const appLog = log.bind(null, AppName);
 export const require = createRequire(import.meta.dirname);
+export const buildParameters = {
+	help: {
+		short: 'h',
+		type: 'boolean',
+		help: 'Show help.',
+	},
+	verbose: {
+		type: 'boolean',
+		help: 'Print detailed build output.',
+	},
+	grep: {
+		type: 'string',
+		help: 'Run only tests whose full name matches the pattern.',
+	},
+} as const;
 
 function kb(bytes: number) {
 	return (bytes / 1000).toFixed(2) + 'kb';
@@ -48,8 +71,10 @@ function formatTime(time: bigint) {
 export function buildOutputOptions(
 	argv = process.argv.slice(2),
 ): BuildOutputOptions {
+	const options = parseArgv(buildParameters, argv);
 	return {
-		verbose: argv.includes('--verbose'),
+		verbose: !!options.verbose,
+		grep: options.grep,
 	};
 }
 
@@ -57,7 +82,7 @@ export function buildTargets(
 	argv = process.argv.slice(2),
 	availableTargets?: readonly string[],
 ) {
-	const targets = argv.filter(arg => arg !== '--verbose');
+	const targets = parseArgv(buildParameters, argv).$;
 	if (availableTargets) {
 		const available = new Set(availableTargets);
 		const unknown = targets.find(target => !available.has(target));

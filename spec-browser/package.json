@@ -7,7 +7,7 @@
 	"browser": "./index.bundle.js",
 	"scripts": {
 		"build": "node ../dist/build/cli.js",
-		"test": "npm run build test"
+		"test": "npm run build -- test"
 	},
 	"bugs": "https://github.com/cxlio/open/issues",
 	"homepage": "https://cxlio.github.io/docs/@cxl/spec-browser",

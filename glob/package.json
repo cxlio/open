@@ -9,7 +9,7 @@
 	"browser": "./index.bundle.js",
 	"scripts": {
 		"build": "node ../dist/build/cli.js",
-		"test": "npm run build test"
+		"test": "npm run build -- test"
 	},
 	"repository": {
 		"type": "git",

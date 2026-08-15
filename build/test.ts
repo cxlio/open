@@ -1,7 +1,9 @@
 import { spec, TestApi } from '../spec/index.js';
-import { mkdtemp, rm, writeFile } from 'fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { pathToFileURL } from 'url';
+import { build as esbuild } from 'esbuild-wasm';
 import { sh } from '../program/index.js';
 import {
 	buildOutputOptions,
@@ -18,6 +20,7 @@ import {
 	npmPublishCommand,
 	npmUnpublishCommand,
 } from './npm.js';
+import { getPackageDeclarationEntryPoints } from './package.js';
 import {
 	enforceCoverageGate,
 	generateTestFile,
@@ -25,6 +28,8 @@ import {
 } from './spec.js';
 import type { Package } from './npm.js';
 import { checkBranchClean, checkBranchUpToDate } from './git.js';
+import { bundleDeclarations } from './tsc.js';
+import * as ts from 'typescript';
 
 async function errorMessage(fn: () => Promise<unknown>) {
 	try {
@@ -90,6 +95,18 @@ export default spec('build', s => {
 		});
 	});
 
+	s.test('npm test integration', it => {
+		it.should('forward focused test options', async a => {
+			const output = await sh('npm test -- --grep parseArgv', {
+				cwd: join(import.meta.dirname, '../../program'),
+			});
+			a.ok(output.includes('cli.js test --grep parseArgv'));
+			a.ok(/tests: passed \([1-9]\d*\)/.test(output));
+			a.ok(!output.includes('Unknown cli config'));
+			a.ok(!output.includes('Unknown build'));
+		});
+	});
+
 	s.test('exec', it => {
 		it.should('throw error if exec fails', async a => {
 			try {
@@ -138,6 +155,212 @@ export default spec('build', s => {
 			a.throws(() =>
 				enforceCoverageGate(undefined, { blocks: 80 }),
 			);
+		});
+	});
+
+	s.test('declaration bundle', it => {
+		it.should('bundle the internal public type graph', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-dts-'));
+			const packageDir = join(dir, 'package');
+			const externalDir = join(dir, 'node_modules', 'external');
+			const internalTypesDir = join(
+				dir,
+				'node_modules',
+				'internal-types',
+			);
+			const aliasSourceDir = join(dir, 'alias-source');
+			const aliasOutputDir = join(dir, 'alias-output');
+			try {
+				await mkdir(packageDir, { recursive: true });
+				await mkdir(externalDir, { recursive: true });
+				await mkdir(internalTypesDir, { recursive: true });
+				await mkdir(aliasSourceDir, { recursive: true });
+				await mkdir(aliasOutputDir, { recursive: true });
+				const javascriptEntry = join(dir, 'index.ts');
+				const javascriptDependency = join(dir, 'b.ts');
+				await writeFile(
+					javascriptEntry,
+					"export { value as bundledValue } from './b.js';\n",
+				);
+				await writeFile(javascriptDependency, 'export const value = 42;\n');
+				await esbuild({
+					bundle: true,
+					entryPoints: [javascriptEntry],
+					format: 'esm',
+					outfile: join(packageDir, 'index.js'),
+					platform: 'node',
+				});
+				await rm(javascriptDependency);
+				const bundled = await import(
+					pathToFileURL(join(packageDir, 'index.js')).href
+				);
+				a.equal(bundled.bundledValue, 42);
+				await writeFile(
+					join(packageDir, 'index.d.ts'),
+					`import type { Public as Imported } from './b.js';
+import type * as Internal from './b.js';
+import type { External } from 'external';
+import Legacy from './legacy.js';
+declare module './b.js' { interface Registry { augmented: true; } }
+export { Public as Renamed } from './b.js';
+export * from './cycle-a.js';
+export interface Result { value: Imported; detail: Internal.Helpers.Detail; instance: Internal.PublicClass; registry: import('./b.js').Registry; legacy: Legacy.Options; hidden: import('internal-types').Hidden; aliased: import('alias/value.js').Aliased; external: External; }
+export default function (): Imported;
+`,
+				);
+				await writeFile(
+					join(packageDir, 'b.d.ts'),
+					`interface Private { source: 'b'; }
+export interface Public extends Private { public: true; cycle?: import('./cycle-a.js').CycleA; }
+export interface Registry { base: true; }
+export namespace Helpers { interface Detail { detail: true; } }
+export class PublicClass { value: Public; }
+`,
+				);
+				await writeFile(
+					join(packageDir, 'cycle-a.d.ts'),
+					`import type { CycleB } from './cycle-b.js';
+interface Private { source: 'a'; }
+export interface CycleA { next?: CycleB; private: Private; }
+export { CycleB as RenamedCycle } from './cycle-b.js';
+`,
+				);
+				await writeFile(
+					join(packageDir, 'cycle-b.d.ts'),
+					`import type { CycleA } from './cycle-a.js';
+interface Private { source: 'cycle-b'; }
+export interface CycleB { next?: CycleA; private: Private; }
+`,
+				);
+				await writeFile(
+					join(packageDir, 'legacy.d.ts'),
+					`declare function Legacy(): void;
+declare namespace Legacy { interface Options { legacy: true; } }
+export = Legacy;
+`,
+				);
+				await writeFile(
+					join(externalDir, 'package.json'),
+					JSON.stringify({ name: 'external', types: 'index.d.ts' }),
+				);
+				await writeFile(
+					join(externalDir, 'index.d.ts'),
+					'export interface External { external: true; }\n',
+				);
+				await writeFile(
+					join(internalTypesDir, 'package.json'),
+					JSON.stringify({
+						name: 'internal-types',
+						types: 'index.d.ts',
+					}),
+				);
+				await writeFile(
+					join(internalTypesDir, 'index.d.ts'),
+					'export interface Hidden { hidden: true; }\n',
+				);
+				await writeFile(
+					join(dir, 'tsconfig.json'),
+					JSON.stringify({
+						compilerOptions: {
+							allowSyntheticDefaultImports: true,
+							module: 'esnext',
+							moduleResolution: 'node',
+							paths: { 'alias/*': ['./alias-source/*'] },
+						},
+						files: [],
+						references: [{ path: './alias-source' }],
+					}),
+				);
+				await writeFile(
+					join(aliasSourceDir, 'tsconfig.json'),
+					JSON.stringify({
+						compilerOptions: {
+							composite: true,
+							declaration: true,
+							module: 'esnext',
+							moduleResolution: 'node',
+							outDir: '../alias-output',
+						},
+						files: ['value.ts'],
+					}),
+				);
+				await writeFile(
+					join(aliasSourceDir, 'value.ts'),
+					'export interface Aliased { aliased: true; }\n',
+				);
+				await writeFile(
+					join(aliasOutputDir, 'value.d.ts'),
+					'export interface Aliased { aliased: true; }\n',
+				);
+
+				const entry = join(packageDir, 'index.d.ts');
+				await writeFile(
+					entry,
+					bundleDeclarations(
+						entry,
+						['external'],
+						join(dir, 'tsconfig.json'),
+					),
+				);
+				await rm(internalTypesDir, { recursive: true });
+				await rm(aliasSourceDir, { recursive: true });
+				await rm(aliasOutputDir, { recursive: true });
+				await rm(join(packageDir, 'b.d.ts'));
+				await rm(join(packageDir, 'cycle-a.d.ts'));
+				await rm(join(packageDir, 'cycle-b.d.ts'));
+				await rm(join(packageDir, 'legacy.d.ts'));
+				const consumer = join(dir, 'consumer.ts');
+				await writeFile(
+					consumer,
+					`import create, { type Result, type Renamed, type CycleA, type RenamedCycle } from './package/index.js';
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type AssertNotAny<T extends false> = T;
+type Assert<T extends true> = T;
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+declare const result: Result;
+const renamed: Renamed = create();
+const cycle: CycleA | RenamedCycle = {} as CycleA;
+type ResultTypesStayTyped = AssertNotAny<IsAny<Result[keyof Result]>>;
+type ImportedTypeStaysTyped = Assert<Equal<typeof result.value['public'], true>>;
+type NamespaceTypeStaysTyped = Assert<Equal<typeof result.detail['detail'], true>>;
+type ClassTypeStaysTyped = Assert<Equal<typeof result.instance.value['public'], true>>;
+type AugmentationStaysTyped = Assert<Equal<typeof result.registry['augmented'], true>>;
+type ExportEqualsStaysTyped = Assert<Equal<typeof result.legacy['legacy'], true>>;
+type PackageImportStaysTyped = Assert<Equal<typeof result.hidden['hidden'], true>>;
+type PathAliasStaysTyped = Assert<Equal<typeof result.aliased['aliased'], true>>;
+type ExternalImportStaysTyped = Assert<Equal<typeof result.external['external'], true>>;
+type RenamedExportStaysTyped = Assert<Equal<typeof renamed['source'], 'b'>>;
+type CycleStaysTyped = Assert<Equal<CycleA['private']['source'], 'a'>>;
+void renamed;
+void cycle;
+void result;
+`,
+				);
+				const program = ts.createProgram([consumer], {
+					module: ts.ModuleKind.ESNext,
+					moduleResolution: ts.ModuleResolutionKind.Node10,
+					noEmit: true,
+					strict: true,
+					skipLibCheck: false,
+				});
+				a.equalValues(
+					ts.getPreEmitDiagnostics(program).map(diagnostic =>
+						ts.flattenDiagnosticMessageText(
+							diagnostic.messageText,
+							'\n',
+						),
+					),
+					[],
+				);
+				const emptyEntry = join(packageDir, 'empty.d.ts');
+				await writeFile(emptyEntry, '');
+				a.equal(
+					bundleDeclarations(emptyEntry, []).trim(),
+					'export {};',
+				);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
 		});
 	});
 
@@ -200,6 +423,36 @@ export default spec('build', s => {
 
 		it.should('leave coverage undefined when unconfigured', a => {
 			a.equal(getPackageBuildOptions(pkg, pkg).coverage, undefined);
+		});
+
+		it.should('derive declarations only for public package entries', a => {
+			a.equalValues(
+				getPackageDeclarationEntryPoints('/dist/pkg', {
+					...pkg,
+						exports: {
+						'.': './index.js',
+						'./*.js': './*.js',
+						'./worker.js': './worker.mjs',
+					},
+				}, [
+					'/dist/pkg/index.d.ts',
+					'/dist/pkg/cli.d.ts',
+					'/dist/pkg/feature/editor.d.ts',
+					'/dist/pkg/worker.d.mts',
+				]),
+				[
+					{ in: '/dist/pkg/index.d.ts', out: 'index.d.ts' },
+					{ in: '/dist/pkg/cli.d.ts', out: 'cli.d.ts' },
+					{
+						in: '/dist/pkg/feature/editor.d.ts',
+						out: 'feature/editor.d.ts',
+					},
+					{ in: '/dist/pkg/worker.d.mts', out: 'worker.d.mts' },
+				],
+			);
+			a.equalValues(getPackageDeclarationEntryPoints('/dist/pkg', pkg), [
+				{ in: '/dist/pkg/index.d.ts', out: 'index.d.ts' },
+			]);
 		});
 	});
 

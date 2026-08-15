@@ -1,6 +1,6 @@
 import { Observable, defer, merge, of, EMPTY } from '../rx/index.js';
 import { existsSync, readFileSync } from 'fs';
-import { join, resolve } from 'path';
+import { join, relative, resolve } from 'path';
 import { file } from './file.js';
 import { execSync } from 'child_process';
 import { Output } from './builder.js';
@@ -50,6 +50,20 @@ export function getPackageExternal(pkgJson: Package) {
 	];
 }
 
+export function getPackageName(specifier: string) {
+	if (
+		specifier.startsWith('.') ||
+		specifier.startsWith('/') ||
+		specifier.startsWith('node:')
+	)
+		return;
+	if (specifier.startsWith('@')) {
+		const [scope, name] = specifier.split('/');
+		if (scope && name) return `${scope}/${name}`;
+	}
+	return specifier.split('/')[0];
+}
+
 export function getPackagePlatform(pkgJson: Package): esbuildApi.Platform {
 	return pkgJson.browser ? 'browser' : 'node';
 }
@@ -72,6 +86,41 @@ export function getPackageEntryPoints(outputDir: string, pkgJson: Package) {
 				return val ? [join(outputDir, val)] : [];
 			})
 		: getPackageBundleEntryPoints(outputDir, pkgJson);
+}
+
+function declarationTarget(target: string) {
+	const path = target.replace(/^\.\//, '');
+	if (path.endsWith('.mjs')) return path.replace(/\.mjs$/, '.d.mts');
+	if (path.endsWith('.cjs')) return path.replace(/\.cjs$/, '.d.cts');
+	if (path.endsWith('.js')) return path.replace(/\.js$/, '.d.ts');
+	throw new Error(`Invalid JavaScript package export: "${target}"`);
+}
+
+export function getPackageDeclarationEntryPoints(
+	outputDir: string,
+	pkgJson: Package,
+	declarationFiles: readonly string[] = [],
+) {
+	const targets = pkgJson.exports
+		? Object.values(pkgJson.exports)
+		: ['./index.js'];
+	const entries = new Map<string, { in: string; out: string }>();
+	for (const target of targets) {
+		const pattern = declarationTarget(target);
+		const wildcard = pattern.indexOf('*');
+		if (wildcard === -1) {
+			entries.set(pattern, { in: join(outputDir, pattern), out: pattern });
+			continue;
+		}
+		const prefix = pattern.slice(0, wildcard);
+		const suffix = pattern.slice(wildcard + 1);
+		for (const declarationFile of declarationFiles) {
+			const out = relative(outputDir, declarationFile);
+			if (out.startsWith(prefix) && out.endsWith(suffix))
+				entries.set(out, { in: declarationFile, out });
+		}
+	}
+	return [...entries.values()];
 }
 
 export function esbuild(options: esbuildApi.BuildOptions) {

@@ -1,11 +1,17 @@
 import { basename, join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 
-import { EMPTY, concat, fromAsync } from '../rx/index.js';
+import { EMPTY, concat, from, fromAsync } from '../rx/index.js';
 
-import { BuildConfiguration, build, exec } from './builder.js';
+import {
+	BuildConfiguration,
+	build,
+	buildOutputOptions,
+	exec,
+} from './builder.js';
 import {
 	getPackageBundleEntryPoints,
+	getPackageDeclarationEntryPoints,
 	getPackageEntryPoints,
 	getPackageExternal,
 	getPackagePlatform,
@@ -13,9 +19,14 @@ import {
 	readme,
 	esbuild,
 } from './package.js';
-import { file, copyDir } from './file.js';
+import { file } from './file.js';
 import { eslintTsconfig } from './lint.js';
-import { TsconfigJson, tsconfig } from './tsc.js';
+import {
+	bundleDeclarations,
+	getProjectDeclarationFiles,
+	TsconfigJson,
+	tsconfig,
+} from './tsc.js';
 import { buildDocs } from './docs.js';
 import { generateTestFile, runBenchmarks, runTests } from './spec.js';
 import { audit } from './audit.js';
@@ -24,6 +35,7 @@ import { Package, publishNpm } from './npm.js';
 
 export function buildLibrary(...extra: BuildConfiguration[]) {
 	const cwd = process.cwd();
+	const { grep } = buildOutputOptions();
 	const tsconfigFile: TsconfigJson = JSON.parse(
 		readFileSync(cwd + '/tsconfig.json', 'utf8'),
 	);
@@ -54,6 +66,11 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 	const hasScreenshotTests = existsSync('./test-screenshot.ts');
 	const bundleEntryPoint = getPackageBundleEntryPoints(outputDir, pkgJson);
 	const entryPoints = getPackageEntryPoints(outputDir, pkgJson);
+	const declarationEntryPoints = getPackageDeclarationEntryPoints(
+		outputDir,
+		pkgJson,
+		getProjectDeclarationFiles(),
+	);
 
 	return build(
 		{
@@ -81,6 +98,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					appId,
 					outputDir,
 					node: !isBrowser,
+					grep,
 				}),
 			],
 		},
@@ -135,6 +153,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 									outputDir,
 									entryFile: './test-screenshot.js',
 									ignoreCoverage: true,
+									grep,
 								}),
 							),
 						],
@@ -173,7 +192,12 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				file('README.md', 'README.md'),
 				file('LICENSE.md', 'LICENSE.md').catchError(() => EMPTY),
 				pkg(pkgMain),
-				copyDir(outputDir, pkgDir, '*.d.ts'),
+				from(declarationEntryPoints).map(entry => ({
+					path: entry.out,
+					source: Buffer.from(
+						bundleDeclarations(entry.in, external),
+					),
+				})),
 				esbuild({
 					entryPoints,
 					platform,

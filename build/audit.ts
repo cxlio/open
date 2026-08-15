@@ -7,6 +7,7 @@ import { readJson } from '../program/index.js';
 import {
 	getPackageEntryPoints,
 	getPackageExternal,
+	getPackageName,
 	getPackagePlatform,
 } from './package.js';
 import { buildOutputOptions } from './builder.js';
@@ -53,6 +54,7 @@ const BugsUrl = 'https://github.com/cxlio/cxl/issues';
 const TsconfigJson = 'tsconfig.json';
 const TsconfigTestJson = 'tsconfig.test.json';
 const LocalTsconfigJson = './tsconfig.json';
+const TestScript = 'npm run build -- test';
 const baseDir = path.resolve('.');
 const requiredPackageFields = [
 	'name',
@@ -179,22 +181,6 @@ function rule(valid: boolean, message: string): Rule {
 	return { valid, message };
 }
 
-function getPackageName(specifier: string): string | undefined {
-	if (
-		specifier.startsWith('.') ||
-		specifier.startsWith('/') ||
-		specifier.startsWith('node:')
-	)
-		return;
-
-	if (specifier.startsWith('@')) {
-		const [scope, name] = specifier.split('/');
-		if (scope && name) return `${scope}/${name}`;
-	}
-
-	return specifier.split('/')[0];
-}
-
 async function collectUsedPackages(pkg: Package, projectPath: string) {
 	const used = new Set<string>();
 	const tsconfig = await readJson<Tsconfig | null>(
@@ -315,13 +301,12 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 	const builder = rootPkg.devDependencies?.['@cxl/build']
 		? 'cxl-build'
 		: 'node ../dist/build';
-	const testScript = `npm run build test`;
 	const browser = './index.bundle.js';
 	const homepage =
 		rootPkg.homepage && new URL(pkg.name, rootPkg.homepage).href;
 
 	pkg.scripts ??= {};
-	if (!pkg.scripts.test) pkg.scripts.test = testScript;
+	if (!pkg.scripts.test) pkg.scripts.test = TestScript;
 	if (!pkg.scripts.build) pkg.scripts.build = builder;
 	if (homepage && (!pkg.homepage || pkg.homepage !== homepage))
 		pkg.homepage = homepage;
@@ -341,7 +326,7 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 	}
 	pkg.type = 'module';
 
-	if (pkg.scripts.test !== testScript) pkg.scripts.test = testScript;
+	if (pkg.scripts.test !== TestScript) pkg.scripts.test = TestScript;
 
 	const newPackage = JSON.stringify(pkg, null, '\t');
 
@@ -369,8 +354,6 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 		rules.push(
 			rule('scripts' in pkg, `Field "scripts" required in package.json`),
 		);
-
-	const testScript = `npm run build test`;
 
 	rules.push(
 		/*rule(
@@ -403,7 +386,7 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 			`Package "bugs" property must match root package "${rootPkg.bugs}"`,
 		),
 		rule(
-			pkg.scripts?.test === testScript,
+			pkg.scripts?.test === TestScript,
 			`Valid test script in package.json`,
 		),
 		rule(!!pkg.repository, 'Package "repository" field must be set'),

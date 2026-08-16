@@ -1,5 +1,5 @@
 import { spec, TestApi } from '../spec/index.js';
-import { mkdir, mkdtemp, rm, writeFile } from 'fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
@@ -22,7 +22,10 @@ import {
 	npmPublishCommand,
 	npmUnpublishCommand,
 } from './npm.js';
-import { getPackageDeclarationEntryPoints } from './package.js';
+import {
+	getPackageDeclarationEntryPoints,
+	getPackageEntryPoints,
+} from './package.js';
 import {
 	enforceCoverageGate,
 	generateTestFile,
@@ -533,6 +536,41 @@ void result;
 			a.equalValues(getPackageDeclarationEntryPoints('/dist/pkg', pkg), [
 				{ in: '/dist/pkg/index.d.ts', out: 'index.d.ts' },
 			]);
+		});
+
+		it.should('package wildcard entries only from project outputs', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-package-'));
+			const outputDir = join(dir, 'dist');
+			const packageDir = join(outputDir, 'package');
+			try {
+				await mkdir(outputDir);
+				const index = join(outputDir, 'index.js');
+				const button = join(outputDir, 'button.js');
+				await writeFile(index, 'export const index = true;');
+				await writeFile(button, 'export const button = true;');
+				await writeFile(
+					join(outputDir, 'test.js'),
+					'export const test = true;',
+				);
+				await esbuild({
+					bundle: true,
+					entryPoints: getPackageEntryPoints(outputDir, {
+						...pkg,
+						exports: {
+							'.': './index.js',
+							'./*.js': './*.js',
+						},
+					}, [index, button]),
+					format: 'esm',
+					outdir: packageDir,
+				});
+				a.equalValues((await readdir(packageDir)).sort(), [
+					'button.js',
+					'index.js',
+				]);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
 		});
 	});
 

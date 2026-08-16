@@ -23,7 +23,7 @@ import { file } from './file.js';
 import { eslintTsconfig } from './lint.js';
 import {
 	bundleDeclarations,
-	getProjectDeclarationFiles,
+	getProjectOutputFiles,
 	TsconfigJson,
 	tsconfig,
 } from './tsc.js';
@@ -64,12 +64,17 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 
 	const external = getPackageExternal(pkgJson);
 	const hasScreenshotTests = existsSync('./test-screenshot.ts');
+	const { declarationFiles, javascriptFiles } = getProjectOutputFiles();
 	const bundleEntryPoint = getPackageBundleEntryPoints(outputDir, pkgJson);
-	const entryPoints = getPackageEntryPoints(outputDir, pkgJson);
+	const entryPoints = getPackageEntryPoints(
+		outputDir,
+		pkgJson,
+		javascriptFiles,
+	);
 	const declarationEntryPoints = getPackageDeclarationEntryPoints(
 		outputDir,
 		pkgJson,
-		getProjectDeclarationFiles(),
+		declarationFiles,
 	);
 
 	return build(

@@ -12,6 +12,7 @@ import {
 } from './package.js';
 import { buildOutputOptions } from './builder.js';
 import { getPackageBuildOptions } from './npm.js';
+import { getProjectOutputFiles } from './tsc.js';
 
 import type { Package } from './npm.js';
 
@@ -194,7 +195,12 @@ async function collectUsedPackages(pkg: Package, projectPath: string) {
 
 	const result = await esbuild.build({
 		bundle: true,
-		entryPoints: getPackageEntryPoints(outputDir, pkg),
+		entryPoints: getPackageEntryPoints(
+			outputDir,
+			pkg,
+			getProjectOutputFiles(path.join(projectPath, 'tsconfig.json'))
+				.javascriptFiles,
+		),
 		external,
 		format: 'esm',
 		logLevel: 'silent',

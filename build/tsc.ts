@@ -216,17 +216,22 @@ function projectDeclarations(tsconfig: string) {
 	return { options: projects.get(resolve(tsconfig))?.options, outputs };
 }
 
-export function getProjectDeclarationFiles(tsconfig = DefaultTsconfig) {
+export function getProjectOutputFiles(tsconfig = DefaultTsconfig) {
 	const parsed = parseTsConfig(tsconfig);
-	return parsed.fileNames.flatMap(sourceFile =>
+	const files = parsed.fileNames.flatMap(sourceFile =>
 		ts
 			.getOutputFileNames(
 				parsed,
 				sourceFile,
 				ts.sys.useCaseSensitiveFileNames,
-			)
-			.filter(file => /\.d\.(?:ts|mts|cts)$/.test(file)),
+			),
 	);
+	return {
+		declarationFiles: files.filter(file =>
+			/\.d\.(?:ts|mts|cts)$/.test(file),
+		),
+		javascriptFiles: files.filter(file => /\.[cm]?js$/.test(file)),
+	};
 }
 
 function declarationProgram(entryFile: string, tsconfig: string) {

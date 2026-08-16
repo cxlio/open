@@ -80,12 +80,51 @@ export function getPackageBundleEntryPoints(
 	];
 }
 
-export function getPackageEntryPoints(outputDir: string, pkgJson: Package) {
-	return pkgJson.exports
-		? Object.values(pkgJson.exports).flatMap(val => {
-				return val ? [join(outputDir, val)] : [];
-			})
-		: getPackageBundleEntryPoints(outputDir, pkgJson);
+function javascriptOutputPath(path: string) {
+	return path.replace(/^\.\//, '').replace(/\.[cm]?js$/, '');
+}
+
+function expandEntryPoints(
+	outputDir: string,
+	patterns: readonly string[],
+	files: readonly string[],
+	outputPath: (path: string) => string,
+) {
+	const entries = new Map<string, { in: string; out: string }>();
+	for (const pattern of patterns) {
+		const wildcard = pattern.indexOf('*');
+		if (wildcard === -1) {
+			entries.set(pattern, {
+				in: join(outputDir, pattern),
+				out: outputPath(pattern),
+			});
+			continue;
+		}
+		const prefix = pattern.slice(0, wildcard);
+		const suffix = pattern.slice(wildcard + 1);
+		for (const file of files) {
+			const out = relative(outputDir, file);
+			if (out.startsWith(prefix) && out.endsWith(suffix))
+				entries.set(out, { in: file, out: outputPath(out) });
+		}
+	}
+	return [...entries.values()];
+}
+
+export function getPackageEntryPoints(
+	outputDir: string,
+	pkgJson: Package,
+	javascriptFiles: readonly string[],
+) {
+	if (!pkgJson.exports) return getPackageBundleEntryPoints(outputDir, pkgJson);
+	return expandEntryPoints(
+		outputDir,
+		Object.values(pkgJson.exports).map(target =>
+			target.replace(/^\.\//, ''),
+		),
+		javascriptFiles,
+		javascriptOutputPath,
+	);
 }
 
 function declarationTarget(target: string) {
@@ -104,23 +143,12 @@ export function getPackageDeclarationEntryPoints(
 	const targets = pkgJson.exports
 		? Object.values(pkgJson.exports)
 		: ['./index.js'];
-	const entries = new Map<string, { in: string; out: string }>();
-	for (const target of targets) {
-		const pattern = declarationTarget(target);
-		const wildcard = pattern.indexOf('*');
-		if (wildcard === -1) {
-			entries.set(pattern, { in: join(outputDir, pattern), out: pattern });
-			continue;
-		}
-		const prefix = pattern.slice(0, wildcard);
-		const suffix = pattern.slice(wildcard + 1);
-		for (const declarationFile of declarationFiles) {
-			const out = relative(outputDir, declarationFile);
-			if (out.startsWith(prefix) && out.endsWith(suffix))
-				entries.set(out, { in: declarationFile, out });
-		}
-	}
-	return [...entries.values()];
+	return expandEntryPoints(
+		outputDir,
+		targets.map(declarationTarget),
+		declarationFiles,
+		path => path,
+	);
 }
 
 export function esbuild(options: esbuildApi.BuildOptions) {

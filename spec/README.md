@@ -6,7 +6,7 @@ This library provides a comprehensive testing framework tailored for browser env
 
 ## Project Details
 
--   Branch Version: [1.0.1](https://npmjs.com/package/@cxl/spec/v/1.0.1)
+-   Branch Version: [1.1.0](https://npmjs.com/package/@cxl/spec/v/1.1.0)
 -   License: Apache-2.0
 -   Documentation: [Link](https://cxlio.github.io/docs/@cxl/spec)
 -   Report Issues: [Github](https://github.com/cxlio/open/issues)

@@ -9,5 +9,12 @@
 				"tasks": "npm run build --prefix $1"
 			}
 		}
+	},
+	"coaxial": {
+		"tasks": {
+			"publish": {
+				"additionalInstructions": "To Publish: git push, repo must be in sync with origin. Build package then npm run build publish --prefix <pkg>"
+			}
+		}
 	}
 }

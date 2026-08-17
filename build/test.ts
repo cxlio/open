@@ -1,5 +1,12 @@
 import { spec, TestApi } from '../spec/index.js';
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'fs/promises';
+import {
+	mkdir,
+	mkdtemp,
+	readFile,
+	readdir,
+	rm,
+	writeFile,
+} from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
@@ -14,6 +21,7 @@ import {
 	formatArtifactSummary,
 	formatBuildError,
 	formatTargetArtifactSummary,
+	type Output,
 } from './builder.js';
 import {
 	getPackageBuildOptions,
@@ -34,6 +42,8 @@ import {
 import type { Package } from './npm.js';
 import { checkBranchClean, checkBranchUpToDate } from './git.js';
 import { bundleDeclarations } from './tsc.js';
+import { file } from './file.js';
+import { rx } from './index.js';
 import * as ts from 'typescript';
 
 async function errorMessage(fn: () => Promise<unknown>) {
@@ -200,6 +210,97 @@ export default spec('build', s => {
 		});
 	});
 
+	s.test('file', it => {
+		it.should('copy a filesystem file', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-file-'));
+			try {
+				const sourcePath = join(dir, 'source.txt');
+				await writeFile(sourcePath, 'source content');
+				const output = await file(sourcePath, 'copy.txt');
+				a.equal(output?.path, 'copy.txt');
+				a.equal(output?.source.toString(), 'source content');
+				const defaultOutput = await file(sourcePath);
+				a.equal(defaultOutput?.path, sourcePath);
+				a.equal(defaultOutput?.source.toString(), 'source content');
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('generate a string', async a => {
+			const outputs: Output[] = [];
+			await file(() => 'generated content', 'generated.txt').tap(output =>
+				outputs.push(output),
+			);
+			a.equal(outputs.length, 1);
+			a.equal(outputs[0]?.path, 'generated.txt');
+			a.equal(outputs[0]?.source.toString(), 'generated content');
+			a.ok(Buffer.isBuffer(outputs[0]?.source));
+		});
+
+		it.should('generate a Buffer', async a => {
+			const source = Buffer.from([1, 2, 3]);
+			const output = await file(() => source, 'generated.bin');
+			a.equal(output?.path, 'generated.bin');
+			a.equal(output?.source, source);
+		});
+
+		it.should('generate asynchronously', async a => {
+			const output = await file(
+				async () => Promise.resolve('async content'),
+				'generated.json',
+			);
+			a.equal(output?.path, 'generated.json');
+			a.equal(output?.source.toString(), 'async content');
+		});
+
+		it.should('defer generation until each subscription', async a => {
+			let calls = 0;
+			const task = file(() => String(++calls), 'lazy.txt');
+			a.equal(calls, 0);
+			a.equal((await task)?.source.toString(), '1');
+			a.equal((await task)?.source.toString(), '2');
+		});
+
+		it.should('propagate generator errors', async a => {
+			a.equal(
+				await errorMessage(async () => {
+					await file(() => {
+						throw new Error('sync failure');
+					}, 'sync.txt');
+				}),
+				'sync failure',
+			);
+			a.equal(
+				await errorMessage(async () => {
+					await file(
+						() => Promise.reject(new Error('async failure')),
+						'async.txt',
+					);
+				}),
+				'async failure',
+			);
+		});
+
+		it.should('compose tasks with the exported rx namespace', async a => {
+			const outputs: Output[] = [];
+			await rx
+				.concat(
+					file(() => 'first', 'first.txt'),
+					rx.of({
+						path: 'second.txt',
+						source: Buffer.from('second'),
+					}),
+					rx.EMPTY,
+				)
+				.tap(output => outputs.push(output));
+			a.equalValues(
+				outputs.map(output => output.path),
+				['first.txt', 'second.txt'],
+			);
+		});
+	});
+
 	s.test('coverage gate', it => {
 		const coverage = {
 			fileTotal: 1,
@@ -242,6 +343,87 @@ export default spec('build', s => {
 	});
 
 	s.test('declaration bundle', it => {
+		it.should('expose generated files as the public Task type', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-consumer-'));
+			try {
+				const consumer = join(dir, 'consumer.ts');
+				const packageDir = join(dir, 'package');
+				const entry = join(dir, 'index.d.ts');
+				const rxEntry = join(dir, 'rx.d.ts');
+				await mkdir(packageDir);
+				await writeFile(
+					rxEntry,
+					`export { Observable, concat, of, EMPTY } from ${JSON.stringify(join(import.meta.dirname, '../rx/index.js'))};
+`,
+				);
+				await writeFile(
+					entry,
+					`export * from ${JSON.stringify(join(import.meta.dirname, 'file.js'))};
+export { type Output, type Task } from ${JSON.stringify(join(import.meta.dirname, 'builder.js'))};
+export * as rx from './rx.js';
+`,
+				);
+				await writeFile(
+					consumer,
+					`import { file, rx, type Output, type Task } from '@cxl/build';
+const generated: Task = file(async () => 'content', 'generated.txt');
+generated.subscribe((output: Output) => output.source.toString());
+const composed: Task = rx.concat(
+	generated,
+	rx.of({ path: 'other.txt', source: Buffer.from('other') }),
+	rx.EMPTY,
+);
+void composed;
+`,
+				);
+				const declarationPath = join(packageDir, 'index.d.ts');
+				await writeFile(
+					declarationPath,
+					bundleDeclarations(entry, []),
+				);
+				const declaration = await readFile(declarationPath, 'utf8');
+				const sourceFile = ts.createSourceFile(
+					declarationPath,
+					declaration,
+					ts.ScriptTarget.Latest,
+					true,
+					ts.ScriptKind.TS,
+				);
+				const fileDeclarations = sourceFile.statements.filter(
+					(statement): statement is ts.FunctionDeclaration =>
+						ts.isFunctionDeclaration(statement) &&
+						statement.name?.text === 'file',
+				);
+				a.equal(fileDeclarations.length, 2);
+				for (const statement of fileDeclarations) {
+					a.equal(statement.type?.getText(sourceFile), 'Task');
+					const text = statement.getText(sourceFile);
+					a.ok(!text.includes('Observable'));
+					a.ok(!text.includes('__subscribe'));
+				}
+				const program = ts.createProgram([consumer], {
+					baseUrl: dir,
+					module: ts.ModuleKind.ESNext,
+					moduleResolution: ts.ModuleResolutionKind.Node10,
+					noEmit: true,
+					paths: { '@cxl/build': [declarationPath] },
+					skipLibCheck: false,
+					strict: true,
+				});
+				a.equalValues(
+					ts.getPreEmitDiagnostics(program).map(diagnostic =>
+						ts.flattenDiagnosticMessageText(
+							diagnostic.messageText,
+							'\n',
+						),
+					),
+					[],
+				);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
 		it.should('bundle the internal public type graph', async a => {
 			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-dts-'));
 			const packageDir = join(dir, 'package');

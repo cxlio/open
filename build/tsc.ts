@@ -405,6 +405,113 @@ function assignAnonymousSymbols(
 	return anonymousSymbols;
 }
 
+interface NamespaceExport {
+	name: string;
+	members: { name: string; symbol: ts.Symbol }[];
+}
+
+function getNamespaceExport(
+	checker: ts.TypeChecker,
+	exported: ts.Symbol,
+): NamespaceExport | undefined {
+	if (!exported.declarations?.some(ts.isNamespaceExport)) return;
+	const module = aliasedSymbol(checker, exported);
+	return {
+		name: exported.getName(),
+		members: checker.getExportsOfModule(module).map(member => ({
+			name: member.getName(),
+			symbol: aliasedSymbol(checker, member),
+		})),
+	};
+}
+
+function getNamespaceTypeParameters(symbol: ts.Symbol) {
+	return symbol.declarations
+		?.map(declaration => {
+			if (
+				ts.isClassDeclaration(declaration) ||
+				ts.isInterfaceDeclaration(declaration) ||
+				ts.isTypeAliasDeclaration(declaration) ||
+				ts.isFunctionDeclaration(declaration)
+			)
+				return declaration.typeParameters;
+		})
+		.find(parameters => parameters !== undefined);
+}
+
+function createNamespaceDeclaration(
+	checker: ts.TypeChecker,
+	namespace: NamespaceExport,
+	symbolNames: Map<ts.Symbol, string>,
+) {
+	const members: ts.Statement[] = [];
+	for (const { name, symbol } of namespace.members) {
+		const local = symbolNames.get(symbol);
+		if (!local)
+			throw new Error(
+				`Unable to bundle namespace export "${namespace.name}.${name}"`,
+			);
+		if (symbol.flags & ts.SymbolFlags.Value)
+			members.push(
+				ts.factory.createVariableStatement(
+					[ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
+					ts.factory.createVariableDeclarationList(
+						[
+							ts.factory.createVariableDeclaration(
+								name,
+								undefined,
+								ts.factory.createTypeQueryNode(
+									ts.factory.createIdentifier(local),
+								),
+							),
+						],
+						ts.NodeFlags.Const,
+					),
+				),
+			);
+		if (symbol.flags & ts.SymbolFlags.Type) {
+			const typeParameters = getNamespaceTypeParameters(symbol)?.map(
+				parameter =>
+					ts.factory.createTypeParameterDeclaration(
+						undefined,
+						parameter.name.text,
+						parameter.constraint &&
+							checker.typeToTypeNode(
+								checker.getTypeFromTypeNode(parameter.constraint),
+								undefined,
+								ts.NodeBuilderFlags.NoTruncation,
+							),
+						parameter.default &&
+							checker.typeToTypeNode(
+								checker.getTypeFromTypeNode(parameter.default),
+								undefined,
+								ts.NodeBuilderFlags.NoTruncation,
+							),
+					),
+			);
+			members.push(
+				ts.factory.createTypeAliasDeclaration(
+					[ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
+					name,
+					typeParameters,
+					ts.factory.createTypeReferenceNode(
+						local,
+						typeParameters?.map(parameter =>
+							ts.factory.createTypeReferenceNode(parameter.name),
+						),
+					),
+				),
+			);
+		}
+	}
+	return ts.factory.createModuleDeclaration(
+		[ts.factory.createModifier(ts.SyntaxKind.DeclareKeyword)],
+		ts.factory.createIdentifier(namespace.name),
+		ts.factory.createModuleBlock(members),
+		ts.NodeFlags.Namespace,
+	);
+}
+
 export function bundleDeclarations(
 	entryFile: string,
 	externalPackages: readonly string[],
@@ -424,6 +531,7 @@ export function bundleDeclarations(
 	const includedFiles = new Set<ts.SourceFile>();
 	const statements = new Set<ts.Statement>();
 	const publicExports: { name: string; symbol: ts.Symbol }[] = [];
+	const namespaceExports: NamespaceExport[] = [];
 	const entrySymbol = checker.getSymbolAtLocation(entry);
 	if (!entrySymbol) {
 		if (!entry.statements.length) return 'export {};\n';
@@ -519,6 +627,13 @@ export function bundleDeclarations(
 	};
 	for (const exported of checker.getExportsOfModule(entrySymbol)) {
 		const name = exported.getName();
+		const namespace = getNamespaceExport(checker, exported);
+		if (namespace) {
+			namespaceExports.push(namespace);
+			for (const member of namespace.members)
+				includeSymbol(member.symbol, true);
+			continue;
+		}
 		const externalExport = exported.declarations
 			?.map(moduleStatement)
 			.find(statement => {
@@ -536,7 +651,7 @@ export function bundleDeclarations(
 
 	const symbolNames = new Map<ts.Symbol, string>();
 	const aliasNames = new Map<ts.Symbol, string>();
-	const usedNames = new Set<string>();
+	const usedNames = new Set(namespaceExports.map(({ name }) => name));
 	for (const { name, symbol } of publicExports) {
 		if (
 			name !== 'default' &&
@@ -840,11 +955,27 @@ export function bundleDeclarations(
 		}
 		result.dispose();
 	}
+	for (const namespace of namespaceExports)
+		chunks.push(
+			printer.printNode(
+				ts.EmitHint.Unspecified,
+				createNamespaceDeclaration(checker, namespace, symbolNames),
+				entry,
+			),
+		);
 	const exports = publicExports.map(({ name, symbol }) => {
 		const local = symbolNames.get(symbol);
 		if (!local) throw new Error(`Unable to bundle declaration export "${name}"`);
 		return ts.factory.createExportSpecifier(false, local === name ? undefined : local, name);
 	});
+	for (const { name } of namespaceExports)
+		exports.push(
+			ts.factory.createExportSpecifier(
+				false,
+				undefined,
+				ts.factory.createIdentifier(name),
+			),
+		);
 	if (exports.length)
 		chunks.push(
 			printer.printNode(

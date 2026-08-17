@@ -12,7 +12,7 @@ import {
 
 import { promises as fs, readFileSync } from 'fs';
 import { basename as pathBasename, dirname, resolve } from 'path';
-import { Output, exec, shell } from './builder.js';
+import { Output, Task, exec, shell } from './builder.js';
 
 /**
  * Provides an Observable that emits the absolute paths of all entries in a given
@@ -43,11 +43,34 @@ export function filterPath(matchPath: string) {
 	return filter((out: Output) => resolve(out.path).startsWith(matchPath));
 }
 
-export function file(source: string, out?: string) {
+export function file(source: string, outputPath?: string): Task;
+export function file(
+	generate: () => string | Buffer | Promise<string | Buffer>,
+	outputPath: string,
+): Task;
+export function file(
+	source: string | (() => string | Buffer | Promise<string | Buffer>),
+	outputPath?: string,
+): Task {
+	if (typeof source === 'function') {
+		if (outputPath === undefined)
+			throw new Error('Generated files require an output path');
+		return fromAsync(async () => {
+			const generated = await source();
+			return {
+				path: outputPath,
+				source:
+					typeof generated === 'string'
+						? Buffer.from(generated)
+						: generated,
+			};
+		});
+	}
+
 	return defer(() =>
 		from(
 			read(source).then(res => ({
-				path: out || resolve(source),
+				path: outputPath || resolve(source),
 				source: res.source,
 			})),
 		),

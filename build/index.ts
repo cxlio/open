@@ -1,4 +1,5 @@
 export * from './file.js';
+export * as rx from '../rx/index.js';
 export { pkg, readme, esbuild, readPackage } from './package.js';
 export { Package } from './npm.js';
 export { buildLibrary } from './library.js';

@@ -8,8 +8,20 @@ import { Coverage, generateReport } from './report.js';
 import { processBenchmarks } from './benchmark.js';
 import { run } from './runner.js';
 import { mkdtemp, readFile, rm } from 'fs/promises';
+import { execFile } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
+
+function runCli(args: string[]) {
+	return new Promise<string>((resolve, reject) => {
+		execFile(
+			process.execPath,
+			[join(import.meta.dirname, 'index.js'), ...args],
+			{ cwd: import.meta.dirname },
+			(error, stdout) => (error ? reject(error) : resolve(stdout)),
+		);
+	});
+}
 
 const suite = {
 	name: 'suite',
@@ -81,6 +93,26 @@ const environment = {
 };
 
 export default spec('tester', s => {
+	s.test('browser console output', async a => {
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
+		try {
+			const args = [
+				'./test-console-fixture.js',
+				'--ignoreCoverage',
+				'--vfsRoot',
+				'..',
+				'--reportPath',
+				join(dir, 'report.json'),
+			];
+			const stdout = await runCli(args);
+			a.equal(stdout.trim(), 'tests: passed (2)');
+			const verboseStdout = await runCli([...args, '--verbose']);
+			a.equal(verboseStdout.includes('browser console output'), true);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	s.test('browser-runner', a => {
 		a.ok(browserRunner);
 	});

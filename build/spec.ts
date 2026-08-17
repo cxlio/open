@@ -207,6 +207,7 @@ export function runTests({
 		const pkgJson = await readJson<Package>('package.json');
 		const rootPkg = await readJson<Package>('../package.json');
 		const ignoreTestCoverage = ignoreCoverage || !!grep;
+		const { verbose } = buildOutputOptions();
 		const expectedCoverageFiles = ignoreTestCoverage
 			? undefined
 			: getExpectedCoverageFiles(outputDir);
@@ -214,6 +215,7 @@ export function runTests({
 			process.chdir(outputDir);
 			const report = await runSpec({
 				node,
+				verbose,
 				mjs: true,
 				vfsRoot: '../../',
 				entryFile,
@@ -257,10 +259,12 @@ export function runBenchmarks({
 		const cwd = process.cwd();
 		const pkgJson = await readJson<Package>('package.json');
 		const rootPkg = await readJson<Package>('../package.json');
+		const { verbose } = buildOutputOptions();
 		try {
 			process.chdir(outputDir);
 			const report = await runSpec({
 				node: false,
+				verbose,
 				mjs: true,
 				vfsRoot: '../../',
 				entryFile: './test-benchmark.js',

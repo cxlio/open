@@ -185,7 +185,7 @@ async function createPage(
 		: app.entryFile;
 
 	page.on('console', msg => {
-		handleConsole(msg, app).catch(e => console.error(e));
+		if (app.verbose) handleConsole(msg, app).catch(e => console.error(e));
 	});
 	page.on('pageerror', msg => {
 		app.log(msg);
@@ -221,7 +221,8 @@ function virtualFileServer(
 ) {
 	const cwd = app.vfsRoot ? resolve(app.vfsRoot) : process.cwd();
 
-	if (app.vfsRoot) app.log(`vfsRoot: ${cwd} (cwd: ${process.cwd()})`);
+	if (app.verbose && app.vfsRoot)
+		app.log(`vfsRoot: ${cwd} (cwd: ${process.cwd()})`);
 
 	function findRequestPath(path: string) {
 		try {
@@ -567,7 +568,7 @@ export default async function runPuppeteer(app: SpecRunner) {
 			timeout: 5000,
 			userDataDir,
 		});
-		app.log(`Puppeteer ${await browser.version()}`);
+		if (app.verbose) app.log(`Puppeteer ${await browser.version()}`);
 
 		const { suite, coverage } = await createPage(app, browser, 0);
 		const benchmark = hasBenchmarks(suite)

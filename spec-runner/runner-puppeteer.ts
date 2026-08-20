@@ -22,6 +22,27 @@ import type { PNG } from 'pngjs';
 import { TestCoverage, generateReport } from './report.js';
 import type { Protocol } from 'devtools-protocol';
 
+const contentTypes: Record<string, string> = {
+	'.avif': 'image/avif',
+	'.css': 'text/css',
+	'.gif': 'image/gif',
+	'.html': 'text/html',
+	'.ico': 'image/x-icon',
+	'.jpeg': 'image/jpeg',
+	'.jpg': 'image/jpeg',
+	'.js': 'text/javascript',
+	'.json': 'application/json',
+	'.map': 'application/json',
+	'.png': 'image/png',
+	'.svg': 'image/svg+xml',
+	'.text': 'text/plain',
+	'.txt': 'text/plain',
+	'.wasm': 'application/wasm',
+	'.webp': 'image/webp',
+	'.woff': 'font/woff',
+	'.woff2': 'font/woff2',
+};
+
 interface HTMLElement {
 	activeElement: HTMLElement | null;
 	innerHTML: string;
@@ -311,22 +332,17 @@ function virtualFileServer(
 						},
 					});
 
-				const body = await readFile(join(cwd, pathname), 'utf8');
-				const ext = extname(pathname);
+				const body = await readFile(join(cwd, pathname));
+				const ext = extname(pathname).toLowerCase();
 				if (ext === '.js' && !app.sources.has(url.href))
 					app.sources.set(url.href, {
 						path: pathname,
-						source: body,
+						source: body.toString('utf8'),
 					});
 
 				await req.respond({
 					status: 200,
-					contentType:
-						ext === '.js'
-							? 'text/javascript'
-							: ext === '.html'
-								? 'text/html'
-								: 'text/plain',
+					contentType: contentTypes[ext] ?? 'application/octet-stream',
 					body,
 				});
 			} else {

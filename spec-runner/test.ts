@@ -117,6 +117,22 @@ export default spec('tester', s => {
 		a.ok(browserRunner);
 	});
 
+	s.test('browser binary static-file execution', async a => {
+		a.setTimeout(60000);
+		const report = await run({
+			node: false,
+			mjs: true,
+			entryFile: './test-binary-fixture.js',
+			vfsRoot: '../../',
+			ignoreCoverage: true,
+			updateBaselines: false,
+			reportPath: 'binary-report.json',
+			sources: new Map(),
+			log: console.log.bind(console),
+		});
+		a.equal(report.success, true);
+	});
+
 	s.test('coverage', it => {
 		const coverage: Coverage = [
 			{

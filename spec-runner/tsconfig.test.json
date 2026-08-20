@@ -5,6 +5,7 @@
 	},
 	"files": [
 		"test.ts",
+		"test-binary-fixture.ts",
 		"test-benchmark-fixture.ts",
 		"test-console-fixture.ts",
 		"test-drag-fixture.ts",

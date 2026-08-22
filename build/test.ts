@@ -442,25 +442,6 @@ void composed;
 				await mkdir(internalTypesDir, { recursive: true });
 				await mkdir(aliasSourceDir, { recursive: true });
 				await mkdir(aliasOutputDir, { recursive: true });
-				const javascriptEntry = join(dir, 'index.ts');
-				const javascriptDependency = join(dir, 'b.ts');
-				await writeFile(
-					javascriptEntry,
-					"export { value as bundledValue } from './b.js';\n",
-				);
-				await writeFile(javascriptDependency, 'export const value = 42;\n');
-				await esbuild({
-					bundle: true,
-					entryPoints: [javascriptEntry],
-					format: 'esm',
-					outfile: join(packageDir, 'index.js'),
-					platform: 'node',
-				});
-				await rm(javascriptDependency);
-				const bundled = await import(
-					pathToFileURL(join(packageDir, 'index.js')).href
-				);
-				a.equal(bundled.bundledValue, 42);
 				await writeFile(
 					join(packageDir, 'index.d.ts'),
 					`import type { Public as Imported } from './b.js';

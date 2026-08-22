@@ -213,6 +213,7 @@ export function runTests({
 			? undefined
 			: getExpectedCoverageFiles(outputDir);
 		const reportPath = 'test-report.json';
+		const documentPath = 'test-report.html';
 		try {
 			process.chdir(outputDir);
 			const report = await runSpec({
@@ -226,6 +227,7 @@ export function runTests({
 				grep: parseGrep(grep),
 				baselinePath: `../../${appId}/spec`,
 				reportPath,
+				documentPath,
 				importmap: node
 					? undefined
 					: generateImportMap(rootPkg, pkgJson),

@@ -5,6 +5,7 @@ import type { Test, JsonResult } from '../spec/index.js';
 import type { SpecRunner } from './index.js';
 
 import { Coverage, generateReport } from './report.js';
+import { writeSpecificationDocument } from './specification-file.js';
 
 function post(session: inspector.Session, msg: string, params = {}) {
 	return new Promise((resolve, reject) => {
@@ -46,6 +47,12 @@ export default async function runNode(app: SpecRunner) {
 		return suite.run(app.grep).then(() => suite);
 	}
 
+	async function writeDocument(suite: JsonResult) {
+		await writeSpecificationDocument(app.documentPath, suite, {
+			baselinePath: app.baselinePath,
+		});
+	}
+
 	const entryFile = app.entryFile;
 	const session = new inspector.Session();
 	const suitePath = resolve(entryFile);
@@ -64,6 +71,7 @@ export default async function runNode(app: SpecRunner) {
 
 	if (app.ignoreCoverage) {
 		const suite = await runSuite();
+		await writeDocument(suite);
 		return generateReport(suite);
 	} else {
 		const { result, coverage } = await recordCoverage(
@@ -75,6 +83,7 @@ export default async function runNode(app: SpecRunner) {
 			console.log('Press any key to continue');
 			await new Promise(res => process.stdin.once('data', res));
 		}
+		await writeDocument(result);
 		return generateReport(result, coverage, {
 			entryFile: app.entryFile,
 			expectedCoverageFiles: app.expectedCoverageFiles,

@@ -1,5 +1,14 @@
 import type { JsonResult, Result, RunnerCommand, Test } from '../spec';
 import {
+	escapeSpecificationHtml,
+	specificationCss,
+	specificationCount,
+	specificationFigureSources,
+	specificationHeading,
+	specificationResults,
+	summarizeSpecification,
+} from '../spec-runner/specification.js';
+import {
 	Component,
 	Page,
 	Layout,
@@ -35,39 +44,10 @@ interface RunnerConfig {
 	baselinePath?: string;
 }
 
-theme.globalCss += `
-.specification { box-sizing: border-box; max-width: 840px; margin: 64px auto 96px; padding: 0 32px; width: 100%; }
-.specification-header { border-bottom: 1px solid var(--cxl-color-outline-variant, #ddd); margin-bottom: 48px; padding-bottom: 24px; }
-.specification-header h1 { font-size: 2.25rem; letter-spacing: -0.025em; line-height: 1.15; margin: 0 0 12px; }
-.specification-summary { color: var(--cxl-color-on-surface-variant, #555); font-size: 0.9375rem; margin: 0; }
-.specification-section { margin: 32px 0; }
-.specification-section .specification-section { margin: 24px 0 0; }
-.specification-section h2, .specification-section h3, .specification-section h4, .specification-section h5, .specification-section h6 { line-height: 1.3; margin: 0 0 12px; }
-.specification-section h2 { border-bottom: 1px solid var(--cxl-color-outline-variant, #ddd); font-size: 1.5rem; padding-bottom: 10px; }
-.specification-section h3 { font-size: 1.25rem; }
-.specification-section h4 { font-size: 1.0625rem; }
-.specification-section h5, .specification-section h6 { font-size: 1rem; }
+theme.globalCss += `${specificationCss}
 .specification-section a { color: inherit; text-decoration: none; }
 .specification-section a:hover { text-decoration: underline; }
-.specification-prose { line-height: 1.7; margin: 0 0 16px; }
-.specification-evidence { margin: 0; padding-left: 28px; }
-.specification-evidence > li { border-top: 1px solid var(--cxl-color-outline-variant, #ddd); padding: 10px 0; }
-.specification-evidence > li::marker { color: var(--cxl-color-primary, #1769aa); font-weight: 700; }
-.specification-evidence .failure { color: var(--cxl-color-error, #b3261e); }
-.specification-evidence pre { overflow: auto; white-space: pre-wrap; }
-.specification-assertions { margin-top: 12px; }
-.specification-assertions > summary { cursor: pointer; color: var(--cxl-color-on-surface-variant, #555); }
-.screenshot-evidence { color: var(--cxl-color-on-surface, #222); margin: 0; }
-.screenshot-evidence > figcaption { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; margin-bottom: 12px; }
-.screenshot-evidence-title { font-weight: 700; }
-.screenshot-status { color: var(--cxl-color-on-surface-variant, #555); font-size: 0.875rem; }
-.failure .screenshot-status { color: var(--cxl-color-error, #b3261e); }
-.screenshot-comparison { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
-.screenshot-passing-image { display: block; height: auto; margin: 0 auto; max-width: 100%; }
-.screenshot-panel { background: var(--cxl-color-surface-container-low, #f7f7f7); border: 1px solid var(--cxl-color-outline-variant, #ddd); border-radius: 4px; margin: 0; min-width: 0; overflow: hidden; }
-.screenshot-panel > figcaption { color: var(--cxl-color-on-surface-variant, #555); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; padding: 8px 10px; text-transform: uppercase; }
-.screenshot-panel > img, .screenshot-panel > spec-image-diff { border-top: 1px solid var(--cxl-color-outline-variant, #ddd); display: block; width: 100%; }
-.screenshot-panel > img { height: auto; }
+.screenshot-panel > spec-image-diff { border-top: 1px solid var(--cxl-color-outline-variant, #ddd); display: block; width: 100%; }
 .screenshot-preview { margin-top: 12px; }
 .screenshot-preview button { background: none; border: 0; color: var(--cxl-color-primary, #1769aa); cursor: pointer; font: inherit; padding: 4px 0; text-decoration: underline; }
 .screenshot-preview iframe { background: white; border: 1px solid var(--cxl-color-outline-variant, #ddd); box-sizing: border-box; display: block; height: 320px; margin-top: 8px; width: 100%; }
@@ -77,8 +57,12 @@ let browserBaselinePath = 'spec';
 
 window.__cxlRunner = async data => {
 	if (data.type === 'figure') {
-		const actual = (data.actual ??= `spec/${data.name}.png`);
-		const baseline = (data.baseline ??= `${browserBaselinePath}/${data.name}.png`);
+		const { actual, baseline } = specificationFigureSources(
+			data,
+			browserBaselinePath,
+		);
+		data.actual = actual;
+		data.baseline = baseline;
 		try {
 			const comparison = await imageDiff(actual, baseline);
 			const success = comparison.diffBytes === 0;
@@ -159,20 +143,11 @@ output.className = 'specification';
 const page = tsx(
 	Page,
 	{},
-	tsx('style', undefined, 'body { tab-size: 4; }'),
 	output,
 );
 
-const ENTITIES_REGEX = /[&<>"]/g,
-	ENTITIES_MAP: Record<string, string> = {
-		'&': '&amp;',
-		'<': '&lt;',
-		'>': '&gt;',
-		'"': '&quot;',
-	};
-
 export function escapeHtml(str: string) {
-	return str.replace(ENTITIES_REGEX, e => ENTITIES_MAP[e] || '');
+	return escapeSpecificationHtml(str);
 }
 
 function previewDocument(html: string, testFile?: string) {
@@ -205,8 +180,7 @@ function printFigureResult(
 ) {
 	const data = result.data;
 	if (data?.type !== 'figure') throw new Error('Missing figure data');
-	const actual = data.actual ?? `spec/${data.name}.png`;
-	const baseline = data.baseline ?? `${baselinePath}/${data.name}.png`;
+	const { actual, baseline } = specificationFigureSources(data, baselinePath);
 	const screenshot = result.success
 		? tsx('img', {
 				className: 'screenshot-passing-image',
@@ -498,35 +472,23 @@ class BrowserRunner {
 			tsx(
 				'header',
 				{ className: 'specification-header' },
-				tsx('h1', undefined, `Specification: ${test.name}`),
+				tsx('p', { className: 'specification-kicker' }, 'Specification'),
+				tsx('h1', undefined, test.name),
 				tsx(
 					'p',
 					{ className: 'specification-summary' },
-					`${summary.tests} requirements · ${summary.failures} failures`,
+					`${specificationCount(summary.tests, 'requirement')} · ${specificationCount(summary.failures, 'failure')}`,
 				),
 			),
 		);
-		this.renderTestReport(test, '', 1, output);
+		this.renderTestReport(test, '', 0, output);
 	}
 
 	getSummary(test: Test | BrowserTestResult): {
 		tests: number;
 		failures: number;
 	} {
-		const children = test.only.length ? test.only : test.tests;
-		return children.reduce(
-			(summary, child) => {
-				const childSummary = this.getSummary(child);
-				return {
-					tests: summary.tests + childSummary.tests,
-					failures: summary.failures + childSummary.failures,
-				};
-			},
-			{
-				tests: 1,
-				failures: test.results.filter(result => !result.success).length,
-			},
-		);
+		return summarizeSpecification(test);
 	}
 
 	renderTestReport(
@@ -537,7 +499,7 @@ class BrowserRunner {
 		parentLevel?: number,
 	) {
 		let failureCount = 0;
-		const results = test.results;
+		const results = specificationResults(test);
 
 		results.forEach(r => {
 			if (r.success === false) {
@@ -545,37 +507,31 @@ class BrowserRunner {
 			}
 		});
 
-		if (
-			results.length === 0 &&
-			test.tests.length === 0 &&
-			test.only.length === 0
-		) {
-			failureCount++;
-			results.push({
-				success: false,
-				failureMessage: 'No assertions found',
-			});
-		}
-
 		const testPath = parentPath ? `${parentPath} ${test.name}` : test.name;
-		const section = tsx('section', { className: 'specification-section' });
-		if (
-			test.level === 0 ||
-			(test.level === undefined && parentLevel !== undefined)
-		)
-			section.append(
-				tsx('p', { className: 'specification-prose' }, test.name),
-			);
-		else {
-			const link = tsx(
-				'a',
-				{ href: '#' },
-				`${test.name}${failureCount > 0 ? ` (${failureCount} failures)` : ''}`,
-			);
-			link.dataset.test = testPath;
-			section.append(
-				tsx(headingTag(test.level ?? depth), undefined, link),
-			);
+		const section = tsx('section', {
+			className: depth === 0
+				? 'specification-root'
+				: 'specification-section',
+		});
+		if (depth > 0) {
+			if (
+				test.level === 0 ||
+				(test.level === undefined && parentLevel !== undefined)
+			)
+				section.append(
+					tsx('p', { className: 'specification-prose' }, test.name),
+				);
+			else {
+				const link = tsx(
+					'a',
+					{ href: '#' },
+					`${test.name}${failureCount > 0 ? ` (${failureCount} failures)` : ''}`,
+				);
+				link.dataset.test = testPath;
+				section.append(
+					tsx(headingTag(test.level ?? depth), undefined, link),
+				);
+			}
 		}
 		const evidence = results.filter(
 			result => result.data?.type === 'figure',
@@ -615,7 +571,7 @@ class BrowserRunner {
 					tsx(
 						'summary',
 						undefined,
-						`${assertions.length} assertions${failures ? ` · ${failures} failures` : ''}`,
+						`${specificationCount(assertions.length, 'assertion')}${failures ? ` · ${specificationCount(failures, 'failure')}` : ''}`,
 					),
 					tsx(
 						'ol',
@@ -671,18 +627,7 @@ class BrowserRunner {
 }
 
 function headingTag(depth: number) {
-	switch (Math.min(depth + 1, 6)) {
-		case 3:
-			return 'h3';
-		case 4:
-			return 'h4';
-		case 5:
-			return 'h5';
-		case 6:
-			return 'h6';
-		default:
-			return 'h2';
-	}
+	return specificationHeading(depth);
 }
 
 export default BrowserRunner;

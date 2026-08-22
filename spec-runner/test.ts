@@ -7,6 +7,10 @@ import browserRunner from './runner-puppeteer.js';
 import { Coverage, generateReport } from './report.js';
 import { processBenchmarks } from './benchmark.js';
 import { run } from './runner.js';
+import {
+	renderSpecificationDocument,
+	specificationCss,
+} from './specification.js';
 import { mkdtemp, readFile, rm } from 'fs/promises';
 import { execFile } from 'child_process';
 import { tmpdir } from 'os';
@@ -103,14 +107,99 @@ export default spec('tester', s => {
 				'..',
 				'--reportPath',
 				join(dir, 'report.json'),
+				'--documentPath',
+				join(dir, 'report.html'),
 			];
 			const stdout = await runCli(args);
 			a.equal(stdout.trim(), 'tests: passed (2)');
+			const document = await readFile(join(dir, 'report.html'), 'utf8');
+			a.ok(document.includes('<c-page><c-layout'));
+			a.ok(document.includes('Specification: console fixture'));
 			const verboseStdout = await runCli([...args, '--verbose']);
 			a.equal(verboseStdout.includes('browser console output'), true);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
+	});
+
+	s.test('static specification document', a => {
+		const document = renderSpecificationDocument({
+			name: 'Payments <script>',
+			results: [],
+			tests: [
+				{
+					name: 'Card checkout',
+					level: 1,
+					results: [],
+					tests: [
+						{
+							name: 'A customer can pay securely.',
+							level: 0,
+							results: [
+								{
+									success: true,
+									message: 'Payment accepted',
+									failureMessage: 'Payment rejected',
+								},
+							],
+							tests: [],
+							only: [],
+							runTime: 0,
+							timeout: 1000,
+						},
+					],
+					only: [],
+					runTime: 0,
+					timeout: 1000,
+				},
+				{
+					name: 'Receipt',
+					results: [
+						{
+							success: false,
+							failureMessage: 'Screenshot <changed>',
+							data: {
+								type: 'figure',
+								name: 'receipt',
+								html: '<button>Pay</button>',
+								domId: 'receipt',
+								actual: 'actual.png',
+								baseline: 'baseline.png',
+							},
+						},
+					],
+					tests: [],
+					only: [],
+					runTime: 0,
+					timeout: 1000,
+				},
+			],
+			only: [],
+			runTime: 0,
+			timeout: 1000,
+		});
+
+		a.ok(document.startsWith('<!doctype html>'));
+		a.ok(document.includes('<c-page><c-layout type="block" center'));
+		a.ok(document.includes(specificationCss));
+		a.ok(document.includes('margin: 0 auto'));
+		a.ok(
+			document.includes(
+				'<p class="specification-kicker">Specification</p><h1>Payments &lt;script&gt;</h1>',
+			),
+		);
+		a.equal(document.includes('<h2>Payments &lt;script&gt;</h2>'), false);
+		a.ok(document.includes('<h2>Card checkout</h2>'));
+		a.ok(
+			document.includes(
+				'<p class="specification-prose">A customer can pay securely.</p>',
+			),
+		);
+		a.ok(document.includes('Screenshot &lt;changed&gt;'));
+		a.ok(document.includes('src="actual.png"'));
+		a.ok(document.includes('src="baseline.png"'));
+		a.equal(document.includes('<script>'), false);
+		a.ok(document.includes('Payments &lt;script&gt;'));
 	});
 
 	s.test('browser-runner', a => {

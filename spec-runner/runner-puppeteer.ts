@@ -20,6 +20,7 @@ import type { SpecRunner } from './index.js';
 import type { PNG } from 'pngjs';
 
 import { TestCoverage, generateReport } from './report.js';
+import { writeSpecificationDocument } from './specification-file.js';
 import type { Protocol } from 'devtools-protocol';
 
 const contentTypes: Record<string, string> = {
@@ -598,6 +599,9 @@ export default async function runPuppeteer(app: SpecRunner) {
 		const report = await generateReport(suite, coverage, {
 			entryFile: app.entryFile,
 			expectedCoverageFiles: app.expectedCoverageFiles,
+		});
+		await writeSpecificationDocument(app.documentPath, suite, {
+			baselinePath: app.baselinePath,
 		});
 		report.benchmark = benchmark;
 		return report;

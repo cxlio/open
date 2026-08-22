@@ -10,6 +10,8 @@
 		"grep.ts",
 		"benchmark.ts",
 		"report.ts",
+		"specification.ts",
+		"specification-file.ts",
 		"runner.ts",
 		"runner-node.ts",
 		"runner-puppeteer.ts",

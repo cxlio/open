@@ -897,6 +897,12 @@ export default spec('fixture', s => s.test('passes', a => a.ok(true)));
 				await readFile(join(outputDir, 'test-report.json'), 'utf8'),
 			) as { summary: { failureCount: number; testTotal: number } };
 			a.equalValues(report.summary, { failureCount: 0, testTotal: 2 });
+			const document = await readFile(
+				join(outputDir, 'test-report.html'),
+				'utf8',
+			);
+			a.ok(document.includes('Specification: fixture'));
+			a.ok(document.includes('<c-page><c-layout'));
 		} finally {
 			process.chdir(cwd);
 			await rm(rootDir, { recursive: true, force: true });

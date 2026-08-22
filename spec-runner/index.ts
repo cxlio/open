@@ -14,6 +14,17 @@ import { parseGrep } from './grep.js';
 import printReportV2 from './report-stdout.js';
 import { writeReport, type TestCoverage } from './report.js';
 
+export {
+	escapeSpecificationHtml,
+	renderSpecificationDocument,
+	specificationCss,
+	specificationCount,
+	specificationFigureSources,
+	specificationHeading,
+	specificationResults,
+	summarizeSpecification,
+} from './specification.js';
+
 export type SpecRunnerOptions = ParametersResult<typeof parameters>;
 
 export type SpecRunner = Omit<SpecRunnerOptions, '$' | 'grep'> & {
@@ -21,6 +32,7 @@ export type SpecRunner = Omit<SpecRunnerOptions, '$' | 'grep'> & {
 	expectedCoverageFiles?: TestCoverage[];
 	importmap?: string;
 	reportPath: string;
+	documentPath?: string;
 	grep?: RegExp;
 	sources: Map<string, Output>;
 	log: Logger;
@@ -66,6 +78,10 @@ const parameters = {
 		type: 'string',
 		help: 'Path to write the JSON test report (default: "test-report.json").',
 	},
+	documentPath: {
+		type: 'string',
+		help: 'Path to write the static HTML specification (default: "test-report.html").',
+	},
 	grep: {
 		type: 'string',
 		help: 'Run only tests whose full name matches the pattern.',
@@ -95,6 +111,7 @@ const start = program({}, async ({ log }) => {
 		node: false,
 		log,
 		reportPath: 'test-report.json',
+		documentPath: 'test-report.html',
 		sources: new Map(),
 		...rest,
 		grep: parseGrep(grepPattern),

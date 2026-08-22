@@ -1,4 +1,5 @@
 import { spec } from '../spec/index.js';
+import { renderSpecificationDocument } from '../spec-runner/specification.js';
 import browserRunner, { imageDataDiff, runTestFile } from './index.js';
 
 export default spec('tester', s => {
@@ -65,7 +66,7 @@ export default spec('tester', s => {
 		) as HTMLDetailsElement | null;
 		a.ok(assertions);
 		a.equal(assertions?.open, false);
-		a.ok(assertions?.textContent?.includes('assertions'));
+		a.ok(assertions?.textContent?.includes('assertion'));
 	});
 
 	s.test('renders specification prose as paragraph text', async a => {
@@ -78,6 +79,46 @@ export default spec('tester', s => {
 		a.equal(prose?.tagName, 'P');
 		a.equal(prose?.textContent, 'Paragraph text');
 		a.equal(prose?.querySelector('a'), null);
+	});
+
+	s.test('renders an accessible static specification document', async a => {
+		const frame = document.createElement('iframe');
+		frame.title = 'Static specification';
+		frame.srcdoc = renderSpecificationDocument(
+			{
+				name: 'Checkout',
+				results: [],
+				tests: [
+					{
+						name: 'Payment',
+						level: 1,
+						results: [
+							{
+								success: true,
+								message: 'Payment accepted',
+								failureMessage: 'Payment rejected',
+							},
+						],
+						tests: [],
+						only: [],
+						runTime: 0,
+						timeout: 1000,
+					},
+				],
+				only: [],
+				runTime: 0,
+				timeout: 1000,
+			},
+			{ uiModule: 'data:text/javascript,' },
+		);
+		document.body.append(frame);
+		await new Promise<void>(resolve =>
+			frame.addEventListener('load', () => resolve(), { once: true }),
+		);
+		const body = frame.contentDocument?.body;
+		a.ok(body);
+		if (body) await a.a11y(body);
+		frame.remove();
 	});
 
 	s.test('renders screenshot evidence without inline source html', async a => {

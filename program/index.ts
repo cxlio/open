@@ -465,6 +465,11 @@ export async function readJson<T>(
 	}
 }
 
+export function getErrorCode(error: Error): string | undefined {
+	const code: unknown = Object.getOwnPropertyDescriptor(error, 'code')?.value;
+	return typeof code === 'string' ? code : undefined;
+}
+
 export function log(prefix: string | (() => string), ...msg: unknown[]) {
 	console.log(typeof prefix === 'string' ? prefix : prefix(), ...msg);
 }

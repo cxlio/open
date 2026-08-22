@@ -57,7 +57,7 @@ const TsconfigTestJson = 'tsconfig.test.json';
 const LocalTsconfigJson = './tsconfig.json';
 const TestScript = 'npm run build -- test';
 const baseDir = path.resolve('.');
-const requiredPackageFields = [
+const requiredPackageFields: (keyof Package)[] = [
 	'name',
 	'version',
 	'description',
@@ -341,25 +341,26 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 
 async function lintPackage({ pkg, name, rootPkg }: LintData) {
 	const rules = requiredPackageFields.map(field =>
-		rule(field in pkg, `Field "${field}" required in package.json`),
+		rule(pkg[field] !== undefined, `Field "${field}" required in package.json`),
 	);
 
 	const browser = './index.bundle.js';
+
+	rules.push(
+		rule(pkg.scripts !== undefined, `Field "scripts" required in package.json`),
+	);
 
 	if (pkg.scripts) {
 		const scripts = pkg.scripts;
 		rules.push(
 			...requiredPackageScripts.map(field =>
 				rule(
-					field in scripts,
+					scripts[field] !== undefined,
 					`Script "${field}" required in package.json`,
 				),
 			),
 		);
-	} else
-		rules.push(
-			rule('scripts' in pkg, `Field "scripts" required in package.json`),
-		);
+	}
 
 	rules.push(
 		/*rule(

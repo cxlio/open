@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
-import { readJson } from '../program/index.js';
+import { getErrorCode, readJson } from '../program/index.js';
 
 import type {
 	BenchmarkData,
@@ -115,10 +115,13 @@ function emptyBaseline(): BenchmarkBaseline {
 async function readBaseline(path: string) {
 	try {
 		return await readJson<BenchmarkBaseline>(path);
-	} catch (e) {
-		if (e instanceof Error && 'code' in e && e.code === 'ENOENT')
+	} catch (error) {
+		if (
+			error instanceof Error &&
+			getErrorCode(error) === 'ENOENT'
+		)
 			return emptyBaseline();
-		throw e;
+		throw error;
 	}
 }
 

@@ -2,10 +2,40 @@ import js from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import ts from 'typescript-eslint';
 import { configs as sonarjsConfigs } from 'eslint-plugin-sonarjs';
+import type { Rule } from 'eslint';
 import type { FlatConfig } from 'typescript-eslint';
+
+const preferTypeDiscrimination: Rule.RuleModule = {
+	meta: {
+		type: 'suggestion',
+		docs: {
+			description:
+				'Prefer a constrained type or an explicitly discriminated union.',
+		},
+		schema: [],
+		messages: {
+			preferTypeDiscrimination:
+				'Prefer a constrained type or an explicitly discriminated union.',
+		},
+	},
+	create(context) {
+		return {
+			"BinaryExpression[operator='in']"(node: Rule.Node) {
+				context.report({ node, messageId: 'preferTypeDiscrimination' });
+			},
+		};
+	},
+};
 
 export const tsConfig: FlatConfig.Config = {
 	files: ['**/*.ts', '**/*.tsx'],
+	plugins: {
+		local: {
+			rules: {
+				'prefer-type-discrimination': preferTypeDiscrimination,
+			},
+		},
+	},
 	languageOptions: {
 		ecmaVersion: 2022,
 		sourceType: 'module',
@@ -16,6 +46,7 @@ export const tsConfig: FlatConfig.Config = {
 	},
 	rules: {
 		'@typescript-eslint/member-ordering': 'error',
+		'local/prefer-type-discrimination': 'warn',
 
 		'no-mixed-spaces-and-tabs': 'off',
 		'no-prototype-builtins': 'error',

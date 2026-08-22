@@ -29,11 +29,11 @@ type RoleName = keyof Roles;
 type AriaAttributeName = keyof typeof ariaAttrs;
 
 function isRoleName(name: string): name is RoleName {
-	return name in ariaRoles;
+	return Object.hasOwn(ariaRoles, name);
 }
 
 function isAriaAttributeName(name: string): name is AriaAttributeName {
-	return name in ariaAttrs;
+	return Object.hasOwn(ariaAttrs, name);
 }
 
 function getRole(name: string | null): RoleMeta | null {
@@ -2137,7 +2137,7 @@ export function testAccessibility(
 	function testAriaAttributes() {
 		let notGlobalCount = 0;
 
-		const isNative = node.tagName.toLowerCase() in htmlElms;
+		const isNative = Object.hasOwn(htmlElms, node.tagName.toLowerCase());
 
 		function validateAriaAttribute(name: string, value: string) {
 			const validName = isAriaAttributeName(name);

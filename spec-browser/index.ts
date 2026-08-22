@@ -453,13 +453,12 @@ class BrowserRunner {
 		browserBaselinePath = config.baselinePath ?? 'spec';
 	}
 
-	async runSuite(suite?: Test | BrowserTestResult, targetPath?: string) {
+	async runSuite(suite?: Test, targetPath?: string) {
 		let result: Test | BrowserTestResult;
 		if (this.testFile)
 			result = await runTestFile(this.testFile, targetPath);
 		else {
-			if (!suite || !('run' in suite))
-				throw new Error('Missing test suite');
+			if (!suite) throw new Error('Missing test suite');
 			await suite.run();
 			result = suite;
 		}

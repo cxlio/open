@@ -12,6 +12,18 @@ export default spec('spec', s => {
 		a.equalValues(value, 'value');
 	});
 
+	s.test('deep equality rejects inherited property matches', async a => {
+		const assertions = spec('deep equality', s => {
+			s.test('own property', a => {
+				const actual: Record<string, string> = { toString: 'own' };
+				const expected: Record<string, string> = {};
+				a.equalValues(actual, expected);
+			});
+		});
+		await assertions.run();
+		a.equal(assertions.toJSON().tests[0]?.results[0]?.success, false);
+	});
+
 	s.test('assertions provide default messages', async a => {
 		const assertions = spec('assertions', s => {
 			s.test('ok', a => a.ok(true));

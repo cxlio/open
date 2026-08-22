@@ -39,7 +39,7 @@ export interface Package {
 	bundledDependencies?: Dependencies;
 	sideEffects?: boolean;
 	type?: string;
-	scripts?: Record<string, string>;
+	scripts?: Partial<Record<string, string>>;
 	exports?: Record<string, string>;
 	build?: {
 		coverage?: {

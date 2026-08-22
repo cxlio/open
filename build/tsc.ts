@@ -15,6 +15,7 @@ import type {
 import * as ts from 'typescript';
 import { Output } from './builder.js';
 import { getPackageName } from './package.js';
+import type { Package } from './npm.js';
 
 export interface TsconfigJson {
 	compilerOptions?: {
@@ -48,8 +49,6 @@ const diagnosticsHost: FormatDiagnosticsHost = {
 export const tscVersion = ts.version;
 
 function getErrorProperty(error: object, property: 'message' | 'messageText') {
-	if (!(property in error)) return;
-
 	const value = Object.getOwnPropertyDescriptor(error, property)?.value;
 	return typeof value === 'string' ? value : undefined;
 }
@@ -178,13 +177,10 @@ function workspaceDeclarations(entryFile: string) {
 		const packageFile = join(sourceRoot, entry.name, 'package.json');
 		const declarationDir = join(outputRoot, entry.name);
 		if (!existsSync(packageFile) || !existsSync(declarationDir)) continue;
-		const value: unknown = JSON.parse(readFileSync(packageFile, 'utf8'));
-		if (
-			value &&
-			typeof value === 'object' &&
-			'name' in value &&
-			typeof value.name === 'string'
-		)
+		const value: Partial<Package> | null = JSON.parse(
+			readFileSync(packageFile, 'utf8'),
+		);
+		if (value && typeof value.name === 'string')
 			packages.set(value.name, declarationDir);
 	}
 	return packages;

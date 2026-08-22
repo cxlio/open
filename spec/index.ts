@@ -170,17 +170,8 @@ function percentile(values: number[], value: number) {
 	return lowerValue + (upperValue - lowerValue) * (index - lower);
 }
 
-function isPromiseLike(value: Value): value is PromiseLike<Value> {
-	return (
-		typeof value === 'object' &&
-		value !== null &&
-		'then' in value &&
-		typeof value.then === 'function'
-	);
-}
-
 async function measureBenchmark(
-	run: () => Value | PromiseLike<Value>,
+	run: () => Value | Promise<Value>,
 	options: BenchmarkOptions,
 ): Promise<BenchmarkData> {
 	const resolved = { ...DEFAULT_BENCHMARK_OPTIONS, ...options };
@@ -191,7 +182,7 @@ async function measureBenchmark(
 		throw new Error('Benchmark samples must be a positive integer');
 
 	const first = run();
-	const asyncRun = isPromiseLike(first);
+	const asyncRun = first instanceof Promise;
 	if (asyncRun) await first;
 
 	async function measure(iterations: number) {
@@ -243,14 +234,19 @@ const setTimeout = globalThis.setTimeout;
 const clearTimeout = globalThis.clearTimeout;
 const DEFAULT_ASSERTION_MESSAGE = 'Expected value to be truthy';
 
-function isIterator<T>(val: T): val is T & Iterator<Value> {
-	return typeof val === 'object' && !!val && 'next' in val;
+function isIterator<T>(value: T): value is T & Iterator<Value> {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		typeof Reflect.get(value, 'next') === 'function'
+	);
 }
 
 function isIterable<T>(val: T): val is T & Iterable<Value> {
 	return (
 		typeof val === 'object' &&
 		!!val &&
+		// eslint-disable-next-line local/prefer-type-discrimination -- Iterable is a runtime protocol, not a concrete class.
 		Symbol.iterator in val &&
 		typeof val[Symbol.iterator] === 'function'
 	);
@@ -407,7 +403,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 	};
 
 	benchmark = (
-		run: () => Value | PromiseLike<Value>,
+		run: () => Value | Promise<Value>,
 		options: BenchmarkOptions = {},
 	) => {
 		if (this.benchmarkCalled)
@@ -990,7 +986,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		if (!partial)
 			for (const key of Object.keys(a)) {
 				count++;
-				if (!(key in b)) {
+				if (!Object.hasOwn(b, key)) {
 					this.ok(
 						false,
 						`${

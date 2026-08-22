@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-import { sh } from '../program/index.js';
+import { getErrorCode, sh } from '../program/index.js';
 import { Package, readPackage } from './npm.js';
 
 export async function buildRoot() {
@@ -54,13 +54,10 @@ async function readPkg(dir: string): Promise<ValidatedPackage | void> {
 
 	try {
 		pkg = await readPackage(pkgPath);
-	} catch (e) {
-		if (
-			!(e instanceof Error) ||
-			!('code' in e) ||
-			(e.code !== 'ENOENT' && e.code !== 'ENOTDIR')
-		)
-			throw e;
+	} catch (error) {
+		const code =
+			error instanceof Error ? getErrorCode(error) : undefined;
+		if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
 
 		return;
 	}

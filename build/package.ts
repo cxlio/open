@@ -5,6 +5,7 @@ import { file } from './file.js';
 import { execSync } from 'child_process';
 import { Output } from './builder.js';
 import { License, Package } from './npm.js';
+import { getErrorCode } from '../program/index.js';
 import * as esbuildApi from 'esbuild-wasm';
 
 const SCRIPTDIR = process.cwd();
@@ -236,9 +237,12 @@ function npmLink(pkgName: string, version: string) {
 function readIfExists(file: string) {
 	try {
 		return readFileSync(file, 'utf8');
-	} catch (e) {
-		if (!(e instanceof Error) || !('code' in e) || e.code !== 'ENOENT')
-			throw e;
+	} catch (error) {
+		if (
+			!(error instanceof Error) ||
+			getErrorCode(error) !== 'ENOENT'
+		)
+			throw error;
 
 		return '';
 	}

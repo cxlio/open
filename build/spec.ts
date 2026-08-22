@@ -200,6 +200,7 @@ export function runTests({
 }) {
 	return fromAsync(async () => {
 		const { run: runSpec } = await import('../spec-runner/runner.js');
+		const { writeReport } = await import('../spec-runner/report.js');
 		const { default: printReportV2 } =
 			await import('../spec-runner/report-stdout.js');
 
@@ -211,6 +212,7 @@ export function runTests({
 		const expectedCoverageFiles = ignoreTestCoverage
 			? undefined
 			: getExpectedCoverageFiles(outputDir);
+		const reportPath = 'test-report.json';
 		try {
 			process.chdir(outputDir);
 			const report = await runSpec({
@@ -223,7 +225,7 @@ export function runTests({
 				ignoreCoverage: ignoreTestCoverage,
 				grep: parseGrep(grep),
 				baselinePath: `../../${appId}/spec`,
-				reportPath: 'test-report.json',
+				reportPath,
 				importmap: node
 					? undefined
 					: generateImportMap(rootPkg, pkgJson),
@@ -231,6 +233,7 @@ export function runTests({
 				log: console.log.bind(console),
 			});
 			printReportV2(report, buildOutputOptions());
+			await writeReport(reportPath, report);
 			if (!report.success) throw new Error('Tests failed');
 			if (!ignoreTestCoverage)
 				enforceCoverageGate(

@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { writeFile } from 'fs/promises';
 import { spawn, execSync } from 'child_process';
 
 import {
@@ -13,7 +12,7 @@ import { run } from './runner.js';
 import { parseGrep } from './grep.js';
 
 import printReportV2 from './report-stdout.js';
-import type { TestCoverage } from './report.js';
+import { writeReport, type TestCoverage } from './report.js';
 
 export type SpecRunnerOptions = ParametersResult<typeof parameters>;
 
@@ -119,7 +118,7 @@ const start = program({}, async ({ log }) => {
 	}
 
 	printReportV2(report, { verbose: !!config.verbose });
-	await writeFile(config.reportPath, JSON.stringify(report));
+	await writeReport(config.reportPath, report);
 
 	if (!report.success) {
 		process.exitCode = 1;

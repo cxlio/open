@@ -38,6 +38,7 @@ import {
 	enforceCoverageGate,
 	generateTestFile,
 	runBenchmarks,
+	runTests,
 } from './spec.js';
 import type { Package } from './npm.js';
 import { checkBranchClean, checkBranchUpToDate } from './git.js';
@@ -884,5 +885,40 @@ void result;
 			outputDir: '../dist/missing-benchmark',
 		});
 		a.ok(true);
+	});
+
+	s.test('test target report', async a => {
+		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-test-'));
+		const packageDir = join(rootDir, 'package');
+		const outputDir = join(packageDir, 'dist');
+		const cwd = process.cwd();
+		try {
+			await mkdir(outputDir, { recursive: true });
+			await writeFile(join(rootDir, 'package.json'), '{"name":"root"}');
+			await writeFile(
+				join(packageDir, 'package.json'),
+				'{"name":"fixture","type":"module"}',
+			);
+			await writeFile(
+				join(outputDir, 'test.js'),
+				`import { spec } from ${JSON.stringify(pathToFileURL(join(import.meta.dirname, '../spec/index.js')).href)};
+export default spec('fixture', s => s.test('passes', a => a.ok(true)));
+`,
+			);
+			process.chdir(packageDir);
+			await runTests({
+				appId: 'fixture',
+				outputDir,
+				node: true,
+				ignoreCoverage: true,
+			});
+			const report = JSON.parse(
+				await readFile(join(outputDir, 'test-report.json'), 'utf8'),
+			) as { summary: { failureCount: number; testTotal: number } };
+			a.equalValues(report.summary, { failureCount: 0, testTotal: 2 });
+		} finally {
+			process.chdir(cwd);
+			await rm(rootDir, { recursive: true, force: true });
+		}
 	});
 });

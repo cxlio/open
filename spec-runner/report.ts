@@ -4,6 +4,7 @@ import type {
 	FigureData,
 } from '../spec/index.js';
 import type { BenchmarkReport } from './benchmark.js';
+import { writeFile } from 'fs/promises';
 import { basename } from 'path';
 
 export interface TestResult {
@@ -90,6 +91,10 @@ export interface TestCoverageReport {
 	functionReports: CoverageFunctionReport[];
 	functionCoveragePct: number;
 	blockCoveragePct: number;
+}
+
+export function writeReport(path: string, report: Report) {
+	return writeFile(path, JSON.stringify(report));
 }
 
 function calculateCoverage(coverage: TestCoverage[]) {

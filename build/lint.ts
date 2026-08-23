@@ -36,6 +36,14 @@ function handleEslintResult(results: ESLint.LintResult[]) {
 }
 
 export function eslint(files = ['**/*.ts?(x)'], options?: ESLint.Options) {
+	return eslintWithConfig(files, options, 'default');
+}
+
+function eslintWithConfig(
+	files: string[],
+	options: ESLint.Options | undefined,
+	configName: 'default' | 'specConfig',
+) {
 	return new Observable<Output>(subs => {
 		const { ESLint } = resolveRequire<typeof import('eslint')>('eslint');
 		import('./eslint-config.js').then(
@@ -45,7 +53,7 @@ export function eslint(files = ['**/*.ts?(x)'], options?: ESLint.Options) {
 					cache: true,
 					cwd: process.cwd(),
 					overrideConfigFile: true,
-					baseConfig: config.default,
+					baseConfig: config[configName],
 					...options,
 				});
 				return linter.lintFiles(files).then(handleEslintResult);
@@ -59,18 +67,44 @@ export function eslint(files = ['**/*.ts?(x)'], options?: ESLint.Options) {
 }
 
 export function eslintTsconfig(path: string | TsconfigJson = 'tsconfig.json') {
+	return eslintConfig(path, 'default');
+}
+
+export function eslintTestTsconfig(path = 'tsconfig.test.json') {
+	return eslintConfig(path, 'specConfig');
+}
+
+function eslintConfig(
+	path: string | TsconfigJson,
+	configName: 'default' | 'specConfig',
+) {
 	let cwd: string;
+	let project: string | undefined;
 	return fromAsync(async () => {
 		if (typeof path === 'string') {
 			cwd = dirname(resolve(path));
+			project = resolve(path);
 			return readJson<TsconfigJson>(path);
 		}
 		return path;
 	}).switchMap(tsconfigFile =>
-		eslint(tsconfigFile.files ?? tsconfigFile.include, {
-			ignorePatterns: [...(tsconfigFile.exclude ?? []), '*.js'],
-			errorOnUnmatchedPattern: false,
-			cwd,
-		}),
+		eslintWithConfig(
+			tsconfigFile.files ?? tsconfigFile.include ?? [],
+			{
+				ignorePatterns: [...(tsconfigFile.exclude ?? []), '*.js'],
+				errorOnUnmatchedPattern: false,
+				cwd,
+				...(configName === 'specConfig' && project
+					? {
+							overrideConfig: {
+								languageOptions: {
+									parserOptions: { project },
+								},
+							},
+						}
+					: {}),
+			},
+			configName,
+		),
 	);
 }

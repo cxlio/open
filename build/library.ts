@@ -20,7 +20,7 @@ import {
 	esbuild,
 } from './package.js';
 import { file } from './file.js';
-import { eslintTsconfig } from './lint.js';
+import { eslintTestTsconfig, eslintTsconfig } from './lint.js';
 import {
 	bundleDeclarations,
 	getProjectOutputFiles,
@@ -92,6 +92,7 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					}),
 				),
 				tsconfig('tsconfig.test.json'),
+				eslintTestTsconfig(),
 				pkg('index.js'),
 			],
 		},

@@ -4,6 +4,68 @@ import ts from 'typescript-eslint';
 import { configs as sonarjsConfigs } from 'eslint-plugin-sonarjs';
 import type { Rule } from 'eslint';
 import type { FlatConfig } from 'typescript-eslint';
+import * as typescript from 'typescript';
+
+type AncestorNode = ReturnType<
+	Rule.RuleContext['sourceCode']['getAncestors']
+>[number];
+
+function enclosingFunction(ancestors: readonly AncestorNode[]) {
+	for (let i = ancestors.length - 1; i >= 0; i--) {
+		const node = ancestors[i];
+		if (
+			node?.type === 'ArrowFunctionExpression' ||
+			node?.type === 'FunctionExpression'
+		)
+			return node;
+	}
+}
+
+function isSpecTestFunction(type: typescript.Type | undefined) {
+	const symbol = type?.aliasSymbol;
+	if (symbol?.getName() !== 'TestFn') return false;
+	return symbol.declarations?.some(declaration => {
+		const file = declaration.getSourceFile().fileName.replace(/\\/g, '/');
+		return (
+			file.includes('/node_modules/@cxl/spec/') ||
+			file.endsWith('/spec/index.ts') ||
+			file.endsWith('/spec/index.d.ts')
+		);
+	});
+}
+
+const noThrowInSpec: Rule.RuleModule = {
+	meta: {
+		type: 'problem',
+		docs: {
+			description: 'Disallow throwing directly from spec test functions.',
+		},
+		schema: [],
+		messages: {
+			noThrowInSpec:
+				'Do not throw directly from a spec test function. Use a test assertion.',
+		},
+	},
+	create(context) {
+		const services: {
+			program: typescript.Program;
+			esTreeNodeToTSNodeMap: {
+				get(node: AncestorNode): typescript.Node | undefined;
+			};
+		} = context.sourceCode.parserServices;
+		const checker = services.program.getTypeChecker();
+		return {
+			ThrowStatement(node: Rule.Node) {
+				const fn = enclosingFunction(context.sourceCode.getAncestors(node));
+				if (!fn) return;
+				const tsNode = services.esTreeNodeToTSNodeMap.get(fn);
+				if (!tsNode || !typescript.isExpression(tsNode)) return;
+				if (isSpecTestFunction(checker.getContextualType(tsNode)))
+					context.report({ node, messageId: 'noThrowInSpec' });
+			},
+		};
+	},
+};
 
 const preferTypeDiscrimination: Rule.RuleModule = {
 	meta: {
@@ -27,14 +89,17 @@ const preferTypeDiscrimination: Rule.RuleModule = {
 	},
 };
 
+const localPlugin = {
+	rules: {
+		'no-throw-in-spec': noThrowInSpec,
+		'prefer-type-discrimination': preferTypeDiscrimination,
+	},
+};
+
 export const tsConfig: FlatConfig.Config = {
 	files: ['**/*.ts', '**/*.tsx'],
 	plugins: {
-		local: {
-			rules: {
-				'prefer-type-discrimination': preferTypeDiscrimination,
-			},
-		},
+		local: localPlugin,
 	},
 	languageOptions: {
 		ecmaVersion: 2022,
@@ -118,6 +183,15 @@ export const tsConfig: FlatConfig.Config = {
 		],
 	},
 };
+
+export const specConfig = defineConfig([
+	ts.configs.base,
+	{
+		files: ['**/*.ts', '**/*.tsx'],
+		plugins: { local: localPlugin },
+		rules: { 'local/no-throw-in-spec': 'error' },
+	},
+]);
 
 export default defineConfig([
 	js.configs.recommended,

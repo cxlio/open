@@ -111,7 +111,10 @@ export default spec('tester', s => {
 				join(dir, 'report.html'),
 			];
 			const stdout = await runCli(args);
-			a.equal(stdout.trim(), 'tests: passed (2)');
+			a.equal(
+				stdout.trim(),
+				`generated: ${join(dir, 'report.html')}\ntests: passed (2)\ngenerated: ${join(dir, 'report.json')}`,
+			);
 			const document = await readFile(join(dir, 'report.html'), 'utf8');
 			a.ok(document.includes('<c-page><c-layout'));
 			a.ok(document.includes('Specification: console fixture'));

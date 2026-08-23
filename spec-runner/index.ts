@@ -34,6 +34,7 @@ export type SpecRunner = Omit<SpecRunnerOptions, '$' | 'grep'> & {
 	reportPath: string;
 	documentPath?: string;
 	grep?: RegExp;
+	onGeneratedFile?: (path: string) => void;
 	sources: Map<string, Output>;
 	log: Logger;
 };
@@ -113,6 +114,7 @@ const start = program({}, async ({ log }) => {
 		reportPath: 'test-report.json',
 		documentPath: 'test-report.html',
 		sources: new Map(),
+		onGeneratedFile: path => console.log(`generated: ${path}`),
 		...rest,
 		grep: parseGrep(grepPattern),
 	};
@@ -136,6 +138,7 @@ const start = program({}, async ({ log }) => {
 
 	printReportV2(report, { verbose: !!config.verbose });
 	await writeReport(config.reportPath, report);
+	config.onGeneratedFile?.(config.reportPath);
 
 	if (!report.success) {
 		process.exitCode = 1;

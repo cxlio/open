@@ -513,10 +513,12 @@ async function handleFigureRequest(
 
 	await mkdir('spec').catch(() => false);
 	await writeFile(filename, buffer);
+	app.onGeneratedFile?.(filename);
 
 	if ((!original || app.updateBaselines) && app.baselinePath) {
 		await mkdir(app.baselinePath).catch(() => false);
 		await writeFile(baseline, buffer);
+		app.onGeneratedFile?.(baseline);
 	} else if (original && app.baselinePath) {
 		const [oPng, newPng] = await Promise.all([
 			parsePNG(original),
@@ -594,6 +596,7 @@ export default async function runPuppeteer(app: SpecRunner) {
 					await getBenchmarkEnvironment(browser, args.join(' ')),
 					app.baselinePath,
 					!!app.updateBaselines,
+					app.onGeneratedFile,
 				)
 			: undefined;
 		const report = await generateReport(suite, coverage, {
@@ -603,6 +606,7 @@ export default async function runPuppeteer(app: SpecRunner) {
 		await writeSpecificationDocument(app.documentPath, suite, {
 			baselinePath: app.baselinePath,
 		});
+		if (app.documentPath) app.onGeneratedFile?.(app.documentPath);
 		report.benchmark = benchmark;
 		return report;
 	} finally {

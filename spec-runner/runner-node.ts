@@ -51,6 +51,7 @@ export default async function runNode(app: SpecRunner) {
 		await writeSpecificationDocument(app.documentPath, suite, {
 			baselinePath: app.baselinePath,
 		});
+		if (app.documentPath) app.onGeneratedFile?.(app.documentPath);
 	}
 
 	const entryFile = app.entryFile;

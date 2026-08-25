@@ -184,13 +184,19 @@ async function measureBenchmark(
 	const first = run();
 	const asyncRun = first instanceof Promise;
 	if (asyncRun) await first;
+	const runSync = () => {
+		const value = run();
+		if (value instanceof Promise)
+			throw new Error('Benchmark changed from synchronous to asynchronous');
+		return value;
+	};
 
 	async function measure(iterations: number) {
 		const start = performance.now();
 		if (asyncRun) {
 			for (let i = 0; i < iterations; i++) await run();
 		} else {
-			for (let i = 0; i < iterations; i++) run();
+			for (let i = 0; i < iterations; i++) runSync();
 		}
 		return performance.now() - start;
 	}
@@ -562,7 +568,12 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 	spyFn = <T extends object, K extends keyof FunctionsOf<T>>(
 		object: T & Record<K, FunctionsOf<T>[K]>,
 		method: K,
-	) => {
+	): Spy<
+		SpyFn<
+			Parameters<FunctionsOf<T>[K]>,
+			ReturnType<FunctionsOf<T>[K]>
+		>
+	> => {
 		const spy = spyFn(object, method);
 		this.$test.events.subscribe({
 			complete: spy.destroy,
@@ -1199,6 +1210,15 @@ export function mockFn<A extends Value[], B>(
 	return result;
 }
 
+function spyFn<T extends object, K extends keyof FunctionsOf<T>>(
+	object: T & Record<K, FunctionsOf<T>[K]>,
+	method: K,
+): Spy<
+	SpyFn<
+		Parameters<FunctionsOf<T>[K]>,
+		ReturnType<FunctionsOf<T>[K]>
+	>
+>;
 function spyFn<A extends Value[], R, K extends PropertyKey>(
 	object: Record<K, (...args: A) => R>,
 	method: K,

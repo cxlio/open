@@ -19,7 +19,7 @@ interface FailureSummary {
 }
 
 function printError(name: string, fail: TestResult) {
-	const msg = fail.message ?? fail.failureMessage ?? 'Unknown failure';
+	const msg = fail.message ?? fail.failureMessage;
 	console.error(name, colors.red(msg));
 	if (fail.stack) console.error(fail.stack);
 }
@@ -52,7 +52,8 @@ function printTest(test: TestReport) {
 
 function printCoverage(coverage: TestCoverageReport[]) {
 	console.log('Coverage Report:');
-	for (const cov of coverage.sort((a, b) => (a.url > b.url ? 1 : -1))) {
+	coverage.sort((a, b) => (a.url > b.url ? 1 : -1));
+	for (const cov of coverage) {
 		const blockPct = cov.blockCoveragePct.toFixed(2);
 		const functionPct = cov.functionCoveragePct.toFixed(2);
 		console.log(
@@ -79,7 +80,7 @@ function collectFailures(
 		if (!r.success)
 			out.push({
 				path,
-				message: r.message ?? r.failureMessage ?? 'Unknown failure',
+				message: r.message ?? r.failureMessage,
 				stack: r.stack,
 			});
 	}

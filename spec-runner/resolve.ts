@@ -31,7 +31,7 @@ export function resolveImport(specifier: string, baseDir: string) {
 		pkgJson = JSON.parse(
 			readFileSync(join(pkgDir, 'package.json'), 'utf8'),
 		);
-	} catch (e) {
+	} catch {
 		return;
 	}
 

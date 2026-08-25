@@ -66,19 +66,64 @@ const codes = {
 	whiteBG: [47, 49],
 };
 
-type Colors<T> = { [P in keyof T]: (str: string) => string };
+function color(code: number[]) {
+	const open = `\u001b[${code[0]}m`;
+	const close = `\u001b[${code[1]}m`;
+	return (value: string) => open + value + close;
+}
 
-export const colors: Colors<typeof codes> = Object.keys(codes).reduce(
-	(styles, key) => {
-		const val = codes[key as keyof typeof codes];
-		const open = '\u001b[' + val[0] + 'm';
-		const close = '\u001b[' + val[1] + 'm';
-
-		styles[key as keyof typeof codes] = (str: string) => open + str + close;
-		return styles;
-	},
-	{} as Colors<typeof codes>,
-);
+export const colors = {
+	reset: color(codes.reset),
+	bold: color(codes.bold),
+	dim: color(codes.dim),
+	italic: color(codes.italic),
+	underline: color(codes.underline),
+	inverse: color(codes.inverse),
+	hidden: color(codes.hidden),
+	strikethrough: color(codes.strikethrough),
+	black: color(codes.black),
+	red: color(codes.red),
+	green: color(codes.green),
+	yellow: color(codes.yellow),
+	blue: color(codes.blue),
+	magenta: color(codes.magenta),
+	cyan: color(codes.cyan),
+	white: color(codes.white),
+	gray: color(codes.gray),
+	grey: color(codes.grey),
+	brightRed: color(codes.brightRed),
+	brightGreen: color(codes.brightGreen),
+	brightYellow: color(codes.brightYellow),
+	brightBlue: color(codes.brightBlue),
+	brightMagenta: color(codes.brightMagenta),
+	brightCyan: color(codes.brightCyan),
+	brightWhite: color(codes.brightWhite),
+	bgBlack: color(codes.bgBlack),
+	bgRed: color(codes.bgRed),
+	bgGreen: color(codes.bgGreen),
+	bgYellow: color(codes.bgYellow),
+	bgBlue: color(codes.bgBlue),
+	bgMagenta: color(codes.bgMagenta),
+	bgCyan: color(codes.bgCyan),
+	bgWhite: color(codes.bgWhite),
+	bgGray: color(codes.bgGray),
+	bgGrey: color(codes.bgGrey),
+	bgBrightRed: color(codes.bgBrightRed),
+	bgBrightGreen: color(codes.bgBrightGreen),
+	bgBrightYellow: color(codes.bgBrightYellow),
+	bgBrightBlue: color(codes.bgBrightBlue),
+	bgBrightMagenta: color(codes.bgBrightMagenta),
+	bgBrightCyan: color(codes.bgBrightCyan),
+	bgBrightWhite: color(codes.bgBrightWhite),
+	blackBG: color(codes.blackBG),
+	redBG: color(codes.redBG),
+	greenBG: color(codes.greenBG),
+	yellowBG: color(codes.yellowBG),
+	blueBG: color(codes.blueBG),
+	magentaBG: color(codes.magentaBG),
+	cyanBG: color(codes.cyanBG),
+	whiteBG: color(codes.whiteBG),
+};
 
 export type ProgramParameters = Parameters<typeof parseParameters>[0];
 
@@ -177,21 +222,23 @@ function findParameter<T extends Record<string, Parameter>>(
 	throw new Error(`Invalid parameter "${shortcut}"`);
 }
 
-function parseValue<T extends Parameter>(
-	param: T,
-	value: string | undefined,
-): ParameterType<T> {
+function parseValue(param: Parameter, value: string | undefined): ParsedValue {
 	if (param.type === 'number')
-		return (value === undefined ? 0 : parseInt(value)) as ParameterType<T>;
+		return value === undefined ? 0 : parseInt(value);
 	if (param.type === 'string')
-		return (value === undefined ? '' : unquote(value)) as ParameterType<T>;
+		return value === undefined ? '' : unquote(value);
 
-	return true as ParameterType<T>; //(value !== undefined) as ParameterType<T>;
+	return true;
 }
 
-function setParam<T extends Record<string, Parameter>, K extends keyof T>(
-	result: ParametersResult<T>,
-	[key, param]: [K, Parameter | undefined],
+type ParsedValue = string | number | boolean;
+type ParsedParameters = Record<string, ParsedValue | ParsedValue[]> & {
+	$: string[];
+};
+
+function setParam(
+	result: ParsedParameters,
+	[key, param]: [string, Parameter | undefined],
 	value: string | undefined,
 ) {
 	if (!param) throw new Error(`Parameter "${String(key)}" not supported`);
@@ -209,20 +256,22 @@ function setParam<T extends Record<string, Parameter>, K extends keyof T>(
 		result.$.push(unquote(value));
 
 	if (lastValue === undefined)
-		result[key] = (
-			param.many ? [newValue] : newValue
-		) as (typeof result)[K];
-	else if (Array.isArray(lastValue)) (lastValue as boolean[]).push(newValue);
+		result[key] = param.many ? [newValue] : newValue;
+	else if (Array.isArray(lastValue)) lastValue.push(newValue);
 	else if (param.many)
-		result[key] = [lastValue, newValue] as (typeof result)[K];
+		result[key] = [lastValue, newValue];
 	else throw new Error('Invalid parameter');
 }
 
 export function parseParameters<T extends Record<string, Parameter>>(
 	parameters: T,
 	input: string,
-): ParametersResult<T> {
-	const result = { $: [] as string[] } as ParametersResult<T>;
+): ParametersResult<T>;
+export function parseParameters(
+	parameters: Record<string, Parameter>,
+	input: string,
+): ParsedParameters {
+	const result: ParsedParameters = { $: [] };
 
 	let m: RegExpExecArray | null;
 
@@ -249,8 +298,12 @@ export function parseParameters<T extends Record<string, Parameter>>(
 export function parseArgvTokens<T extends Record<string, Parameter>>(
 	parameters: T,
 	argv: string[],
-): ParametersResult<T> {
-	const result = { $: [] as string[] } as ParametersResult<T>;
+): ParametersResult<T>;
+export function parseArgvTokens(
+	parameters: Record<string, Parameter>,
+	argv: string[],
+): ParsedParameters {
+	const result: ParsedParameters = { $: [] };
 
 	for (let i = 0; i < argv.length; i++) {
 		const token = argv[i];
@@ -382,7 +435,7 @@ function hrtime(): bigint {
 export async function operation<T>(
 	fn: OperationFunction<T>,
 ): Promise<OperationResult<T>> {
-	let start = hrtime();
+	const start = hrtime();
 	const item = await (typeof fn === 'function' ? fn() : fn);
 	let tasks = 0;
 
@@ -393,7 +446,6 @@ export async function operation<T>(
 		time: end - start,
 		result: item,
 	};
-	start = end;
 	return result;
 }
 
@@ -434,8 +486,8 @@ export function parseArgvHelp<T extends Record<string, Parameter>>(
 ): ParseArgvHelpResult<T> {
 	const args = parseArgvTokens(parameters, argv);
 	const help = formatHelp(parameters);
-	const handled =
-		(args as ParametersResult<T> & { help?: unknown }).help === true;
+	const helpValue = args.help;
+	const handled = typeof helpValue === 'boolean' && helpValue;
 	if (handled) (config.output || console.log)(help);
 	return { args, help, handled };
 }
@@ -453,12 +505,17 @@ export async function mkdirp(dir: string) {
  * Read and parse a JSON file, ignores errors.
  * @param fileName Path of file to parse
  */
+export function parseJson<T>(source: string): T {
+	const value: T = JSON.parse(source);
+	return value;
+}
+
 export async function readJson<T>(
 	fileName: string,
 	defaultValue?: T,
 ): Promise<T> {
 	try {
-		return JSON.parse(await readFile(fileName, 'utf8')) as T;
+		return parseJson<T>(await readFile(fileName, 'utf8'));
 	} catch (e) {
 		if (defaultValue !== undefined) return defaultValue;
 		throw e;

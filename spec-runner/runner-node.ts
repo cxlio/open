@@ -4,11 +4,16 @@ import * as inspector from 'inspector';
 import type { Test, JsonResult } from '../spec/index.js';
 import type { SpecRunner } from './index.js';
 
-import { Coverage, generateReport } from './report.js';
+import { generateReport } from './report.js';
 import { writeSpecificationDocument } from './specification-file.js';
 
+function post(
+	session: inspector.Session,
+	msg: 'Profiler.takePreciseCoverage',
+): Promise<inspector.Profiler.TakePreciseCoverageReturnType>;
+function post(session: inspector.Session, msg: string, params?: object): Promise<void>;
 function post(session: inspector.Session, msg: string, params = {}) {
-	return new Promise((resolve, reject) => {
+	return new Promise<unknown>((resolve, reject) => {
 		session.post(msg, params, (err, result) =>
 			err ? reject(err) : resolve(result),
 		);
@@ -28,7 +33,7 @@ async function recordCoverage(
 	await post(session, 'Profiler.disable');
 
 	return {
-		coverage: (coverage as { result: Coverage }).result.flatMap(n => {
+		coverage: coverage.result.flatMap(n => {
 			if (!n.url || n.url.startsWith('node:')) return [];
 			if (n.url.startsWith('file:///')) {
 				const rel = n.url.slice(7);
@@ -43,7 +48,8 @@ async function recordCoverage(
 
 export default async function runNode(app: SpecRunner) {
 	async function runSuite() {
-		const suite = ((await import(suitePath)) as { default: Test }).default;
+		const module: { default: Test } = await import(suitePath);
+		const suite = module.default;
 		return suite.run(app.grep).then(() => suite);
 	}
 

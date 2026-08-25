@@ -132,7 +132,7 @@ const start = program({}, async ({ log }) => {
 			execSync(`kill -9 ${server.pid}`);
 			server.kill();
 		}
-	} catch (e) {
+	} catch {
 		log(`Could not kill "${args.startServer}"`);
 	}
 

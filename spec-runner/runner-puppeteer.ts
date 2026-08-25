@@ -21,7 +21,6 @@ import type { PNG } from 'pngjs';
 
 import { TestCoverage, generateReport } from './report.js';
 import { writeSpecificationDocument } from './specification-file.js';
-import type { Protocol } from 'devtools-protocol';
 
 const contentTypes: Record<string, string> = {
 	'.avif': 'image/avif',
@@ -78,13 +77,28 @@ async function handleConsole(msg: puppeteer.ConsoleMessage, app: SpecRunner) {
 					return JSON.stringify(v, null, 2);
 				}),
 			);
-		} catch (e) {
+		} catch {
 			console.log(arg.toString());
 		}
 }
 
 async function openPage(browser: Browser) {
 	return await browser.newPage();
+}
+
+function press(element: { press(key: string): Promise<void> }, key: string) {
+	return element.press(key);
+}
+
+function keyboardEvent(
+	keyboard: {
+		down(key: string): Promise<void>;
+		up(key: string): Promise<void>;
+	},
+	type: 'keyDown' | 'keyUp',
+	key: string,
+) {
+	return keyboard[type === 'keyDown' ? 'down' : 'up'](key);
 }
 
 async function getBenchmarkEnvironment(
@@ -119,18 +133,21 @@ async function createPage(
 				throw new Error(`Element for selector "${selector}" not found.`);
 			return element;
 		});
+	async function figure(cmd: FigureData) {
+		try {
+			return await handleFigureRequest(page, cmd, app);
+		} catch (error) {
+			return {
+				success: false,
+				failureMessage: String(error) || 'Unknown Error',
+			};
+		}
+	}
 
 	function cxlRunner(cmd: RunnerCommand): Promise<Result> | Result {
 		const type = cmd.type;
 		if (type === 'figure') {
-			try {
-				return handleFigureRequest(page, cmd, app);
-			} catch (e) {
-				return {
-					success: false,
-					failureMessage: String(e) || 'Unknown Error',
-				};
-			}
+			return figure(cmd);
 		} else if (type === 'hover' || type === 'tap' || type === 'click') {
 			return element(cmd.element)
 				.then(el => {
@@ -145,7 +162,9 @@ async function createPage(
 		} else if (type === 'type' || type === 'press') {
 			return element(cmd.element)
 				.then(el => {
-					return el[type](cmd.value as puppeteer.KeyInput);
+					return type === 'type'
+						? el.type(cmd.value)
+						: press(el, cmd.value);
 				})
 				.then(() => {
 					return {
@@ -156,11 +175,7 @@ async function createPage(
 		} else if (type === 'keyDown' || type === 'keyUp') {
 			return element(cmd.element)
 				.then(el => el.focus())
-				.then(() =>
-					page.keyboard[type === 'keyDown' ? 'down' : 'up'](
-						cmd.value as puppeteer.KeyInput,
-					),
-				)
+				.then(() => keyboardEvent(page.keyboard, type, cmd.value))
 				.then(() => {
 					return {
 						success: true,
@@ -398,12 +413,12 @@ async function mjsRunner(
 			grepSource?: string;
 			grepFlags?: string;
 		}) => {
-			const mod = (await import(entry)) as {
+			const mod: {
 				default: {
 					run(grep?: RegExp): Promise<unknown>;
 					toJSON(): JsonResult;
 				};
-			};
+			} = await import(entry);
 			const r = mod.default;
 			const grep = grepSource
 				? new RegExp(grepSource, grepFlags)
@@ -416,7 +431,7 @@ async function mjsRunner(
 			grepSource: app.grep?.source,
 			grepFlags: app.grep?.flags,
 		},
-	) as Promise<JsonResult>;
+	);
 }
 
 async function generateCoverage(
@@ -429,9 +444,7 @@ async function generateCoverage(
 	await session.send('Profiler.stopPreciseCoverage');
 	await session.send('Profiler.disable');
 
-	return (
-		coverage as Protocol.Profiler.TakePreciseCoverageResponse
-	).result.flatMap(entry => {
+	return coverage.result.flatMap(entry => {
 		const sourceFile = app.sources.get(entry.url);
 		return sourceFile
 			? {

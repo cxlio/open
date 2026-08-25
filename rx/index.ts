@@ -3,9 +3,8 @@ declare const clearTimeout: (n: number) => void;
 declare const setInterval: (fn: () => unknown, n?: number) => number;
 declare const clearInterval: (n: number) => void;
 
-type ObservableError = unknown;
 type NextFunction<T> = (val: T) => void;
-type ErrorFunction = (err: ObservableError) => void;
+type ErrorFunction = (err: unknown) => void;
 type CompleteFunction = () => void;
 type SubscribeFunction<T> = (subscription: Subscriber<T>) => void;
 type Merge<T> = T extends Observable<infer U> ? U : never;
@@ -65,9 +64,15 @@ export interface Subscription {
 }
 
 // Represents the initial state
-const Undefined = {};
+const Undefined = Symbol('undefined');
 // Represents when the observable is ready to complete
 const Terminator = Symbol('terminator');
+
+function storedValue<T>(value: T | typeof Undefined): T;
+function storedValue<T>(value: T | typeof Undefined) {
+	if (value === Undefined) throw new Error('Value not initialized');
+	return value;
+}
 
 export function Subscriber<T>(
 	observer: Observer<T>,
@@ -103,7 +108,7 @@ export function Subscriber<T>(
 
 	observer.signal?.subscribe(unsubscribe);
 
-	function error(e: ObservableError) {
+	function error<ErrorT>(e: ErrorT) {
 		if (!closed) {
 			if (!observer.error) {
 				unsubscribe();
@@ -209,7 +214,9 @@ export class Observable<T, P = 'none' | 'emit1'> {
 		...extra: [Operator<T, unknown>, ...Operator<unknown, unknown>[]]
 	): Observable<unknown> {
 		return extra.reduce(
+			// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
 			(prev, fn) => fn(prev as Observable<T>),
+			// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
 			this as Observable<unknown>,
 		);
 	}
@@ -234,7 +241,9 @@ export class Subject<T, ErrorT = unknown> extends Observable<T> {
 	protected observers = new Set<Subscriber<T>>();
 
 	constructor() {
-		super((subscriber: Subscriber<T>) => this.onSubscribe(subscriber));
+		super((subscriber: Subscriber<T>) => {
+			this.onSubscribe(subscriber);
+		});
 	}
 
 	/**
@@ -340,7 +349,8 @@ export class OrderedSubject<T> extends Subject<T> {
 		else {
 			this.emitting = true;
 			super.next(a);
-			while (this.queue.length) super.next(this.queue.shift() as T);
+			while (this.queue.length)
+				for (const value of this.queue.splice(0)) super.next(value);
 			this.emitting = false;
 		}
 	}
@@ -378,15 +388,13 @@ export class BehaviorSubject<T> extends Subject<T> {
  */
 export class ReplaySubject<T, ErrorT = unknown> extends Subject<T, ErrorT> {
 	private buffer: T[] = [];
-	private hasError = false;
-	private lastError?: ErrorT;
+	private lastError: ErrorT | typeof Undefined = Undefined;
 
 	constructor(public readonly bufferSize: number = Infinity) {
 		super();
 	}
 
 	error(val: ErrorT) {
-		this.hasError = true;
 		this.lastError = val;
 		super.error(val);
 	}
@@ -402,7 +410,8 @@ export class ReplaySubject<T, ErrorT = unknown> extends Subject<T, ErrorT> {
 		this.observers.add(subscriber);
 
 		this.buffer.forEach(val => subscriber.next(val));
-		if (this.hasError) subscriber.error(this.lastError as ErrorT);
+		if (this.lastError !== Undefined)
+			subscriber.error(storedValue<ErrorT>(this.lastError));
 		else if (this.closed) subscriber.complete();
 		subscriber.signal.subscribe(() => this.observers.delete(subscriber));
 	}
@@ -421,7 +430,7 @@ export class Reference<T> extends Subject<T> {
 	get value(): T {
 		if (this.$value === Undefined)
 			throw new Error('Reference not initialized');
-		return this.$value as T;
+		return storedValue<T>(this.$value);
 	}
 
 	next(val: T) {
@@ -431,7 +440,7 @@ export class Reference<T> extends Subject<T> {
 
 	protected onSubscribe(subscription: Subscriber<T>) {
 		if (!this.closed && this.$value !== Undefined)
-			subscription.next(this.$value as T);
+			subscription.next(storedValue<T>(this.$value));
 		super.onSubscribe(subscription);
 	}
 }
@@ -445,8 +454,9 @@ export class EmptyError extends Error {
  */
 export function concat<R extends Observable<unknown>[]>(
 	...observables: R
-): CombineResult<R> {
-	return new Observable(subscriber => {
+): CombineResult<R>;
+export function concat(...observables: Observable<unknown>[]) {
+	return new Observable<unknown>(subscriber => {
 		let index = 0;
 		let innerSignal: Signal | undefined;
 
@@ -464,7 +474,7 @@ export function concat<R extends Observable<unknown>[]>(
 		}
 		subscriber.signal.subscribe(() => innerSignal?.next());
 		onComplete();
-	}) as CombineResult<R>;
+	});
 }
 
 /**
@@ -514,20 +524,15 @@ export function of<T>(...values: T[]): Observable<T> {
 	return fromIterable(values);
 }
 
-function _toPromise<T, P>(observable: Observable<T, P>) {
-	return new Promise<P extends 'emit1' ? T : T | typeof Undefined>(
-		(resolve, reject) => {
-			let value: typeof Undefined | T = Undefined;
-			observable.subscribe({
-				next: (val: T) => (value = val),
-				error: (e: ObservableError) => reject(e),
-				complete: () =>
-					resolve(
-						value as P extends 'emit1' ? T : T | typeof Undefined,
-					),
-			});
-		},
-	);
+function observablePromise<T, P>(observable: Observable<T, P>) {
+	return new Promise<T | typeof Undefined>((resolve, reject) => {
+		let value: typeof Undefined | T = Undefined;
+		observable.subscribe({
+			next: (val: T) => (value = val),
+			error: reject,
+			complete: () => resolve(value),
+		});
+	});
 }
 
 /**
@@ -535,17 +540,17 @@ function _toPromise<T, P>(observable: Observable<T, P>) {
  */
 export function toPromise<T, P>(
 	observable: Observable<T, P>,
-): Promise<P extends 'emit1' ? T : T | undefined> {
-	return _toPromise<T, P>(observable).then(
-		r =>
-			(r === Undefined ? undefined : r) as P extends 'emit1'
-				? T
-				: T | undefined,
+): Promise<P extends 'emit1' ? T : T | undefined>;
+export function toPromise<T, P>(observable: Observable<T, P>) {
+	return observablePromise(observable).then(value =>
+		value === Undefined ? undefined : storedValue<T>(value),
 	);
 }
 
 export async function firstValueFrom<T>(observable: Observable<T>) {
-	return _toPromise(observable.first());
+	return observablePromise(observable.first()).then(value =>
+		storedValue<T>(value),
+	);
 }
 
 export function operatorNext<T, T2 = T>(
@@ -633,23 +638,19 @@ export function reduce<T, T2>(
  *
  * The returned function has a `cancel` method that can be called to manually clear any pending debounce timer.
  */
-/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-export function debounceFunction<F extends (...args: any) => any>(
-	fn: F,
+export function debounceFunction<This, Args extends unknown[]>(
+	fn: (this: This, ...args: Args) => unknown,
 	delay?: number,
 ) {
-	/*eslint prefer-rest-params: off*/
 	let to: number;
-	const result = function (this: unknown) {
+	function debounced(this: This, ...args: Args) {
 		if (to) clearTimeout(to);
-		to = setTimeout(() => {
-			fn.apply(this, arguments as unknown as unknown[]);
-		}, delay) as unknown as number;
-	};
+		to = setTimeout(() => fn.apply(this, args), delay);
+	}
 
-	(result as unknown as { cancel(): void }).cancel = () => clearTimeout(to);
+	debounced.cancel = () => clearTimeout(to);
 
-	return result as ((...args: Parameters<F>) => void) & { cancel(): void };
+	return debounced;
 }
 
 /**
@@ -779,18 +780,19 @@ export function mergeMap<T, T2>(project: (val: T) => ObservableInput<T2>) {
 			let completed = 0;
 			let sourceCompleted = false;
 
+			function innerComplete() {
+				completed++;
+				if (sourceCompleted && completed === count)
+					subscriber.complete();
+			}
+
 			source.subscribe({
 				next: (val: T) => {
 					count++;
 					from(project(val)).subscribe({
 						next: subscriber.next,
 						error: subscriber.error,
-						complete: () => {
-							completed++;
-							if (sourceCompleted && completed === count) {
-								subscriber.complete();
-							}
-						},
+						complete: innerComplete,
 						signal,
 					});
 				},
@@ -819,7 +821,8 @@ export function concatMap<T, T2>(project: (val: T) => ObservableInput<T2>) {
 			innerSubscription = undefined;
 			active = false;
 
-			if (queue.length && !subscriber.closed) run(queue.shift() as T);
+			if (queue.length && !subscriber.closed)
+				queue.splice(0, 1).forEach(run);
 			else if (completed) subscriber.complete();
 		};
 
@@ -954,7 +957,7 @@ export function catchError<T, O>(
 		let signal: Signal | undefined;
 		const observer = {
 			next: subscriber.next,
-			error(err: unknown) {
+			error<ErrorT>(err: ErrorT) {
 				try {
 					if (subscriber.closed) return;
 					const result = selector(err, source);
@@ -1086,10 +1089,11 @@ export function publishLast<T>(): Operator<T, T> {
  */
 export function merge<R extends Observable<unknown>[]>(
 	...observables: R
-): CombineResult<R> {
-	if (observables.length === 1) return observables[0] as CombineResult<R>;
+): CombineResult<R>;
+export function merge(...observables: Observable<unknown>[]) {
+	if (observables.length === 1) return observables[0];
 
-	return new Observable(subs => {
+	return new Observable<unknown>(subs => {
 		let refCount = observables.length;
 		for (const o of observables)
 			if (!subs.closed)
@@ -1101,7 +1105,7 @@ export function merge<R extends Observable<unknown>[]>(
 					},
 					signal: subs.signal,
 				});
-	}) as CombineResult<R>;
+	});
 }
 
 /**
@@ -1109,10 +1113,11 @@ export function merge<R extends Observable<unknown>[]>(
  */
 export function zip<T extends Observable<unknown>[]>(
 	...observables: T
-): Observable<PickObservable<T>> {
+): Observable<PickObservable<T>>;
+export function zip(...observables: Observable<unknown>[]) {
 	return observables.length === 0
 		? EMPTY
-		: (new Observable<unknown>(subs => {
+		: new Observable<unknown>(subs => {
 				const buffer: (unknown[] | undefined)[] = new Array(
 					observables.length,
 				);
@@ -1143,7 +1148,7 @@ export function zip<T extends Observable<unknown>[]>(
 						signal: subs.signal,
 					});
 				});
-		  }) as Observable<PickObservable<T>>);
+			});
 }
 
 /**
@@ -1152,10 +1157,11 @@ export function zip<T extends Observable<unknown>[]>(
  */
 export function combineLatest<T extends Observable<unknown>[]>(
 	...observables: T
-): Observable<PickObservable<T>> {
+): Observable<PickObservable<T>>;
+export function combineLatest(...observables: Observable<unknown>[]) {
 	return observables.length === 0
 		? EMPTY
-		: new Observable<PickObservable<T>>(subs => {
+		: new Observable<unknown>(subs => {
 				let len = observables.length;
 				const initialLen = len;
 				let emittedCount = 0;
@@ -1171,8 +1177,7 @@ export function combineLatest<T extends Observable<unknown>[]>(
 								emitted[id] = true;
 								if (++emittedCount >= initialLen) ready = true;
 							}
-							if (ready)
-								subs.next(last.slice(0) as PickObservable<T>);
+							if (ready) subs.next(last.slice(0));
 						},
 						error: subs.error,
 						complete() {
@@ -1181,7 +1186,7 @@ export function combineLatest<T extends Observable<unknown>[]>(
 						signal: subs.signal,
 					}),
 				);
-		  });
+			});
 }
 
 /**
@@ -1196,20 +1201,26 @@ export function finalize<T>(unsubscribe: () => void): Operator<T, T> {
 }
 
 export function ignoreElements() {
-	return filter(() => false) as Operator<unknown, never>;
+	return operator<unknown, never>(() => ({
+		next() {},
+	}));
 }
 
 /**
  * Creates an Observable that emits no items to the Observer and immediately emits an error notification.
  */
-export function throwError(error: unknown) {
-	return new Observable<never>(subs => subs.error(error));
+export function throwError<ErrorT>(error: ErrorT) {
+	return new Observable<never>(subs => {
+		subs.error(error);
+	});
 }
 
 /**
  * An observable that completes on subscription.
  */
-export const EMPTY = new Observable<never>(subs => subs.complete());
+export const EMPTY = new Observable<never>(subs => {
+	subs.complete();
+});
 
 /**
  * Creates a new Behavior Subject.
@@ -1264,11 +1275,12 @@ export const operators = {
 } as const;
 
 for (const p in operators) {
+	// eslint-disable-next-line @typescript-eslint/consistent-type-assertions
 	Observable.prototype[p as keyof typeof operators] = function (
 		this: Observable<unknown>,
 		...args: unknown[]
 	) {
-		/* eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
+		/* eslint-disable-next-line @typescript-eslint/consistent-type-assertions, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
 		return this.pipe((operators as any)[p](...args));
 		/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 	} as any;

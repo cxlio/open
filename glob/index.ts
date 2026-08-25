@@ -15,6 +15,23 @@ export interface Options {
 	gitignore?: boolean;
 }
 
+function prepareGlob(glob: string, gitignore: boolean | undefined) {
+	if (!gitignore)
+		return { glob, anchoredToRoot: false, dirOnly: false, matchesNothing: false };
+	if (glob[0] === '#' && glob[1] !== '\\')
+		return { glob, anchoredToRoot: false, dirOnly: false, matchesNothing: true };
+	while (glob.length > 0 && glob.endsWith(' ') && !glob.endsWith('\\ '))
+		glob = glob.slice(0, -1);
+	glob = glob.replace(/\\ $/, ' ');
+
+	const anchoredToRoot = glob.startsWith('/');
+	if (anchoredToRoot) glob = glob.slice(1);
+	const dirOnly = glob.endsWith('/');
+	if (dirOnly) glob = glob.slice(0, -1);
+
+	return { glob, anchoredToRoot, dirOnly, matchesNothing: false };
+}
+
 /*
  * The `globToRegexString` function converts a single glob pattern into its equivalent
  * regular expression string. It supports advanced glob features like groups, ranges,
@@ -28,42 +45,10 @@ function globToRegexString(
 	glob: string,
 	{ matchBase, gitignore }: Options = {},
 ): string {
-	// --- gitignore preprocessing ---
-	if (gitignore) {
-		// Trim trailing spaces unless escaped with a backslash (gitignore behavior).
-		// e.g. "foo " == "foo", but "foo\ " keeps the space.
-		let g = glob;
-
-		// Comments: a leading unescaped # means "ignore this pattern"
-		// (return a regex that matches nothing).
-		if (g[0] === '#' && g[1] !== '\\') return '(?!)';
-
-		// Remove unescaped trailing spaces
-		while (g.length > 0 && g.endsWith(' ') && !g.endsWith('\\ ')) {
-			g = g.slice(0, -1);
-		}
-		// Unescape "\ " -> " "
-		g = g.replace(/\\ $/, ' ');
-
-		glob = g;
-	}
-
-	let anchoredToRoot = false;
-	let dirOnly = false;
-
-	if (gitignore) {
-		// Leading slash anchors to root
-		if (glob.startsWith('/')) {
-			anchoredToRoot = true;
-			glob = glob.slice(1);
-		}
-
-		// Trailing slash means directory-only match
-		if (glob.endsWith('/')) {
-			dirOnly = true;
-			glob = glob.slice(0, -1);
-		}
-	}
+	const prepared = prepareGlob(glob, gitignore);
+	if (prepared.matchesNothing) return '(?!)';
+	glob = prepared.glob;
+	const { anchoredToRoot, dirOnly } = prepared;
 
 	const len = glob.length;
 	let reStr = '';
@@ -134,10 +119,8 @@ function globToRegexString(
 	}
 
 	let i = 0;
-	while (i < len) {
-		const c = glob[i];
-		const la = glob[i + 1];
 
+	function parsePunctuation(c: string, la: string | undefined) {
 		switch (c) {
 			case '.':
 				if (inGroup && la === '.') {
@@ -153,13 +136,12 @@ function globToRegexString(
 					} else reStr += '(?!\\.\\.)\\.';
 				} else reStr += '\\.';
 				isStartOfPath = false;
-				break;
+				return true;
 			case '\\':
-				if (la === '\\') reStr += '\\\\';
-				else reStr += `\\${la}`;
+				reStr += la === '\\' ? '\\\\' : `\\${la}`;
 				i++;
 				isStartOfPath = false;
-				break;
+				return true;
 			case '!':
 				if (la === '(') {
 					reStr += '(?:(?!';
@@ -169,78 +151,89 @@ function globToRegexString(
 					isStartOfPath = false;
 				} else {
 					let negate = true;
-
 					while (glob[i + 1] === '!') {
 						negate = !negate;
 						i++;
 					}
-
 					if (negate)
 						return `^(?:(?!${globToRegexString(glob.slice(i + 1), {
 							matchBase,
 							gitignore,
 						})}).*)$`;
 				}
-				break;
+				return true;
 			case '"':
 				inQuotes = !inQuotes;
 				reStr += '"?';
 				isStartOfPath = false;
-				break;
+				return true;
 			case '^':
 				reStr += '\\^';
 				isStartOfPath = false;
-				break;
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	function parseModifier(c: string, la: string | undefined) {
+		switch (c) {
 			case '+':
-				// One or more mod
-				if (la === '(') break;
-				if (inParens || (glob[i - 1] === ')' && glob[i - 2] !== '\\'))
-					reStr += '+';
-				else reStr += '\\+';
-				isStartOfPath = false;
-				break;
+				if (la !== '(') {
+					reStr +=
+						inParens || (glob[i - 1] === ')' && glob[i - 2] !== '\\')
+							? '+'
+							: '\\+';
+					isStartOfPath = false;
+				}
+				return true;
 			case '@':
 				if (la !== '(') {
 					reStr += '@';
 					isStartOfPath = false;
 				}
-				break;
+				return true;
 			case '$':
 			case '=':
 				reStr += '\\' + c;
 				isStartOfPath = false;
-				break;
+				return true;
 			case '?':
-				// One or more mod
-				if (la === '(') break;
-				reStr += !glob[i - 1] || glob[i - 1] === '/' ? '[^/.]' : '[^/]';
-				isStartOfPath = false;
-				break;
+				if (la !== '(') {
+					reStr += !glob[i - 1] || glob[i - 1] === '/' ? '[^/.]' : '[^/]';
+					isStartOfPath = false;
+				}
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	function parseGroup(c: string, la: string | undefined) {
+		switch (c) {
 			case '(':
 				matchParens(i);
-				break;
+				return true;
 			case ')':
 				if (inParens) {
 					const mod = parensMod.pop() || '';
-					const sep =
-						mod === ').*)' && isEndOfPath(i) ? '(?:/|$)' : '';
+					const sep = mod === ').*)' && isEndOfPath(i) ? '(?:/|$)' : '';
 					inParens--;
-					if (mod === '^*') reStr += isEndOfPath(i) ? `)+` : ')*';
-					else reStr += `)${sep}${mod}`;
+					reStr +=
+						mod === '^*' ? (isEndOfPath(i) ? ')+' : ')*') : `)${sep}${mod}`;
 				} else {
 					reStr += '\\)';
 					isStartOfPath = false;
 				}
-				break;
+				return true;
 			case '[':
 				[i, reStr] = matchBrackets(i + 1);
-				break;
+				return true;
 			case ']':
 				reStr += '\\]';
 				isStartOfPath = false;
-				break;
+				return true;
 			case '{': {
-				// If no commas treat as literal
 				let found = false;
 				for (let a = i + 1; a < len && glob[a] !== '}'; a++)
 					if (
@@ -256,7 +249,7 @@ function globToRegexString(
 					reStr += '\\{';
 					isStartOfPath = false;
 				}
-				break;
+				return true;
 			}
 			case '}':
 				if (inGroup) {
@@ -268,75 +261,97 @@ function globToRegexString(
 					}
 				} else reStr += '\\}';
 				isStartOfPath = false;
-				break;
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	function parseSeparator(c: string, la: string | undefined) {
+		switch (c) {
 			case '|':
-				if (gitignore && glob[i - 1] === '/') reStr += '?|';
-				else reStr += '|';
-				break;
+				reStr += gitignore && glob[i - 1] === '/' ? '?|' : '|';
+				return true;
 			case ',':
-				if (inGroup) {
-					reStr += '|';
-					break;
+				if (inGroup) reStr += '|';
+				else {
+					reStr += '\\' + c;
+					isStartOfPath = false;
 				}
-				reStr += '\\' + c;
-				isStartOfPath = false;
-				break;
+				return true;
 			case '/':
-				if (
+				reStr +=
 					la === '*' &&
 					glob[i - 1] &&
 					glob[i + 2] === '*' &&
 					glob[i + 3] !== '/'
-				)
-					reStr += '/?';
-				else reStr += '/';
+						? '/?'
+						: '/';
 				isStartOfPath = true;
-				break;
-			case '*':
-				if (inQuotes) {
-					reStr += '\\' + c;
-					isStartOfPath = false;
-					break;
-				}
-				if (la === '(') break;
-
-				if (la === '*') {
-					if (!glob[i - 1]) reStr += '/?';
-					if (
-						(glob[i + 2] === '/' || !glob[i + 2]) &&
-						(glob[i - 1] === '/' || !glob[i - 1])
-					) {
-						if (glob[i + 3]) reStr += '(?:[^/.][^/]*(?:/|$))*';
-						else if (!glob[i + 2]) reStr += '(?:[^/.][^/]*/?)*';
-						else reStr += '(?:[^/.][^/]*/)*';
-
-						i += 2;
-						break;
-					} else {
-						if (glob[i - 1] === '/' || !glob[i - 1])
-							reStr += `(?:[^./][^/]*)${
-								glob[i + 2] ? '?(?:/$)?' : '/?'
-							}`;
-						else reStr += `[^/]*${glob[i + 2] ? '(?:/$)?' : '/?'}`;
-						i++;
-						break;
-					}
-				} else if (la === '/') {
-					reStr += '(?:[^./][^/]*)?/';
-					i++;
-					break;
-				}
-				if (glob[i - 1] === '/' || !glob[i - 1]) {
-					if (la === '.') {
-						reStr += `(?:[^./][^/]*)(?:/$)?`;
-					} else reStr += `(?:[^./][^/]*)${la ? '?(?:/$)?' : '/?'}`;
-				} else reStr += `[^/]*${la ? '(?:/$)?' : '/?'}`;
-				isStartOfPath = false;
-				break;
-
+				return true;
 			default:
+				return false;
+		}
+	}
+
+	function parseStar(la: string | undefined) {
+		if (inQuotes) {
+			reStr += '\\*';
+			isStartOfPath = false;
+			return;
+		}
+		if (la === '(') return;
+		if (la === '*') {
+			if (!glob[i - 1]) reStr += '/?';
+			if (
+				(glob[i + 2] === '/' || !glob[i + 2]) &&
+				(glob[i - 1] === '/' || !glob[i - 1])
+			) {
+				if (glob[i + 3]) reStr += '(?:[^/.][^/]*(?:/|$))*';
+				else if (!glob[i + 2]) reStr += '(?:[^/.][^/]*/?)*';
+				else reStr += '(?:[^/.][^/]*/)*';
+				i += 2;
+				return;
+			}
+			reStr +=
+				glob[i - 1] === '/' || !glob[i - 1]
+					? `(?:[^./][^/]*)${glob[i + 2] ? '?(?:/$)?' : '/?'}`
+					: `[^/]*${glob[i + 2] ? '(?:/$)?' : '/?'}`;
+			i++;
+			return;
+		}
+		if (la === '/') {
+			reStr += '(?:[^./][^/]*)?/';
+			i++;
+			return;
+		}
+		if (glob[i - 1] === '/' || !glob[i - 1])
+			reStr +=
+				la === '.'
+					? '(?:[^./][^/]*)(?:/$)?'
+					: `(?:[^./][^/]*)${la ? '?(?:/$)?' : '/?'}`;
+		else reStr += `[^/]*${la ? '(?:/$)?' : '/?'}`;
+		isStartOfPath = false;
+	}
+
+	while (i < len) {
+		const c = glob[i];
+		if (c === undefined) break;
+		const la = glob[i + 1];
+
+		const punctuation = parsePunctuation(c, la);
+		if (typeof punctuation === 'string') return punctuation;
+		if (
+			!punctuation &&
+			!parseModifier(c, la) &&
+			!parseGroup(c, la) &&
+			!parseSeparator(c, la)
+		) {
+			if (c === '*') parseStar(la);
+			else {
 				reStr += c;
 				isStartOfPath = false;
+			}
 		}
 		i++;
 	}

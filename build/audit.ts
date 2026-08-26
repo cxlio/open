@@ -275,7 +275,10 @@ async function collectConfiguredUsedPackages(
 		const configPath = path.join(projectPath, tsconfig);
 		if (!(await exists(configPath))) continue;
 
-		const config = ts.readConfigFile(configPath, ts.sys.readFile);
+		const config = ts.readConfigFile(
+			configPath,
+			ts.sys.readFile.bind(ts.sys),
+		);
 		if (config.error) continue;
 
 		const parsed = ts.parseJsonConfigFileContent(
@@ -339,7 +342,7 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 	if (oldPackage !== newPackage) await fs.writeFile(pkgPath, newPackage);
 }
 
-async function lintPackage({ pkg, name, rootPkg }: LintData) {
+function lintPackage({ pkg, name, rootPkg }: LintData) {
 	const rules = requiredPackageFields.map(field =>
 		rule(pkg[field] !== undefined, `Field "${field}" required in package.json`),
 	);
@@ -404,12 +407,12 @@ async function lintPackage({ pkg, name, rootPkg }: LintData) {
 		rule(pkg.type === 'module', 'Package "type" must be "module".'),
 	);
 
-	return {
+	return Promise.resolve({
 		id: 'package',
 		project: name,
 		fix: fixPackage,
 		rules,
-	};
+	});
 }
 
 async function lintTest({ projectPath }: LintData) {

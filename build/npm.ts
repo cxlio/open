@@ -1,5 +1,4 @@
-import { sh } from '../program/index.js';
-import { readFile } from 'fs/promises';
+import { parseJson, readJson, sh } from '../program/index.js';
 import type { SpawnOptions } from 'child_process';
 import { buildOutputOptions } from './builder.js';
 import {
@@ -77,8 +76,7 @@ export function getPackageBuildOptions(rootPkg: Package, pkg: Package) {
 }
 
 export async function readPackage(path: string) {
-	const pkg: Package = JSON.parse(await readFile(path, 'utf8'));
-	return pkg;
+	return readJson<Package>(path);
 }
 
 export async function getLatestVersion(
@@ -138,7 +136,7 @@ export async function publishNpm(dir: string, distDir: string) {
 	const branch = await getBranch(process.cwd());
 	const mainBranch = await getMainBranch(process.cwd());
 	if (branch !== mainBranch)
-		throw `Active branch "${branch}" is not main branch`;
+		throw new Error(`Active branch "${branch}" is not main branch`);
 	await checkBranchClean(mainBranch, process.cwd());
 	await checkBranchUpToDate(mainBranch, process.cwd());
 
@@ -199,7 +197,7 @@ export async function publishNpm(dir: string, distDir: string) {
 
 export async function getPackageInfo(name: string): Promise<PackageInfo> {
 	try {
-		const info: PackageInfo = JSON.parse(
+		const info = parseJson<PackageInfo>(
 			(await sh(`npm show ${name} --json`)).trim(),
 		);
 		return info;

@@ -15,11 +15,12 @@ export function buildDocs(options: BuildDocsOptions) {
 				cxlExtensions: true,
 				...options,
 			},
-			async file => {
+			file => {
 				subs.next({
 					path: file.name,
 					source: Buffer.from(file.content),
 				});
+				return Promise.resolve();
 			},
 		).then(
 			() => subs.complete(),

@@ -1,7 +1,6 @@
 import { dirname, relative, resolve } from 'path';
 import { existsSync, utimesSync, writeFileSync } from 'fs';
 import { SpawnOptions, spawn, execSync } from 'child_process';
-import { createRequire } from 'module';
 
 import {
 	Logger,
@@ -40,7 +39,6 @@ class ReportedBuildError extends Error {}
 
 const AppName = colors.green('build');
 export const appLog = log.bind(null, AppName);
-export const require = createRequire(import.meta.dirname);
 export const buildParameters = {
 	help: {
 		short: 'h',
@@ -114,13 +112,6 @@ export function formatBuildError(error: Error | string) {
 	return error;
 }
 
-export function resolveRequire<T>(mod: string) {
-	const result: T = require(require.resolve(mod, {
-		paths: [process.cwd(), import.meta.dirname],
-	}));
-	return result;
-}
-
 export async function build(...targets: BuildConfiguration[]) {
 	if (!targets.length) throw new Error('Invalid configuration');
 
@@ -128,7 +119,7 @@ export async function build(...targets: BuildConfiguration[]) {
 		process.chdir(BASEDIR);
 	}
 
-	const pkg = readPackage();
+	const pkg = await readPackage();
 	const options = buildOutputOptions();
 
 	if (options.verbose) appLog(`${pkg.name} ${pkg.version}`);

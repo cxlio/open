@@ -6,7 +6,6 @@ import {
 	Output,
 	appLog,
 	buildOutputOptions,
-	resolveRequire,
 } from './builder.js';
 
 import type { TsconfigJson } from './tsc.js';
@@ -45,9 +44,8 @@ function eslintWithConfig(
 	configName: 'default' | 'specConfig',
 ) {
 	return new Observable<Output>(subs => {
-		const { ESLint } = resolveRequire<typeof import('eslint')>('eslint');
-		import('./eslint-config.js').then(
-			config => {
+		Promise.all([import('eslint'), import('./eslint-config.js')]).then(
+			([{ ESLint }, config]) => {
 				if (buildOutputOptions().verbose) appLog(`eslint ${ESLint.version}`);
 				const linter = new ESLint({
 					cache: true,

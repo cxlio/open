@@ -14,4 +14,3 @@ Lightweight module for handling keyboard input on HTML elements with customizabl
 ## Installation
 
 	npm install @cxl/keyboard
-

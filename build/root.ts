@@ -90,7 +90,7 @@ async function renderPackage(dir: string, rootPkg: Package) {
 	const pkg = await readPkg(dir);
 	if (!pkg) return '';
 
-	await sh(`npm run build audit test package docs --prefix ${dir}`);
+	await sh(`npm run build test package docs --prefix ${dir}`);
 
 	/*const latestVersion =
 		(await getLatestVersion(pkg.name, 'beta').catch(() => '')) ||

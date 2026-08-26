@@ -143,10 +143,6 @@ export const tsConfig: FlatConfig.Config = {
 				assertionStyle: 'never',
 			},
 		],
-		/*'@typescript-eslint/strict-boolean-expressions': [
-				'error',
-				{ allowString: true, allowNumber: false },
-			],*/
 		'@typescript-eslint/no-unnecessary-condition': [
 			'error',
 			{ allowConstantLoopConditions: true },
@@ -156,14 +152,10 @@ export const tsConfig: FlatConfig.Config = {
 			{ considerDefaultExhaustiveForUnions: true },
 		],
 
-		// Prefer modern nullable patterns
-		/*'@typescript-eslint/prefer-nullish-coalescing': [
-				'error',
-				{ ignoreMixedLogicalExpressions: true },
-			],*/
 		'@typescript-eslint/prefer-optional-chain': 'error',
 
 		'@typescript-eslint/no-unsafe-call': 'error',
+		'@typescript-eslint/unbound-method': 'off',
 		'@typescript-eslint/no-unsafe-member-access': 'error',
 		'@typescript-eslint/no-unsafe-return': 'error',
 		'@typescript-eslint/no-unsafe-argument': 'error',
@@ -171,14 +163,17 @@ export const tsConfig: FlatConfig.Config = {
 			'error',
 			{
 				selector: [
-					// Named params: function foo(x: unknown)
 					'FunctionDeclaration > :matches(Identifier, RestElement)[typeAnnotation.typeAnnotation.type="TSUnknownKeyword"]',
 					'FunctionExpression > :matches(Identifier, RestElement)[typeAnnotation.typeAnnotation.type="TSUnknownKeyword"]',
 					'ArrowFunctionExpression > :matches(Identifier, RestElement)[typeAnnotation.typeAnnotation.type="TSUnknownKeyword"]',
-					// Interface/type method signatures: { foo(x: unknown): void }
 					'TSMethodSignature > :matches(Identifier, RestElement)[typeAnnotation.typeAnnotation.type="TSUnknownKeyword"]',
 				].join(', '),
 				message: 'Param type `unknown` is banned. Use a concrete type.',
+			},
+			{
+				selector: 'MemberExpression[object.name="Reflect"]',
+				message:
+					'Reflect API usage is banned. Use typed language constructs.',
 			},
 		],
 	},
@@ -196,10 +191,12 @@ export const specConfig = defineConfig([
 export default defineConfig([
 	js.configs.recommended,
 	ts.configs.recommended,
+	//ts.configs.recommendedTypeCheckedOnly,
 	tsConfig,
 	sonarjsConfigs.recommended,
 	{
 		rules: {
+			'require-atomic-updates': ['error', { allowProperties: true }],
 			'sonarjs/cognitive-complexity': 'off',
 			'sonarjs/no-all-duplicated-branches': 'error',
 			'sonarjs/no-duplicated-branches': 'error',

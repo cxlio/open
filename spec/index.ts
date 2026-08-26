@@ -241,11 +241,8 @@ const clearTimeout = globalThis.clearTimeout;
 const DEFAULT_ASSERTION_MESSAGE = 'Expected value to be truthy';
 
 function isIterator<T>(value: T): value is T & Iterator<Value> {
-	return (
-		typeof value === 'object' &&
-		value !== null &&
-		typeof Reflect.get(value, 'next') === 'function'
-	);
+	if (value === null || typeof value !== 'object') return false;
+	return 'next' in value && typeof value.next === 'function';
 }
 
 function isIterable<T>(val: T): val is T & Iterable<Value> {
@@ -770,7 +767,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 					const elapsedTime = ms - lastFired;
 					const timesToFire = Math.floor(elapsedTime / (delay || 1));
 					for (let i = 0; i < timesToFire; i++)
-						if (typeof cb === 'function') Reflect.apply(cb, globalThis, []);
+						if (typeof cb === 'function') cb.call(globalThis);
 					int.lastFired = Math.floor(ms / delay) * delay;
 				}
 			},
@@ -798,7 +795,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 			advance(ms: number) {
 				for (const [key, { cb, time }] of Object.entries(timeouts)) {
 					if (time <= ms) {
-						if (typeof cb === 'function') Reflect.apply(cb, globalThis, []);
+						if (typeof cb === 'function') cb.call(globalThis);
 						delete timeouts[+key];
 					} else {
 						const to = timeouts[+key];
@@ -1227,7 +1224,7 @@ function spyFn<A extends Value[], R, K extends PropertyKey>(
 	const originalFn = object[method];
 	const spy: Spy<SpyFn<A, R>> = {
 		destroy() {
-			Reflect.set(object, method, originalFn);
+			object[method] = originalFn;
 			sub.complete();
 		},
 		then(resolve, reject) {
@@ -1255,7 +1252,7 @@ function spyFn<A extends Value[], R, K extends PropertyKey>(
 		sub.next((spy.lastEvent = { called, arguments: args, result }));
 		return result;
 	};
-	Reflect.set(object, method, spyFn);
+	object[method] = spyFn;
 
 	return spy;
 }

@@ -1,11 +1,11 @@
-import { Observable, defer, merge, of, EMPTY } from '../rx/index.js';
+import { Observable, fromAsync, merge, of, EMPTY } from '../rx/index.js';
 import { existsSync, readFileSync } from 'fs';
 import { join, relative, resolve } from 'path';
 import { file } from './file.js';
 import { execSync } from 'child_process';
 import { Output } from './builder.js';
 import { License, Package } from './npm.js';
-import { getErrorCode } from '../program/index.js';
+import { getErrorCode, readJson } from '../program/index.js';
 import * as esbuildApi from 'esbuild-wasm';
 
 const SCRIPTDIR = process.cwd();
@@ -174,12 +174,12 @@ export function esbuild(options: esbuildApi.BuildOptions) {
 	});
 }
 
-export function readPackage(base: string = BASEDIR): Package {
+export async function readPackage(base: string = BASEDIR) {
 	const pkg = resolve(base, 'package.json');
 
 	if (!existsSync(pkg)) throw new Error(`"${pkg}" not found`);
 
-	const PACKAGE: Package = JSON.parse(readFileSync(pkg, 'utf8'));
+	const PACKAGE = await readJson<Package>(pkg);
 	verifyFields(['name', 'version', 'description'], PACKAGE, pkg);
 	if (!PACKAGE.private) verifyFields(['license'], PACKAGE, pkg);
 	return PACKAGE;
@@ -252,12 +252,12 @@ function readIfExists(file: string) {
  * Generate README file
  */
 export function readme() {
-	return defer(() => {
-		const pkg = readPackage(BASEDIR);
+	return fromAsync(async () => {
+		const pkg = await readPackage(BASEDIR);
 		const extra = readIfExists('USAGE.md');
 		const encodedName = encodeURIComponent(pkg.name);
 
-		return of({
+		return {
 			path: 'README.md',
 			source: Buffer.from(`# ${pkg.name} 
 	
@@ -276,13 +276,12 @@ ${pkg.description}
 
 	npm install ${pkg.name}
 ${extra ? `\n${extra}` : ''}`),
-		});
+		};
 	});
 }
 
 export function pkg(main?: string) {
-	return defer(() => {
-		const p = readPackage();
+	return fromAsync(() => readPackage()).switchMap(p => {
 		const licenseId = p.license;
 
 		const output: Observable<Output>[] = [packageJson(p, main)];

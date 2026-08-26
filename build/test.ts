@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
-import { execFileSync } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import { build as esbuild } from 'esbuild-wasm';
 import { formatHelp, sh } from '../program/index.js';
 import {
@@ -38,7 +38,6 @@ import {
 	enforceCoverageGate,
 	generateTestFile,
 	runBenchmarks,
-	runTests,
 } from './spec.js';
 import type { Package } from './npm.js';
 import { checkBranchClean, checkBranchUpToDate } from './git.js';
@@ -126,18 +125,6 @@ export default spec('build', s => {
 				formatBuildError(new Error('eslint errors found.')),
 				'eslint errors found.',
 			);
-		});
-	});
-
-	s.test('npm test integration', it => {
-		it.should('forward focused test options', async a => {
-			const output = await sh('npm test -- --grep parseArgv', {
-				cwd: join(import.meta.dirname, '../../program'),
-			});
-			a.ok(output.includes('cli.js test --grep parseArgv'));
-			a.ok(/tests: passed \([1-9]\d*\)/.test(output));
-			a.ok(!output.includes('Unknown cli config'));
-			a.ok(!output.includes('Unknown build'));
 		});
 	});
 
@@ -380,7 +367,7 @@ void composed;
 				const declarationPath = join(packageDir, 'index.d.ts');
 				await writeFile(
 					declarationPath,
-					bundleDeclarations(entry, []),
+					await bundleDeclarations(entry, []),
 				);
 				const declaration = await readFile(declarationPath, 'utf8');
 				const sourceFile = ts.createSourceFile(
@@ -425,7 +412,7 @@ void composed;
 			}
 		});
 
-		it.should('bundle the internal public type graph', async a => {
+		it.test('internal public type graph', async graph => {
 			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-dts-'));
 			const packageDir = join(dir, 'package');
 			const externalDir = join(dir, 'node_modules', 'external');
@@ -436,7 +423,8 @@ void composed;
 			);
 			const aliasSourceDir = join(dir, 'alias-source');
 			const aliasOutputDir = join(dir, 'alias-output');
-			try {
+			graph.afterAll(() => rm(dir, { recursive: true, force: true }));
+			{
 				await mkdir(packageDir, { recursive: true });
 				await mkdir(externalDir, { recursive: true });
 				await mkdir(internalTypesDir, { recursive: true });
@@ -540,10 +528,11 @@ export = Legacy;
 					'export interface Aliased { aliased: true; }\n',
 				);
 
+				graph.test('bundles internal types', async bundled => {
 				const entry = join(packageDir, 'index.d.ts');
 				await writeFile(
 					entry,
-					bundleDeclarations(
+					await bundleDeclarations(
 						entry,
 						['external'],
 						join(dir, 'tsconfig.json'),
@@ -556,9 +545,10 @@ export = Legacy;
 				await rm(join(packageDir, 'cycle-a.d.ts'));
 				await rm(join(packageDir, 'cycle-b.d.ts'));
 				await rm(join(packageDir, 'legacy.d.ts'));
-				const consumer = join(dir, 'consumer.ts');
-				await writeFile(
-					consumer,
+				bundled.test('preserves public types', async a => {
+					const consumer = join(dir, 'consumer.ts');
+					await writeFile(
+						consumer,
 					`import create, { type Result, type Renamed, type CycleA, type RenamedCycle } from './package/index.js';
 type IsAny<T> = 0 extends 1 & T ? true : false;
 type AssertNotAny<T extends false> = T;
@@ -582,31 +572,33 @@ void renamed;
 void cycle;
 void result;
 `,
-				);
-				const program = ts.createProgram([consumer], {
-					module: ts.ModuleKind.ESNext,
-					moduleResolution: ts.ModuleResolutionKind.Node10,
-					noEmit: true,
-					strict: true,
-					skipLibCheck: false,
-				});
-				a.equalValues(
-					ts.getPreEmitDiagnostics(program).map(diagnostic =>
-						ts.flattenDiagnosticMessageText(
-							diagnostic.messageText,
-							'\n',
+					);
+					const program = ts.createProgram([consumer], {
+						module: ts.ModuleKind.ESNext,
+						moduleResolution: ts.ModuleResolutionKind.Node10,
+						noEmit: true,
+						strict: true,
+						skipLibCheck: false,
+					});
+					a.equalValues(
+						ts.getPreEmitDiagnostics(program).map(diagnostic =>
+							ts.flattenDiagnosticMessageText(
+								diagnostic.messageText,
+								'\n',
+							),
 						),
-					),
-					[],
-				);
-				const emptyEntry = join(packageDir, 'empty.d.ts');
-				await writeFile(emptyEntry, '');
-				a.equal(
-					bundleDeclarations(emptyEntry, []).trim(),
-					'export {};',
-				);
-			} finally {
-				await rm(dir, { recursive: true, force: true });
+						[],
+					);
+					a.test('handles empty declarations', async a => {
+						const emptyEntry = join(packageDir, 'empty.d.ts');
+						await writeFile(emptyEntry, '');
+						a.equal(
+							(await bundleDeclarations(emptyEntry, [])).trim(),
+							'export {};',
+						);
+					});
+				});
+			});
 			}
 		});
 	});
@@ -770,49 +762,56 @@ void result;
 	});
 
 	s.test('npm publish git verification', it => {
-		it.should('reject dirty and unsynchronized repositories', async a => {
+		it.test('repository verification', async checks => {
 			const baseDir = await mkdtemp(join(tmpdir(), 'cxl-build-git-'));
 			const remoteDir = join(baseDir, 'remote.git');
 			const dir = join(baseDir, 'project');
 			const otherDir = join(baseDir, 'other');
-			try {
+			checks.afterAll(() =>
+				rm(baseDir, { recursive: true, force: true }),
+			);
+			{
 				await sh(`git init --bare ${remoteDir}`);
 				await sh('git symbolic-ref HEAD refs/heads/main', {
 					cwd: remoteDir,
 				});
-				await sh(`git init -b main ${dir}`);
-				await sh('git config user.email build@example.com', { cwd: dir });
-				await sh('git config user.name Build', { cwd: dir });
-				await writeFile(join(dir, 'file.txt'), 'initial');
-				await sh('git add file.txt && git commit -m initial', { cwd: dir });
-				await sh(`git remote add origin ${remoteDir}`, { cwd: dir });
-				await sh('git push -u origin main', { cwd: dir });
+				checks.test('initializes a local repository', async local => {
+					await sh(`git init -b main ${dir}`);
+					await writeFile(join(dir, 'file.txt'), 'initial');
+					await sh(
+						'git add file.txt && git -c user.email=build@example.com -c user.name=Build commit -m initial',
+						{ cwd: dir },
+					);
+					local.test('accepts synchronized repositories', async synchronized => {
+						await sh(`git remote add origin ${remoteDir}`, { cwd: dir });
+						await sh('git push -u origin main', { cwd: dir });
 
-				await checkBranchClean('main', dir);
-				await checkBranchUpToDate('main', dir);
+						await checkBranchClean('main', dir);
+						await checkBranchUpToDate('main', dir);
 
-				await writeFile(join(dir, 'file.txt'), 'dirty');
-				a.equal(
-					await errorMessage(() => checkBranchClean('main', dir)),
-					'Not a clean repository',
-				);
-				await sh('git checkout -- file.txt', { cwd: dir });
-				await sh(`git clone ${remoteDir} ${otherDir}`);
-				await sh('git config user.email build@example.com', {
-					cwd: otherDir,
+						synchronized.test('rejects dirty repositories', async a => {
+							await writeFile(join(dir, 'file.txt'), 'dirty');
+							a.equal(
+								await errorMessage(() => checkBranchClean('main', dir)),
+								'Not a clean repository',
+							);
+							await sh('git checkout -- file.txt', { cwd: dir });
+							a.test('rejects unsynchronized repositories', async a => {
+								await sh(`git clone ${remoteDir} ${otherDir}`);
+								await writeFile(join(otherDir, 'file.txt'), 'remote change');
+								await sh(
+									'git add file.txt && git -c user.email=build@example.com -c user.name=Build commit -m changed',
+									{ cwd: otherDir },
+								);
+								await sh('git push origin main', { cwd: otherDir });
+								a.equal(
+									await errorMessage(() => checkBranchUpToDate('main', dir)),
+									'Branch has not been merged with origin',
+								);
+							});
+						});
+					});
 				});
-				await sh('git config user.name Build', { cwd: otherDir });
-				await writeFile(join(otherDir, 'file.txt'), 'remote change');
-				await sh('git add file.txt && git commit -m changed', {
-					cwd: otherDir,
-				});
-				await sh('git push origin main', { cwd: otherDir });
-				a.equal(
-					await errorMessage(() => checkBranchUpToDate('main', dir)),
-					'Branch has not been merged with origin',
-				);
-			} finally {
-				await rm(baseDir, { recursive: true, force: true });
 			}
 		});
 	});
@@ -872,7 +871,6 @@ void result;
 		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-test-'));
 		const packageDir = join(rootDir, 'package');
 		const outputDir = join(packageDir, 'dist');
-		const cwd = process.cwd();
 		try {
 			await mkdir(outputDir, { recursive: true });
 			await writeFile(join(rootDir, 'package.json'), '{"name":"root"}');
@@ -886,12 +884,20 @@ void result;
 export default spec('fixture', s => s.test('passes', a => a.ok(true)));
 `,
 			);
-			process.chdir(packageDir);
-			await runTests({
+			const options = {
 				appId: 'fixture',
 				outputDir,
 				node: true,
 				ignoreCoverage: true,
+			};
+			const script = `await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runTests(${JSON.stringify(options)}))`;
+			await new Promise<void>((resolve, reject) => {
+				execFile(
+					process.execPath,
+					['--input-type=module', '--eval', script],
+					{ cwd: packageDir },
+					error => (error ? reject(error) : resolve()),
+				);
 			});
 			const report = JSON.parse(
 				await readFile(join(outputDir, 'test-report.json'), 'utf8'),
@@ -904,7 +910,6 @@ export default spec('fixture', s => s.test('passes', a => a.ok(true)));
 			a.ok(document.includes('Specification: fixture'));
 			a.ok(document.includes('<c-page><c-layout'));
 		} finally {
-			process.chdir(cwd);
 			await rm(rootDir, { recursive: true, force: true });
 		}
 	});

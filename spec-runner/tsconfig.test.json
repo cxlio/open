@@ -1,22 +1,15 @@
 {
 	"extends": "./tsconfig.json",
-	"compilerOptions": {
-		"lib": ["dom", "es2023"]
-	},
-	"files": [
-		"test.ts",
-		"test-binary-fixture.ts",
-		"test-benchmark-fixture.ts",
-		"test-console-fixture.ts",
-		"test-drag-fixture.ts",
-		"test-keyboard-fixture.ts"
-	],
+	"files": ["test.ts"],
 	"references": [
 		{
 			"path": "."
 		},
 		{
 			"path": "../spec"
+		},
+		{
+			"path": "./tsconfig.test-browser.json"
 		}
 	]
 }

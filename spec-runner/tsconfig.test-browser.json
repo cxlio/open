@@ -1,0 +1,15 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"outDir": "../dist/spec-runner",
+		"lib": ["dom", "es2023"]
+	},
+	"files": [
+		"test-benchmark-fixture.ts",
+		"test-binary-fixture.ts",
+		"test-console-fixture.ts",
+		"test-drag-fixture.ts",
+		"test-keyboard-fixture.ts"
+	],
+	"references": [{ "path": "../spec" }]
+}

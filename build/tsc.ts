@@ -1,6 +1,6 @@
 import { dirname, join, relative, resolve } from 'path';
 import { builtinModules } from 'module';
-import { existsSync, readdirSync, readFileSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { Observable, Subscriber } from '../rx/index.js';
 import type {
 	BuilderProgram,
@@ -15,6 +15,7 @@ import type {
 import * as ts from 'typescript';
 import { Output } from './builder.js';
 import { getPackageName } from './package.js';
+import { readJson } from '../program/index.js';
 import type { Package } from './npm.js';
 
 export interface TsconfigJson {
@@ -36,7 +37,7 @@ const parseConfigHost: ParseConfigFileHost = {
 	fileExists,
 	readFile,
 	onUnRecoverableConfigFileDiagnostic(e) {
-		throw e;
+		throw new Error(ts.flattenDiagnosticMessageText(e.messageText, '\n'));
 	},
 };
 
@@ -47,11 +48,6 @@ const diagnosticsHost: FormatDiagnosticsHost = {
 };
 
 export const tscVersion = ts.version;
-
-function getErrorProperty(error: object, property: 'message' | 'messageText') {
-	const value = Object.getOwnPropertyDescriptor(error, property)?.value;
-	return typeof value === 'string' ? value : undefined;
-}
 
 export function buildDiagnostics(program: Program | BuilderProgram) {
 	return [
@@ -121,7 +117,7 @@ export function tsbuild(
 		const status = project.done(undefined, writeFile);
 
 		if (status !== ts.ExitStatus.Success)
-			throw `${project.project}: Typescript compilation failed`;
+			throw new Error(`${project.project}: Typescript compilation failed`);
 	}
 }
 
@@ -142,12 +138,7 @@ export function parseTsConfig(tsconfig: string) {
 		);
 	} catch (e) {
 		if (e instanceof Error) throw e;
-		if (!e || typeof e !== 'object') throw new Error('Unknown Error');
-		const msg =
-			getErrorProperty(e, 'message') ??
-			getErrorProperty(e, 'messageText');
-
-		throw new Error(msg ?? 'Unknown Error');
+		throw new Error('Unknown Error');
 	}
 
 	if (!parsed) {
@@ -168,7 +159,7 @@ function declarationName(name: string) {
 	return /^[A-Za-z_$]/.test(value) ? value : `_${value}`;
 }
 
-function workspaceDeclarations(entryFile: string) {
+async function workspaceDeclarations(entryFile: string) {
 	const outputRoot = resolve(dirname(dirname(entryFile)));
 	const sourceRoot = dirname(outputRoot);
 	const packages = new Map<string, string>();
@@ -177,9 +168,7 @@ function workspaceDeclarations(entryFile: string) {
 		const packageFile = join(sourceRoot, entry.name, 'package.json');
 		const declarationDir = join(outputRoot, entry.name);
 		if (!existsSync(packageFile) || !existsSync(declarationDir)) continue;
-		const value: Partial<Package> | null = JSON.parse(
-			readFileSync(packageFile, 'utf8'),
-		);
+		const value = await readJson<Partial<Package> | null>(packageFile);
 		if (value && typeof value.name === 'string')
 			packages.set(value.name, declarationDir);
 	}
@@ -230,8 +219,8 @@ export function getProjectOutputFiles(tsconfig = DefaultTsconfig) {
 	};
 }
 
-function declarationProgram(entryFile: string, tsconfig: string) {
-	const workspace = workspaceDeclarations(entryFile);
+async function declarationProgram(entryFile: string, tsconfig: string) {
+	const workspace = await workspaceDeclarations(entryFile);
 	const project = projectDeclarations(tsconfig);
 	const paths: Record<string, string[]> = {};
 	for (const [name, declarationDir] of workspace) {
@@ -270,7 +259,7 @@ function declarationProgram(entryFile: string, tsconfig: string) {
 				).resolvedModule;
 			if (sourceModule) {
 				const declaration =
-					sourceModule.extension === ts.Extension.Dts
+					sourceModule.extension === '.d.ts'
 						? sourceModule.resolvedFileName
 						: project.outputs.get(resolve(sourceModule.resolvedFileName));
 				if (declaration && existsSync(declaration))
@@ -508,7 +497,7 @@ function createNamespaceDeclaration(
 	);
 }
 
-export function bundleDeclarations(
+export async function bundleDeclarations(
 	entryFile: string,
 	externalPackages: readonly string[],
 	tsconfig = DefaultTsconfig,
@@ -518,7 +507,7 @@ export function bundleDeclarations(
 		const name = getPackageName(specifier);
 		return builtinPackages.has(specifier) || (!!name && external.has(name));
 	};
-	const program = declarationProgram(entryFile, tsconfig);
+	const program = await declarationProgram(entryFile, tsconfig);
 	const checker = program.getTypeChecker();
 	const entry = program.getSourceFile(entryFile);
 	if (!entry) throw new Error(`Declaration entry not found: ${entryFile}`);

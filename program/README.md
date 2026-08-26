@@ -14,4 +14,3 @@ Utility module providing command-line parameter parsing, colorized console outpu
 ## Installation
 
 	npm install @cxl/program
-

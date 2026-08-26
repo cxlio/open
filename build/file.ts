@@ -86,7 +86,7 @@ export function basename(replace?: string) {
 export function concatFile(outName: string, separator = '\n') {
 	return pipe(
 		reduce<Output, string>(
-			(out, src) => `${out}${separator}${src.source}`,
+			(out, src) => `${out}${separator}${src.source.toString()}`,
 			'',
 		),
 		map(source => ({ path: outName, source: Buffer.from(source) })),

@@ -1,5 +1,5 @@
 import { basename, join } from 'path';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync } from 'fs';
 
 import { EMPTY, concat, from, fromAsync } from '../rx/index.js';
 
@@ -30,24 +30,21 @@ import {
 import { buildDocs } from './docs.js';
 import { generateTestFile, runBenchmarks, runTests } from './spec.js';
 import { audit } from './audit.js';
+import { readJson } from '../program/index.js';
 
 import { Package, publishNpm } from './npm.js';
 
-export function buildLibrary(...extra: BuildConfiguration[]) {
+export async function buildLibrary(...extra: BuildConfiguration[]) {
 	const cwd = process.cwd();
 	const { grep } = buildOutputOptions();
-	const tsconfigFile: TsconfigJson = JSON.parse(
-		readFileSync(cwd + '/tsconfig.json', 'utf8'),
-	);
+	const tsconfigFile = await readJson<TsconfigJson>(cwd + '/tsconfig.json');
 	const outputDir = tsconfigFile.compilerOptions?.outDir;
 	if (!outputDir) throw new Error('Invalid tsconfig file');
 
 	const appId = basename(outputDir);
 	const pkgDir = join(outputDir, 'package');
-	const pkgJson: Package = JSON.parse(readFileSync('package.json', 'utf8'));
-	const rootPkg: Package = JSON.parse(
-		readFileSync('../package.json', 'utf8'),
-	);
+	const pkgJson = await readJson<Package>('package.json');
+	const rootPkg = await readJson<Package>('../package.json');
 
 	const isBrowser = !!pkgJson.browser;
 	const platform = getPackagePlatform(pkgJson);
@@ -132,15 +129,16 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 										await import('@cxl/3doc/render.js');
 									const { renderJson, findExamples } =
 										await import('@cxl/3doc/render-summary.js');
-									const dts = await buildDts(
-										{
-											clean: false,
-											outputDir,
-											noHtml: true,
-										},
-										pkgJson,
+									const summary = renderJson(
+										await buildDts(
+											{
+												clean: false,
+												outputDir,
+												noHtml: true,
+											},
+											pkgJson,
+										),
 									);
-									const summary = renderJson(dts);
 									const examples = summary.index.flatMap(n =>
 										findExamples(n),
 									);
@@ -166,6 +164,11 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 					},
 				]
 			: []),
+		{
+			target: 'audit',
+			outputDir,
+			tasks: [fromAsync(audit).ignoreElements()],
+		},
 
 		{
 			target: 'docs',
@@ -198,12 +201,14 @@ export function buildLibrary(...extra: BuildConfiguration[]) {
 				file('README.md', 'README.md'),
 				file('LICENSE.md', 'LICENSE.md').catchError(() => EMPTY),
 				pkg(pkgMain),
-				from(declarationEntryPoints).map(entry => ({
-					path: entry.out,
-					source: Buffer.from(
-						bundleDeclarations(entry.in, external),
-					),
-				})),
+				from(declarationEntryPoints).concatMap(entry =>
+					fromAsync(async () => ({
+						path: entry.out,
+						source: Buffer.from(
+							await bundleDeclarations(entry.in, external),
+						),
+					})),
+				),
 				esbuild({
 					entryPoints,
 					platform,

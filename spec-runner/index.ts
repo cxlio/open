@@ -90,6 +90,13 @@ const parameters = {
 	verbose: {
 		help: 'Print detailed test output.',
 	},
+	failurePage: {
+		type: 'number',
+		help: 'Page of test failures to print.',
+	},
+	allFailures: {
+		help: 'Print all test failures.',
+	},
 } as const;
 
 function startServer(cmd: string) {
@@ -103,6 +110,11 @@ function startServer(cmd: string) {
 
 const start = program({}, async ({ log }) => {
 	const args = parseArgv(parameters);
+	if (
+		args.failurePage !== undefined &&
+		(!Number.isInteger(args.failurePage) || args.failurePage < 1)
+	)
+		throw new Error('--failurePage must be a positive integer.');
 	const { $, grep: grepPattern, ...rest } = args;
 	const config: SpecRunner = {
 		entryFile: $[0] || './test.js',
@@ -136,7 +148,11 @@ const start = program({}, async ({ log }) => {
 		log(`Could not kill "${args.startServer}"`);
 	}
 
-	printReportV2(report, { verbose: !!config.verbose });
+	printReportV2(report, {
+		verbose: !!config.verbose,
+		failurePage: config.failurePage,
+		allFailures: config.allFailures,
+	});
 	await writeReport(config.reportPath, report);
 	config.onGeneratedFile?.(config.reportPath);
 

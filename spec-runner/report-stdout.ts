@@ -10,13 +10,24 @@ import {
 
 export interface ReportOptions {
 	verbose: boolean;
+	failurePage?: number;
+	allFailures?: boolean;
 }
 
 interface FailureSummary {
 	path: string;
 	message: string;
 	stack?: string;
+	result: TestResult;
 }
+
+interface FailurePage {
+	all: FailureSummary[];
+	visible: FailureSummary[];
+	page: number;
+}
+
+const FAILURE_PAGE_SIZE = 5;
 
 function printError(name: string, fail: TestResult) {
 	const msg = fail.message ?? fail.failureMessage;
@@ -24,7 +35,7 @@ function printError(name: string, fail: TestResult) {
 	if (fail.stack) console.error(fail.stack);
 }
 
-function printTest(test: TestReport) {
+function printTest(test: TestReport, visibleFailures: ReadonlySet<TestResult>) {
 	let out = '';
 
 	const failures = test.results.filter(result => {
@@ -43,8 +54,10 @@ function printTest(test: TestReport) {
 		)} ${out}`,
 	);
 	console.group();
-	failures.forEach(fail => printError(test.name, fail));
-	test.tests.forEach(printTest);
+	failures
+		.filter(fail => visibleFailures.has(fail))
+		.forEach(fail => printError(test.name, fail));
+	test.tests.forEach(child => printTest(child, visibleFailures));
 	console.groupEnd();
 
 	return failures;
@@ -82,51 +95,81 @@ function collectFailures(
 				path,
 				message: r.message ?? r.failureMessage,
 				stack: r.stack,
+				result: r,
 			});
 	}
 	for (const child of test.tests) collectFailures(child, path, out);
 }
 
-function printFailureSummary(report: Report): number {
+function getFailurePage(report: Report, options: ReportOptions): FailurePage {
 	const failures: FailureSummary[] = [];
 	collectFailures(report.testReport, '', failures);
-	if (!failures.length) return 0;
-	console.error(colors.red(`\nFailures (${failures.length}):`));
-	for (const f of failures) {
+	if (options.allFailures || failures.length <= FAILURE_PAGE_SIZE)
+		return { all: failures, visible: failures, page: 1 };
+	const pageCount = Math.ceil(failures.length / FAILURE_PAGE_SIZE);
+	const page = Math.min(options.failurePage ?? 1, pageCount);
+	const start = (page - 1) * FAILURE_PAGE_SIZE;
+	return {
+		all: failures,
+		visible: failures.slice(start, start + FAILURE_PAGE_SIZE),
+		page,
+	};
+}
+
+function printPagination(page: FailurePage): void {
+	if (page.visible.length === page.all.length) return;
+	const first = (page.page - 1) * FAILURE_PAGE_SIZE + 1;
+	const last = first + page.visible.length - 1;
+	const pageCount = Math.ceil(page.all.length / FAILURE_PAGE_SIZE);
+	const targetPage = page.page < pageCount ? page.page + 1 : page.page - 1;
+	console.error(
+		`Showing failures ${first}–${last} of ${page.all.length}. Use --failurePage ${targetPage} or --allFailures.`,
+	);
+}
+
+function printFailureSummary(page: FailurePage): number {
+	if (!page.all.length) return 0;
+	console.error(colors.red(`\nFailures (${page.all.length}):`));
+	for (const f of page.visible) {
 		console.error(colors.red(`✗ ${f.path}`));
 		console.error(`  ${f.message.replace(/\n/g, '\n  ')}`);
 	}
-	return failures.length;
+	printPagination(page);
+	return page.all.length;
 }
 
 function printSuccessSummary(): void {
 	console.log(colors.green(`\nAll tests passed.`));
 }
 
-function printVerboseReport(report: Report) {
+function printVerboseReport(report: Report, options: ReportOptions) {
 	if (report.coverage) {
 		printCoverage(report.coverage);
 		if (report.summary.coverage)
 			printCoverageSummary(report.summary.coverage);
 	}
-	printTest(report.testReport);
-	const failures = printFailureSummary(report);
+	const page = getFailurePage(report, options);
+	printTest(
+		report.testReport,
+		new Set(page.visible.map(failure => failure.result)),
+	);
+	const failures = printFailureSummary(page);
 	if (!failures) printSuccessSummary();
 }
 
-function printDefaultFailures(failures: FailureSummary[]): void {
-	console.error(`tests: failed (${failures.length})`);
-	for (const failure of failures) {
+function printDefaultFailures(page: FailurePage): void {
+	console.error(`tests: failed (${page.all.length})`);
+	for (const failure of page.visible) {
 		console.error(`${failure.path}: ${failure.message.replace(/\n/g, ' ')}`);
 		if (failure.stack) console.error(failure.stack);
 	}
+	printPagination(page);
 }
 
-function printDefaultReport(report: Report): void {
-	const failures: FailureSummary[] = [];
-	collectFailures(report.testReport, '', failures);
-	if (failures.length) {
-		printDefaultFailures(failures);
+function printDefaultReport(report: Report, options: ReportOptions): void {
+	const page = getFailurePage(report, options);
+	if (page.all.length) {
+		printDefaultFailures(page);
 		return;
 	}
 	console.log(`tests: passed (${report.summary.testTotal})`);
@@ -153,7 +196,7 @@ function printBenchmarks(report: Report) {
 }
 
 export default function (report: Report, options: ReportOptions) {
-	if (options.verbose) printVerboseReport(report);
-	else printDefaultReport(report);
+	if (options.verbose) printVerboseReport(report, options);
+	else printDefaultReport(report, options);
 	printBenchmarks(report);
 }

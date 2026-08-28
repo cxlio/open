@@ -169,6 +169,82 @@ export default spec('console fixture', s => s.test('passes', a => a.ok(true)));`
 		}
 	});
 
+	s.test('failure pagination', async a => {
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
+		try {
+			const fixturePath = join(dir, 'failure-fixture.mjs');
+			const specUrl = new URL('../spec/index.js', import.meta.url).href;
+			await writeFile(
+				fixturePath,
+				`import { spec } from ${JSON.stringify(specUrl)};
+export default spec('failure fixture', s => {
+	const count = process.argv.includes('--fiveFailures') ? 5 : 7;
+	for (let i = 1; i <= count; i++) s.test(\`case \${i}\`, a => a.ok(false, \`failure \${i}\`));
+});`,
+			);
+			const args = [
+				fixturePath,
+				'--node',
+				'--ignoreCoverage',
+				'--reportPath',
+				join(dir, 'report.json'),
+				'--documentPath',
+				join(dir, 'report.html'),
+			];
+			const firstPage = await runFailingCli(args);
+			a.ok(firstPage.stderr.includes('tests: failed (7)'));
+			a.ok(firstPage.stderr.includes('case 1: failure 1'));
+			a.ok(firstPage.stderr.includes('case 5: failure 5'));
+			a.equal(firstPage.stderr.includes('failure 6'), false);
+			a.ok(
+				firstPage.stderr.includes(
+					'Showing failures 1–5 of 7. Use --failurePage 2 or --allFailures.',
+				),
+			);
+
+			const secondPage = await runFailingCli([
+				...args,
+				'--failurePage',
+				'2',
+			]);
+			a.equal(secondPage.stderr.includes('failure 5'), false);
+			a.ok(
+				secondPage.stderr.includes('case 6: failure 6'),
+				secondPage.stderr,
+			);
+			a.ok(
+				secondPage.stderr.includes('case 7: failure 7'),
+				secondPage.stderr,
+			);
+
+			const allFailures = await runFailingCli([...args, '--allFailures']);
+			a.ok(allFailures.stderr.includes('failure 1'), allFailures.stderr);
+			a.ok(allFailures.stderr.includes('failure 7'), allFailures.stderr);
+			a.equal(allFailures.stderr.includes('Showing failures'), false);
+
+			const fiveFailures = await runFailingCli([...args, '--fiveFailures']);
+			a.ok(fiveFailures.stderr.includes('failure 5'));
+			a.equal(fiveFailures.stderr.includes('Showing failures'), false);
+
+			const verbose = await runFailingCli([...args, '--verbose']);
+			a.equal(verbose.stderr.includes('failure 6'), false);
+			a.ok(verbose.stderr.includes('Showing failures 1–5 of 7.'));
+
+			const invalidPage = await runFailingCli([
+				...args,
+				'--failurePage',
+				'0',
+			]);
+			a.ok(
+				invalidPage.stderr.includes(
+					'--failurePage must be a positive integer.',
+				),
+			);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	s.test('static specification document', a => {
 		const document = renderSpecificationDocument({
 			name: 'Payments <script>',

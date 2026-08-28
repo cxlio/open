@@ -158,6 +158,25 @@ function normalizePath(path: string) {
 	return path.replace(/\\/g, '/').replace(/^\.\//, '');
 }
 
+function resolveCoveragePath(path: string, paths: Iterable<string>) {
+	const normalized = normalizePath(path).replace(/^\/+/, '');
+	let match: string | undefined;
+
+	for (const candidate of paths) {
+		const relativeCandidate = candidate.replace(/^\/+/, '');
+		if (
+			(normalized === relativeCandidate ||
+				normalized.endsWith(`/${relativeCandidate}`) ||
+				relativeCandidate.endsWith(`/${normalized}`)) &&
+			(!match || relativeCandidate.length > match.replace(/^\/+/, '').length)
+		) {
+			match = candidate;
+		}
+	}
+
+	return match ?? normalizePath(path);
+}
+
 function isTestCoverageFile(url: string, options?: ReportOptions) {
 	const file = normalizePath(url);
 	const fileName = basename(file);
@@ -189,11 +208,12 @@ async function generateCoverageReport(
 	}
 
 	for (const file of options?.expectedCoverageFiles ?? []) {
+		const path = resolveCoveragePath(file.url, filtered.keys());
 		if (
 			!isTestCoverageFile(file.url, options) &&
-			!filtered.has(normalizePath(file.url))
+			!filtered.has(path)
 		) {
-			filtered.set(normalizePath(file.url), file);
+			filtered.set(path, file);
 		}
 	}
 

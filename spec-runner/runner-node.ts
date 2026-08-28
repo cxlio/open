@@ -48,9 +48,21 @@ async function recordCoverage(
 
 export default async function runNode(app: SpecRunner) {
 	async function runSuite() {
-		const module: { default: Test } = await import(suitePath);
-		const suite = module.default;
-		return suite.run(app.grep).then(() => suite);
+		const stdout = process.stdout.write;
+		const stderr = process.stderr.write;
+		const ignoreOutput = () => true;
+		if (!app.verbose) {
+			process.stdout.write = ignoreOutput;
+			process.stderr.write = ignoreOutput;
+		}
+		try {
+			const module: { default: Test } = await import(suitePath);
+			const suite = module.default;
+			return await suite.run(app.grep).then(() => suite);
+		} finally {
+			process.stdout.write = stdout;
+			process.stderr.write = stderr;
+		}
 	}
 
 	async function writeDocument(suite: JsonResult) {

@@ -11,7 +11,7 @@ import {
 	renderSpecificationDocument,
 	specificationCss,
 } from './specification.js';
-import { mkdtemp, readFile, rm } from 'fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { execFile } from 'child_process';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -23,6 +23,17 @@ function runCli(args: string[]) {
 			[join(import.meta.dirname, 'index.js'), ...args],
 			{ cwd: import.meta.dirname },
 			(error, stdout) => (error ? reject(error) : resolve(stdout)),
+		);
+	});
+}
+
+function runFailingCli(args: string[]) {
+	return new Promise<{ stdout: string; stderr: string }>(resolve => {
+		execFile(
+			process.execPath,
+			[join(import.meta.dirname, 'index.js'), ...args],
+			{ cwd: import.meta.dirname },
+			(_error, stdout, stderr) => resolve({ stdout, stderr }),
 		);
 	});
 }
@@ -120,6 +131,39 @@ export default spec('tester', s => {
 			a.ok(document.includes('Specification: console fixture'));
 			const verboseStdout = await runCli([...args, '--verbose']);
 			a.equal(verboseStdout.includes('browser console output'), true);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	s.test('node console output', async a => {
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
+		try {
+			const fixturePath = join(dir, 'console-fixture.mjs');
+			const specUrl = new URL('../spec/index.js', import.meta.url).href;
+			await writeFile(
+				fixturePath,
+				`import { execFileSync } from 'node:child_process';
+import { spec } from ${JSON.stringify(specUrl)};
+console.log('node console output');
+try {
+	execFileSync(process.execPath, ['--eval', 'process.stderr.write("node child stderr\\\\n"); process.exit(1)']);
+} catch {}
+export default spec('console fixture', s => s.test('passes', a => a.ok(true)));`,
+			);
+			const args = [
+				fixturePath,
+				'--node',
+				'--ignoreCoverage',
+				'--reportPath',
+				join(dir, 'report.json'),
+			];
+			const output = await runFailingCli(args);
+			a.equal(output.stdout.includes('node console output'), false);
+			a.equal(output.stderr.includes('node child stderr'), false);
+			const verbose = await runFailingCli([...args, '--verbose']);
+			a.equal(verbose.stdout.includes('node console output'), true);
+			a.equal(verbose.stderr.includes('node child stderr'), true);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
@@ -297,6 +341,22 @@ export default spec('tester', s => {
 			a.equal(report.coverage?.[1]?.url, 'missing.js');
 			a.equal(report.summary.coverage?.blockCoveragePct, 37.5);
 			a.equal(report.summary.coverage?.functionCoveragePct, 33.33333333333333);
+		});
+
+		it.should('deduplicate equivalent expected coverage paths', async a => {
+			const report = await generateReport(suite, coverage, {
+				entryFile: './test.js',
+				expectedCoverageFiles: [
+					{
+						url: '/dist/project-server/index.js',
+						functions: [],
+					},
+				],
+			});
+
+			a.equal(report.coverage?.length, 1);
+			a.equal(report.coverage?.[0]?.url, 'index.js');
+			a.equal(report.summary.coverage?.blockCoveragePct, 62.5);
 		});
 	});
 

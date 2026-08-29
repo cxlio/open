@@ -13,4 +13,3 @@ Monorepo of Typescript libraries and tools.
 | @cxl/spec-browser    | GPL-3.0    | Browser test runner and HTML reporter for spec tests. Renders results, error stacks, and supports click-to-run test re-execution. | [Docs](https://cxlio.github.io/docs/@cxl/spec-browser/0.4.0/) |
 | @cxl/spec-runner     | GPL-3.0    | A test runner CLI that supports node and browser testing, baseline updates, coverage control, virtual file server, and custom server integration, with reporting and debugging support. | [Docs](https://cxlio.github.io/docs/@cxl/spec-runner/0.4.0/) |
 | @cxl/tgz             | GPL-3.0    | Lightweight, efficient tool for extracting files from gzip-compressed tarballs. | [Docs](https://cxlio.github.io/docs/@cxl/tgz/0.1.0/) |
-

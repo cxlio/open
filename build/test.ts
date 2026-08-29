@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
-import { execFile, execFileSync } from 'child_process';
+import { execFile, execFileSync, spawnSync } from 'child_process';
 import { build as esbuild } from 'esbuild-wasm';
 import { ESLint } from 'eslint';
 import { formatHelp, sh } from '../program/index.js';
@@ -91,6 +91,59 @@ ${source}`,
 	} finally {
 		await rm(dir, { recursive: true, force: true });
 	}
+}
+
+async function createAuditFixture(
+	rootTsconfig: object = { extends: './tsconfig.base.json', files: [] },
+	base = true,
+) {
+	const dir = await mkdtemp(join(tmpdir(), 'cxl-build-audit-'));
+	const packageDir = join(dir, 'pkg');
+	await mkdir(packageDir);
+	await writeFile(
+		join(dir, 'package.json'),
+		JSON.stringify({
+			homepage: 'https://example.com/docs/',
+			bugs: 'https://example.com/issues',
+		}),
+	);
+	await writeFile(join(dir, 'tsconfig.json'), JSON.stringify(rootTsconfig));
+	if (base) await writeFile(join(dir, 'tsconfig.base.json'), '{}');
+	await writeFile(
+		join(packageDir, 'package.json'),
+		JSON.stringify({
+			name: '@test/pkg',
+			version: '1.0.0',
+			description: 'test package',
+			license: 'GPL-3.0',
+			homepage: 'https://example.com/docs/@test/pkg',
+			bugs: 'https://example.com/issues',
+			repository: {
+				type: 'git',
+				url: 'https://example.com/repo.git',
+			},
+			scripts: {
+				build: 'cxl-build',
+				publish: 'npm run build publish',
+				test: 'npm run build -- test',
+			},
+		}),
+	);
+	await writeFile(
+		join(packageDir, 'tsconfig.json'),
+		JSON.stringify({ compilerOptions: { outDir: '../dist/pkg' } }),
+	);
+	await writeFile(
+		join(packageDir, 'tsconfig.test.json'),
+		JSON.stringify({ extends: './tsconfig.json' }),
+	);
+	await writeFile(join(packageDir, 'test.ts'), '');
+	return { dir, packageDir };
+}
+
+function auditCommand(packageDir: string) {
+	const script = `process.chdir(${JSON.stringify(packageDir)}); await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'audit.js')).href)}).then(module => module.audit())`;
+	return [process.execPath, ['--input-type=module', '--eval', script]] as const;
 }
 
 export default spec('build', s => {
@@ -230,55 +283,12 @@ export default spec('build', s => {
 
 	s.test('audit output', it => {
 		it.should('report applied fixes in quiet mode', async a => {
-			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-audit-'));
-			const packageDir = join(dir, 'pkg');
+			const { dir, packageDir } = await createAuditFixture();
 			try {
-				await mkdir(packageDir);
-				await writeFile(
-					join(dir, 'package.json'),
-					JSON.stringify({
-						homepage: 'https://example.com/docs/',
-						bugs: 'https://example.com/issues',
-					}),
-				);
-				await writeFile(
-					join(packageDir, 'package.json'),
-					JSON.stringify({
-						name: '@test/pkg',
-						version: '1.0.0',
-						description: 'test package',
-						license: 'GPL-3.0',
-						homepage: 'https://example.com/docs/@test/pkg',
-						bugs: 'https://example.com/issues',
-						repository: {
-							type: 'git',
-							url: 'https://example.com/repo.git',
-						},
-						scripts: {
-							build: 'cxl-build',
-							publish: 'npm run build publish',
-							test: 'npm run build -- test',
-						},
-					}),
-				);
-				await writeFile(
-					join(packageDir, 'tsconfig.json'),
-					JSON.stringify({
-						compilerOptions: { outDir: '../dist/pkg' },
-					}),
-				);
-				await writeFile(
-					join(packageDir, 'tsconfig.test.json'),
-					JSON.stringify({
-						extends: './tsconfig.json',
-					}),
-				);
-				await writeFile(join(packageDir, 'test.ts'), '');
-
-				const script = `process.chdir(${JSON.stringify(packageDir)}); await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'audit.js')).href)}).then(module => module.audit())`;
+				const [command, args] = auditCommand(packageDir);
 				const output = execFileSync(
-					process.execPath,
-					['--input-type=module', '--eval', script],
+					command,
+					args,
 					{ encoding: 'utf8' },
 				);
 
@@ -294,6 +304,32 @@ export default spec('build', s => {
 					await readFile(join(packageDir, 'package.json'), 'utf8'),
 				) as Package;
 				a.equal(Object.keys(pkg.scripts ?? {}).join(','), 'build,test');
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('require tsconfig.base.json in the root directory', async a => {
+			const { dir, packageDir } = await createAuditFixture(undefined, false);
+			try {
+				const [command, args] = auditCommand(packageDir);
+				const result = spawnSync(command, args, { encoding: 'utf8' });
+				a.ok(result.stderr.includes('Missing root "tsconfig.base.json" file.'));
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('require root tsconfig.json to extend the base config', async a => {
+			const { dir, packageDir } = await createAuditFixture({ files: [] });
+			try {
+				const [command, args] = auditCommand(packageDir);
+				const result = spawnSync(command, args, { encoding: 'utf8' });
+				a.ok(
+					result.stderr.includes(
+						'Root tsconfig.json extends should be "./tsconfig.base.json".',
+					),
+				);
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}

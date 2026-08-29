@@ -53,8 +53,10 @@ type Linter = (data: LintData) => Promise<LinterResult>;
 
 const BugsUrl = 'https://github.com/cxlio/cxl/issues';
 const TsconfigJson = 'tsconfig.json';
+const TsconfigBaseJson = 'tsconfig.base.json';
 const TsconfigTestJson = 'tsconfig.test.json';
 const LocalTsconfigJson = './tsconfig.json';
+const LocalTsconfigBaseJson = './tsconfig.base.json';
 const TestScript = 'npm run build -- test';
 const baseDir = path.resolve('.');
 const requiredPackageFields: (keyof Package)[] = [
@@ -544,6 +546,29 @@ async function lintTsconfig({ projectPath, name }: LintData) {
 	};
 }
 
+async function lintRootTsconfig({ projectPath }: LintData) {
+	const rootDir = path.dirname(projectPath);
+	const tsconfig = await readJson<Tsconfig | null>(
+		path.join(rootDir, TsconfigJson),
+		null,
+	);
+
+	return {
+		id: 'root-tsconfig',
+		project: 'root',
+		rules: [
+			rule(
+				!!(await exists(path.join(rootDir, TsconfigBaseJson))),
+				'Missing root "tsconfig.base.json" file.',
+			),
+			rule(
+				tsconfig?.extends === LocalTsconfigBaseJson,
+				'Root tsconfig.json extends should be "./tsconfig.base.json".',
+			),
+		],
+	};
+}
+
 async function lintImports({ name }: LintData) {
 	const result = cp.spawnSync('/usr/bin/git', ['grep', `"from '\\.\\.\\/"`, name], {
 		encoding: 'utf8',
@@ -583,6 +608,7 @@ const linters: Linter[] = [
 	lintTest,
 	lintDependencies,
 	lintTsconfig,
+	lintRootTsconfig,
 	lintImports,
 ];
 

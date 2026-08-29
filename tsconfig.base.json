@@ -1,0 +1,18 @@
+{
+	"compilerOptions": {
+		"incremental": true,
+		"strict": true,
+		"target": "es2023",
+		"module": "esnext",
+		"lib": ["ES2023"],
+		"sourceMap": false,
+		"moduleResolution": "Node",
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noUncheckedIndexedAccess": true,
+		"composite": true,
+		"skipLibCheck": true,
+		"typeRoots": ["./node_modules/@types"],
+		"types": []
+	}
+}

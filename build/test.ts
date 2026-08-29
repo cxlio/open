@@ -12,6 +12,7 @@ import { join } from 'path';
 import { pathToFileURL } from 'url';
 import { execFile, execFileSync } from 'child_process';
 import { build as esbuild } from 'esbuild-wasm';
+import { ESLint } from 'eslint';
 import { formatHelp, sh } from '../program/index.js';
 import {
 	buildParameters,
@@ -43,6 +44,7 @@ import type { Package } from './npm.js';
 import { checkBranchClean, checkBranchUpToDate } from './git.js';
 import { bundleDeclarations } from './tsc.js';
 import { file } from './file.js';
+import { specConfig } from './eslint-config.js';
 import { rx } from './index.js';
 import * as ts from 'typescript';
 
@@ -55,7 +57,105 @@ async function errorMessage(fn: () => Promise<unknown>) {
 	throw new Error('Expected operation to fail');
 }
 
+async function lintSpecFixture(source: string) {
+	const dir = await mkdtemp(join(tmpdir(), 'cxl-build-eslint-'));
+	try {
+		const project = join(dir, 'tsconfig.json');
+		await writeFile(
+			project,
+			JSON.stringify({
+				compilerOptions: {
+					module: 'NodeNext',
+					moduleResolution: 'NodeNext',
+					strict: true,
+				},
+				files: ['test.ts'],
+			}),
+		);
+		await writeFile(
+			join(dir, 'test.ts'),
+			`import { spec } from ${JSON.stringify(join(import.meta.dirname, '../spec/index.js'))};
+${source}`,
+		);
+
+		const eslint = new ESLint({
+			baseConfig: specConfig,
+			cwd: dir,
+			overrideConfig: {
+				languageOptions: { parserOptions: { project } },
+			},
+			overrideConfigFile: true,
+		});
+		const [result] = await eslint.lintFiles(['test.ts']);
+		return result?.messages ?? [];
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+}
+
 export default spec('build', s => {
+	s.test('eslint config', it => {
+		it.should('ban direct returns from spec tests', async a => {
+			const messages = await lintSpecFixture(`export default spec('fixture', s => {
+	s.test('direct return', a => {
+		if (!a) return;
+	});
+	s.test('nested return', () => {
+		const nested = () => {
+			return true;
+		};
+		nested();
+		function declared() {
+			return true;
+		}
+		declared();
+	});
+});
+`);
+			a.equal(messages.length, 1);
+			a.equal(messages[0]?.ruleId, 'local/no-return-in-spec');
+		});
+
+		it.should('ban real timers from spec tests', async a => {
+			const messages = await lintSpecFixture(`export default spec('fixture', s => {
+	s.test('real timers', () => {
+		setTimeout(() => undefined, 1);
+		function nested() {
+			setInterval(() => undefined, 1);
+		}
+		nested();
+		globalThis.setTimeout(() => undefined, 1);
+		requestAnimationFrame(() => undefined);
+	});
+	s.test('virtual timers', a => {
+		a.mockSetTimeout();
+		setTimeout(() => undefined, 1);
+		globalThis.setTimeout(() => undefined, 1);
+		a.mockSetInterval();
+		setInterval(() => undefined, 1);
+		a.mockRequestAnimationFrame();
+		requestAnimationFrame(() => undefined);
+		a.setTimeout(1000);
+	});
+	s.test('wrong virtual timer', a => {
+		a.mockSetTimeout();
+		setInterval(() => undefined, 1);
+	});
+});
+`);
+			a.equalValues(
+				messages.map(message => message.ruleId),
+				[
+					'local/no-real-timers-in-spec',
+					'local/no-real-timers-in-spec',
+					'local/no-real-timers-in-spec',
+					'local/no-real-timers-in-spec',
+					'local/no-real-timers-in-spec',
+				],
+			);
+		});
+	});
+
 	s.test('output', it => {
 		it.should('parse build options', a => {
 			a.equal(buildOutputOptions(['test']).verbose, false);

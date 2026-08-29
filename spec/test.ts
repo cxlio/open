@@ -1,4 +1,4 @@
-import { spec } from './index.js';
+import { spec, type TestApi } from './index.js';
 import { ref } from '../rx/index.js';
 
 export default spec('spec', s => {
@@ -56,15 +56,14 @@ export default spec('spec', s => {
 	});
 
 	s.test('benchmark', it => {
-		it.should('measure the current test', async a => {
+		it.should('measure the current test', async (a: TestApi) => {
 			await a.benchmark(() => 1, {
 				warmup: 0,
 				sampleTime: 1,
 				samples: 3,
 			});
 			const result = a.$test.results[0];
-			a.equal(result?.data?.type, 'benchmark');
-			if (result?.data?.type !== 'benchmark') return;
+			a.assert(result?.data?.type === 'benchmark');
 			a.equal(result.data.values.length, 3);
 			a.ok(result.data.iterations > 0);
 			a.ok(result.data.median >= 0);

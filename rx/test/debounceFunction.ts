@@ -1,13 +1,10 @@
 import { spec } from '../../spec/index.js';
 import { debounceFunction } from '../index.js';
-import { mockSetTimeout } from './util.js';
-
-declare const setTimeout: (fn: () => unknown, n?: number) => number;
 
 export default spec('debounceFunction', it => {
 	it.should('debounce calls by the specified delay', a => {
+		const time = a.mockSetTimeout();
 		let callCount = 0;
-		const done = a.async();
 		const debouncedFunc = debounceFunction(() => {
 			callCount++;
 		}, 50);
@@ -18,16 +15,14 @@ export default spec('debounceFunction', it => {
 
 		a.equal(callCount, 0);
 
-		setTimeout(() => {
-			a.equal(callCount, 1);
-			done();
-		}, 60);
+		time.advance(60);
+		a.equal(callCount, 1);
 	});
 
 	it.should('pass arguments and preserve context', a => {
+		const time = a.mockSetTimeout();
 		let capturedArgs: number[] = [];
 		let capturedContext: unknown = null;
-		const done = a.async();
 
 		const debouncedFunc = debounceFunction(function (
 			this: unknown,
@@ -40,62 +35,53 @@ export default spec('debounceFunction', it => {
 		const context = {};
 		debouncedFunc.apply(context, [1, 2, 3]);
 
-		setTimeout(() => {
-			a.equalValues(capturedArgs, [1, 2, 3]);
-			a.equal(capturedContext, context);
-			done();
-		}, 40);
+		time.advance(40);
+		a.equalValues(capturedArgs, [1, 2, 3]);
+		a.equal(capturedContext, context);
 	});
 
 	it.should('cancel the pending call when cancel is invoked', a => {
+		const time = a.mockSetTimeout();
 		let callCount = 0;
 		const debouncedFunc = debounceFunction(() => {
 			callCount++;
 		}, 50);
-		const done = a.async();
-
 		debouncedFunc();
 		debouncedFunc.cancel();
 
-		setTimeout(() => {
-			a.equal(callCount, 0);
-			done();
-		}, 60);
+		time.advance(60);
+		a.equal(callCount, 0);
 	});
 
 	it.should('handle multiple debounce invocations correctly', a => {
-		mockSetTimeout(advance => {
-			let callCount = 0;
-			const debouncedFunc = debounceFunction(() => {
-				callCount++;
-			}, 50);
+		const time = a.mockSetTimeout();
+		let callCount = 0;
+		const debouncedFunc = debounceFunction(() => {
+			callCount++;
+		}, 50);
 
-			debouncedFunc();
-			setTimeout(debouncedFunc, 10);
-			setTimeout(debouncedFunc, 20);
-
-			advance(100);
-			a.equal(callCount, 1);
-		});
+		debouncedFunc();
+		time.advance(10);
+		debouncedFunc();
+		time.advance(10);
+		debouncedFunc();
+		time.advance(50);
+		a.equal(callCount, 1);
 	});
 
 	it.should(
 		'invoke multiple times with sufficient delay between calls',
 		a => {
+			const time = a.mockSetTimeout();
 			let callCount = 0;
 			const debouncedFunc = debounceFunction(() => {
 				callCount++;
 			}, 30);
-			const done = a.async();
-
 			debouncedFunc();
-
-			setTimeout(debouncedFunc, 50);
-
-			setTimeout(() => {
-				a.equal(callCount, 2);
-				done();
-			}, 100);
+			time.advance(50);
+			debouncedFunc();
+			time.advance(30);
+			a.equal(callCount, 2);
 		},
 	);
 });

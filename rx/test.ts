@@ -208,7 +208,7 @@ export default spec('rx', suite => {
 			});
 
 			test('Cold Observable Behavior', a => {
-				const done = a.async();
+				const time = a.mockSetTimeout();
 				const coldObservable = new Observable<string>(observer => {
 					observer.next('value1');
 					observer.next('value2');
@@ -225,9 +225,9 @@ export default spec('rx', suite => {
 					},
 					complete() {
 						a.equalValues(results, ['value1', 'value2', 'value3']);
-						done();
 					},
 				});
+				time.advance(100);
 			});
 		}),
 
@@ -292,16 +292,15 @@ export default spec('rx', suite => {
 			});
 
 			test('should ignore next messages after unsubscription', a => {
+				const time = a.mockSetInterval();
 				let times = 0;
 
 				const subscription = new Observable<number>(observer => {
 					let i = 0;
-					const done = a.async();
 					const id = setInterval(() => observer.next(i++));
 					observer.signal.subscribe(() => {
 						clearInterval(id);
 						a.equal(times, 2);
-						done();
 					});
 				})
 					.pipe(tap(() => (times += 1)))
@@ -310,12 +309,13 @@ export default spec('rx', suite => {
 							subscription.unsubscribe();
 						}
 					});
+				time.advance(2);
 			});
 
 			test('should ignore error messages after unsubscription', a => {
+				const time = a.mockSetInterval();
 				let times = 0;
 				let errorCalled = false;
-				const done = a.async();
 
 				const subscription = new Observable<number>(observer => {
 					let i = 0;
@@ -330,7 +330,6 @@ export default spec('rx', suite => {
 						clearInterval(id);
 						a.equal(times, 2);
 						a.ok(!errorCalled);
-						done();
 					});
 				})
 					.pipe(tap(() => (times += 1)))
@@ -344,13 +343,14 @@ export default spec('rx', suite => {
 							errorCalled = true;
 						},
 					});
+				time.advance(2);
 			});
 
 			test('should ignore complete messages after unsubscription', a => {
+				const time = a.mockSetInterval();
 				let times = 0;
 				let completeCalled = false;
 
-				const done = a.async();
 				const subscription = new Observable<number>(observer => {
 					let i = 0;
 					const id = setInterval(() => {
@@ -363,7 +363,6 @@ export default spec('rx', suite => {
 						clearInterval(id);
 						a.equal(times, 2);
 						a.ok(!completeCalled);
-						done();
 					});
 				})
 					.pipe(tap(() => (times += 1)))
@@ -377,6 +376,7 @@ export default spec('rx', suite => {
 							completeCalled = true;
 						},
 					});
+				time.advance(2);
 			});
 
 			test('should not be unsubscribed when other empty subscription completes', a => {

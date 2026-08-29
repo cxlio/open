@@ -320,7 +320,8 @@ export default spec('keyboard', s => {
 			a.equal(off.lastEvent?.called, 1);
 		});
 
-		it.should('reset sequence after delay', async (a: TestApi) => {
+		it.should('reset sequence after delay', (a: TestApi) => {
+			const time = a.mockSetTimeout();
 			const elementMock = a.element('div');
 			const on = a.spyFn(elementMock, 'addEventListener');
 			const off = a.spyFn(elementMock, 'removeEventListener');
@@ -339,7 +340,7 @@ export default spec('keyboard', s => {
 			on.lastEvent?.arguments[1](eventA);
 
 			// Advance time beyond delay
-			await new Promise(resolve => setTimeout(resolve, 200));
+			time.advance(200);
 			a.equal(onKeyMock.lastArguments?.[0], 'a');
 
 			// Simulate another keydown event

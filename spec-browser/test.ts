@@ -1,4 +1,4 @@
-import { spec } from '../spec/index.js';
+import { spec, type TestApi } from '../spec/index.js';
 import { renderSpecificationDocument } from '../spec-runner/specification.js';
 import browserRunner, { imageDataDiff, runTestFile } from './index.js';
 
@@ -121,7 +121,7 @@ export default spec('tester', s => {
 		frame.remove();
 	});
 
-	s.test('renders screenshot evidence without inline source html', async a => {
+	s.test('renders screenshot evidence without inline source html', async (a: TestApi) => {
 		const runner = new browserRunner({});
 		runner.renderSpecification({
 			name: 'screenshots',
@@ -151,8 +151,7 @@ export default spec('tester', s => {
 				figure.querySelector('.screenshot-evidence-title')?.textContent ===
 				'button',
 		);
-		a.ok(figure);
-		if (!figure) return;
+		a.assert(figure);
 		a.equal(
 			figure.querySelector('.screenshot-status')?.textContent,
 			'Screenshot differs from baseline',
@@ -175,7 +174,7 @@ export default spec('tester', s => {
 		await a.a11y(figure);
 	});
 
-	s.test('renders passing screenshots without a panel', async a => {
+	s.test('renders passing screenshots without a panel', async (a: TestApi) => {
 		const runner = new browserRunner({});
 		runner.renderSpecification({
 			name: 'passing screenshots',
@@ -205,8 +204,7 @@ export default spec('tester', s => {
 				figure.querySelector('.screenshot-evidence-title')?.textContent ===
 				'passing-button',
 		);
-		a.ok(figure);
-		if (!figure) return;
+		a.assert(figure);
 		a.equal(
 			figure.querySelectorAll('.screenshot-panel').length,
 			0,

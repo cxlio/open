@@ -7,7 +7,6 @@ import {
 	merge,
 	tap,
 	throwError,
-	toPromise,
 } from '../index.js';
 import { spec } from '../../spec/index.js';
 
@@ -15,35 +14,39 @@ declare const setTimeout: (fn: () => unknown, n?: number) => number;
 declare const clearTimeout: (n: number) => void;
 
 export default spec('debounceTime', it => {
-	it.should('debounce time asynchronously', async a => {
+	it.should('debounce time asynchronously', a => {
+		const time = a.mockSetTimeout();
 		let fired = 0;
-		const promise = toPromise(
-			from([1, 2, 3]).pipe(
+		from([1, 2, 3])
+			.pipe(
 				debounceTime(5),
 				tap(() => fired++),
-			),
-		);
+			)
+			.subscribe();
 		a.equal(fired, 0);
-		await promise;
+		time.advance(5);
 		a.equal(fired, 1);
 	});
 
-	it.should('cancel timeout if error', async a => {
+	it.should('cancel timeout if error', a => {
+		const time = a.mockSetTimeout();
 		let fired = 0;
-		const promise = merge(of(1), throwError(0))
+		merge(of(1), throwError(0))
 			.debounceTime(5)
 			.tap(() => fired++)
-			.catchError(e => of((fired = e as number)));
+			.catchError(e => of((fired = e as number)))
+			.subscribe();
 		a.equal(fired, 0);
-		await promise;
+		time.advance(5);
 		a.equal(fired, 0);
 	});
 
-	it.should('complete if empty', async a => {
+	it.should('complete if empty', a => {
 		let fired = 0;
-		await from([])
+		from([])
 			.debounceTime(0)
-			.tap(() => fired++);
+			.tap(() => fired++)
+			.subscribe();
 		a.equal(fired, 0);
 	});
 
@@ -59,7 +62,7 @@ export default spec('debounceTime', it => {
 	});
 
 	it.should('cancel on unsubscribe', a => {
-		const done = a.async();
+		const time = a.mockSetTimeout();
 		let timeoutCleared = 0;
 
 		function timer(delay: number) {
@@ -85,9 +88,9 @@ export default spec('debounceTime', it => {
 			.debounceTime(5)
 			.tap(() => {
 				a.equal(timeoutCleared, 3);
-				done();
 			});
 		obs.subscribe({ complete: () => timeoutCleared++ }).unsubscribe();
 		obs2.subscribe();
+		time.advance(5);
 	});
 });

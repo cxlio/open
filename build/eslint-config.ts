@@ -10,14 +10,25 @@ type AncestorNode = ReturnType<
 	Rule.RuleContext['sourceCode']['getAncestors']
 >[number];
 
+type ParserServices = {
+	program: typescript.Program;
+	esTreeNodeToTSNodeMap: {
+		get(node: AncestorNode | Rule.Node): typescript.Node | undefined;
+	};
+};
+
+function isFunction(node: AncestorNode | undefined) {
+	return (
+		node?.type === 'ArrowFunctionExpression' ||
+		node?.type === 'FunctionExpression' ||
+		node?.type === 'FunctionDeclaration'
+	);
+}
+
 function enclosingFunction(ancestors: readonly AncestorNode[]) {
 	for (let i = ancestors.length - 1; i >= 0; i--) {
 		const node = ancestors[i];
-		if (
-			node?.type === 'ArrowFunctionExpression' ||
-			node?.type === 'FunctionExpression'
-		)
-			return node;
+		if (isFunction(node)) return node;
 	}
 }
 
@@ -34,6 +45,64 @@ function isSpecTestFunction(type: typescript.Type | undefined) {
 	});
 }
 
+function isInSpecTestFunction(
+	ancestors: readonly AncestorNode[],
+	services: ParserServices,
+	checker: typescript.TypeChecker,
+) {
+	const fn = enclosingFunction(ancestors);
+	if (!fn) return false;
+	const tsNode = services.esTreeNodeToTSNodeMap.get(fn);
+	return (
+		!!tsNode &&
+		typescript.isExpression(tsNode) &&
+		isSpecTestFunction(checker.getContextualType(tsNode))
+	);
+}
+
+function specTestFunction(
+	ancestors: readonly AncestorNode[],
+	services: ParserServices,
+	checker: typescript.TypeChecker,
+) {
+	for (let i = ancestors.length - 1; i >= 0; i--) {
+		const fn = ancestors[i];
+		if (!isFunction(fn)) continue;
+		const tsNode = services.esTreeNodeToTSNodeMap.get(fn);
+		if (
+			tsNode &&
+			typescript.isExpression(tsNode) &&
+			isSpecTestFunction(checker.getContextualType(tsNode))
+		)
+			return tsNode;
+	}
+}
+
+function hasEarlierCall(
+	fn: typescript.Expression,
+	method:
+		| 'mockRequestAnimationFrame'
+		| 'mockSetInterval'
+		| 'mockSetTimeout',
+	position: number,
+) {
+	let found = false;
+	function visit(node: typescript.Node) {
+		if (found || node.getStart() >= position) return;
+		if (
+			typescript.isCallExpression(node) &&
+			typescript.isPropertyAccessExpression(node.expression) &&
+			node.expression.name.text === method
+		) {
+			found = true;
+			return;
+		}
+		typescript.forEachChild(node, visit);
+	}
+	typescript.forEachChild(fn, visit);
+	return found;
+}
+
 const noThrowInSpec: Rule.RuleModule = {
 	meta: {
 		type: 'problem',
@@ -47,21 +116,103 @@ const noThrowInSpec: Rule.RuleModule = {
 		},
 	},
 	create(context) {
-		const services: {
-			program: typescript.Program;
-			esTreeNodeToTSNodeMap: {
-				get(node: AncestorNode): typescript.Node | undefined;
-			};
-		} = context.sourceCode.parserServices;
+		const services: ParserServices = context.sourceCode.parserServices;
 		const checker = services.program.getTypeChecker();
 		return {
 			ThrowStatement(node: Rule.Node) {
-				const fn = enclosingFunction(context.sourceCode.getAncestors(node));
-				if (!fn) return;
-				const tsNode = services.esTreeNodeToTSNodeMap.get(fn);
-				if (!tsNode || !typescript.isExpression(tsNode)) return;
-				if (isSpecTestFunction(checker.getContextualType(tsNode)))
+				if (
+					isInSpecTestFunction(
+						context.sourceCode.getAncestors(node),
+						services,
+						checker,
+					)
+				)
 					context.report({ node, messageId: 'noThrowInSpec' });
+			},
+		};
+	},
+};
+
+const noReturnInSpec: Rule.RuleModule = {
+	meta: {
+		type: 'problem',
+		docs: {
+			description: 'Disallow returning directly from spec test functions.',
+		},
+		schema: [],
+		messages: {
+			noReturnInSpec:
+				'Do not return from a spec test function. Use assertions and async/await.',
+		},
+	},
+	create(context) {
+		const services: ParserServices = context.sourceCode.parserServices;
+		const checker = services.program.getTypeChecker();
+		return {
+			ReturnStatement(node: Rule.Node) {
+				if (
+					isInSpecTestFunction(
+						context.sourceCode.getAncestors(node),
+						services,
+						checker,
+					)
+				)
+					context.report({ node, messageId: 'noReturnInSpec' });
+			},
+		};
+	},
+};
+
+const noRealTimersInSpec: Rule.RuleModule = {
+	meta: {
+		type: 'problem',
+		docs: {
+			description: 'Disallow real timing APIs in spec test functions.',
+		},
+		schema: [],
+		messages: {
+			noRealTimer:
+				'Do not use real timing APIs in a spec test. Use {{method}}() and advance virtual time.',
+		},
+	},
+	create(context) {
+		const services: ParserServices = context.sourceCode.parserServices;
+		const checker = services.program.getTypeChecker();
+		function checkTimer(
+			node: Rule.Node,
+			method:
+				| 'mockRequestAnimationFrame'
+				| 'mockSetInterval'
+				| 'mockSetTimeout',
+		) {
+			const fn = specTestFunction(
+				context.sourceCode.getAncestors(node),
+				services,
+				checker,
+			);
+			const tsNode = services.esTreeNodeToTSNodeMap.get(node);
+			if (!fn || !tsNode || hasEarlierCall(fn, method, tsNode.getStart())) return;
+			context.report({
+				node,
+				messageId: 'noRealTimer',
+				data: { method: `a.${method}` },
+			});
+		}
+		return {
+			":matches(CallExpression[callee.type='Identifier'][callee.name='requestAnimationFrame'], CallExpression[callee.type='MemberExpression'][callee.object.name=/^(globalThis|self|window)$/][callee.property.name='requestAnimationFrame'])"(
+				node: Rule.Node,
+			) {
+				checkTimer(node, 'mockRequestAnimationFrame');
+			},
+			":matches(CallExpression[callee.type='Identifier'][callee.name='setInterval'], CallExpression[callee.type='MemberExpression'][callee.object.name=/^(globalThis|self|window)$/][callee.property.name='setInterval'])"(
+				node: Rule.Node,
+			) {
+				checkTimer(node, 'mockSetInterval');
+			},
+			":matches(CallExpression[callee.type='Identifier'][callee.name='setTimeout'], CallExpression[callee.type='MemberExpression'][callee.object.name=/^(globalThis|self|window)$/][callee.property.name='setTimeout'])"(
+				node: Rule.Node,
+			) {
+				checkTimer(node, 'mockSetTimeout');
 			},
 		};
 	},
@@ -91,6 +242,8 @@ const preferTypeDiscrimination: Rule.RuleModule = {
 
 const localPlugin = {
 	rules: {
+		'no-real-timers-in-spec': noRealTimersInSpec,
+		'no-return-in-spec': noReturnInSpec,
 		'no-throw-in-spec': noThrowInSpec,
 		'prefer-type-discrimination': preferTypeDiscrimination,
 	},
@@ -184,7 +337,11 @@ export const specConfig = defineConfig([
 	{
 		files: ['**/*.ts', '**/*.tsx'],
 		plugins: { local: localPlugin },
-		rules: { 'local/no-throw-in-spec': 'error' },
+		rules: {
+			'local/no-real-timers-in-spec': 'error',
+			'local/no-return-in-spec': 'error',
+			'local/no-throw-in-spec': 'error',
+		},
 	},
 ]);
 

@@ -156,6 +156,7 @@ export default spec('build', s => {
 						},
 						scripts: {
 							build: 'cxl-build',
+							publish: 'npm run build publish',
 							test: 'npm run build -- test',
 						},
 					}),
@@ -182,6 +183,10 @@ export default spec('build', s => {
 				);
 
 				a.equal(output.trim(), 'audit fixed: pkg/package');
+				const pkg = JSON.parse(
+					await readFile(join(packageDir, 'package.json'), 'utf8'),
+				) as Package;
+				a.equal(Object.keys(pkg.scripts ?? {}).join(','), 'build,test');
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}

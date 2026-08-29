@@ -303,6 +303,16 @@ async function collectConfiguredUsedPackages(
 	}
 }
 
+function fixPackageScripts(pkg: Package, builder: string) {
+	pkg.scripts ??= {};
+	if (!pkg.scripts.test) pkg.scripts.test = TestScript;
+	if (!pkg.scripts.build) pkg.scripts.build = builder;
+	for (const script in pkg.scripts) {
+		if (!requiredPackageScripts.includes(script)) delete pkg.scripts[script];
+	}
+	if (pkg.scripts.test !== TestScript) pkg.scripts.test = TestScript;
+}
+
 async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 	const pkgPath = `${projectPath}/package.json`;
 	const pkg = await readJson<Package>(pkgPath);
@@ -314,9 +324,7 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 	const homepage =
 		rootPkg.homepage && new URL(pkg.name, rootPkg.homepage).href;
 
-	pkg.scripts ??= {};
-	if (!pkg.scripts.test) pkg.scripts.test = TestScript;
-	if (!pkg.scripts.build) pkg.scripts.build = builder;
+	fixPackageScripts(pkg, builder);
 	if (homepage && (!pkg.homepage || pkg.homepage !== homepage))
 		pkg.homepage = homepage;
 
@@ -334,8 +342,6 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 		};
 	}
 	pkg.type = 'module';
-
-	if (pkg.scripts.test !== TestScript) pkg.scripts.test = TestScript;
 
 	const newPackage = JSON.stringify(pkg, null, '\t');
 
@@ -361,6 +367,12 @@ function lintPackage({ pkg, name, rootPkg }: LintData) {
 					scripts[field] !== undefined,
 					`Script "${field}" required in package.json`,
 				),
+			),
+			rule(
+				Object.keys(scripts).every(script =>
+					requiredPackageScripts.includes(script),
+				),
+				'Only "build" and "test" scripts allowed in package.json',
 			),
 		);
 	}

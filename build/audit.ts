@@ -638,6 +638,7 @@ export async function audit() {
 				const { data, fix } = result;
 				fixes.push({
 					id: `${data.name}/${result.id}`,
+					rules: result.rules.filter(rule => !rule.valid),
 					run: () => {
 						if (verbose)
 							console.log(
@@ -653,10 +654,10 @@ export async function audit() {
 	}
 
 	let validation = await validate();
-	let appliedFixes: string[] = [];
+	let appliedFixes: { id: string; rules: Rule[] }[] = [];
 	// Run again after fixes have been applied.
 	if (validation.hasErrors && validation.fixes.length) {
-		appliedFixes = validation.fixes.map(fix => fix.id);
+		appliedFixes = validation.fixes;
 		for (const fix of validation.fixes) await fix.run();
 		validation = await validate();
 	}
@@ -666,6 +667,11 @@ export async function audit() {
 		throw new Error('Errors detected, check logs for details.');
 	}
 
-	if (!verbose && appliedFixes.length)
-		console.log(`audit fixed: ${appliedFixes.join(',')}`);
+	if (!verbose && appliedFixes.length) {
+		console.log(`audit fixed: ${appliedFixes.map(fix => fix.id).join(',')}`);
+		for (const fix of appliedFixes) {
+			for (const rule of fix.rules)
+				console.log(`${fix.id}: fixed: ${rule.message}`);
+		}
+	}
 }

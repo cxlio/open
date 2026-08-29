@@ -282,7 +282,14 @@ export default spec('build', s => {
 					{ encoding: 'utf8' },
 				);
 
-				a.equal(output.trim(), 'audit fixed: pkg/package');
+				a.equal(
+					output.trim(),
+					[
+						'audit fixed: pkg/package',
+						'pkg/package: fixed: Only "build" and "test" scripts allowed in package.json',
+						'pkg/package: fixed: Package "type" must be "module".',
+					].join('\n'),
+				);
 				const pkg = JSON.parse(
 					await readFile(join(packageDir, 'package.json'), 'utf8'),
 				) as Package;

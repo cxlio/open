@@ -315,7 +315,7 @@ function virtualFileServer(
 			body:
 				req.method() === 'GET' || req.method() === 'HEAD'
 					? undefined
-					: req.postData(),
+					: await req.fetchPostData(),
 			redirect: 'manual',
 		});
 

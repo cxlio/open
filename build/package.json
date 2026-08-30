@@ -23,7 +23,7 @@
 		"esbuild-wasm": "^0.28.2",
 		"typescript": "npm:@typescript/typescript6@^6.0.3",
 		"typescript-eslint": "8.58.2",
-		"puppeteer": "^24.22.3"
+		"puppeteer": "^25.9.0"
 	},
 	"peerDependencies": {
 		"pngjs": "^6.0.0"

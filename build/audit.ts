@@ -56,6 +56,12 @@ const TsconfigJson = 'tsconfig.json';
 const TsconfigTestJson = 'tsconfig.test.json';
 const LocalTsconfigJson = './tsconfig.json';
 const RootTsconfigJson = '../tsconfig.json';
+const rootTsconfigFiles = new Set([
+	RootTsconfigJson,
+	'../tsconfig.base.json',
+	'../tsconfig.server.json',
+	'../tsconfig.worker.json',
+]);
 export const requiredRootCompilerOptions = {
 	incremental: true,
 	strict: true,
@@ -67,12 +73,25 @@ export const requiredRootCompilerOptions = {
 	noUnusedParameters: true,
 	noUncheckedIndexedAccess: true,
 	noUncheckedSideEffectImports: true,
+	noFallthroughCasesInSwitch: true,
+	allowUnusedLabels: false,
+	allowUnreachableCode: false,
+	forceConsistentCasingInFileNames: true,
 	composite: true,
+	skipLibCheck: true,
+	sourceMap: false,
+	libReplacement: false,
 	types: [],
 } as const;
+const packageCompilerOptionOverrides = new Set([
+	'types',
+	'skipLibCheck',
+	'sourceMap',
+	'libReplacement',
+]);
 const inheritedPackageCompilerOptions = Object.keys(
 	requiredRootCompilerOptions,
-).filter(name => name !== 'types');
+).filter(name => !packageCompilerOptionOverrides.has(name));
 const TestScript = 'npm run build -- test';
 const baseDir = path.resolve('.');
 const requiredPackageFields: (keyof Package)[] = [
@@ -129,7 +148,8 @@ async function fixTsconfig({ projectPath, name }: LintData) {
 			references: [],
 		};
 	}
-	tsconfig.extends = RootTsconfigJson;
+	if (!rootTsconfigFiles.has(tsconfig.extends ?? ''))
+		tsconfig.extends = RootTsconfigJson;
 	tsconfig.compilerOptions ??= {};
 	tsconfig.compilerOptions.outDir = `../dist/${name}`;
 	for (const option of inheritedPackageCompilerOptions)
@@ -531,8 +551,8 @@ async function lintTsconfig({ projectPath, name }: LintData) {
 	const rules = [
 		rule(!!tsconfig, 'tsconfig.json should be present'),
 		rule(
-			tsconfig?.extends === RootTsconfigJson,
-			'tsconfig.json should extend "../tsconfig.json"',
+			rootTsconfigFiles.has(tsconfig?.extends ?? ''),
+			'tsconfig.json should extend a root tsconfig',
 		),
 		rule(
 			!!tsconfig?.compilerOptions,

@@ -381,8 +381,12 @@ export default spec('build', s => {
 							outDir: './wrong',
 							strict: false,
 							module: 'esnext',
+							noFallthroughCasesInSwitch: false,
 							types: ['node'],
 							lib: ['dom'],
+							skipLibCheck: false,
+							sourceMap: true,
+							libReplacement: true,
 						},
 						files: ['index.ts'],
 					}),
@@ -401,8 +405,36 @@ export default spec('build', s => {
 					outDir: '../dist/pkg',
 					types: ['node'],
 					lib: ['dom'],
+					skipLibCheck: false,
+					sourceMap: true,
+					libReplacement: true,
 				});
 				a.equalValues(tsconfig.files, ['index.ts']);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('preserve package environment inheritance', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				await writeFile(
+					join(packageDir, 'tsconfig.json'),
+					JSON.stringify({
+						extends: '../tsconfig.server.json',
+						compilerOptions: { outDir: './wrong', types: ['node'] },
+					}),
+				);
+				const [command, args] = auditCommand(packageDir);
+				execFileSync(command, args);
+				const tsconfig = JSON.parse(
+					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
+				) as { extends?: string; compilerOptions?: Record<string, unknown> };
+				a.equal(tsconfig.extends, '../tsconfig.server.json');
+				a.equalValues(tsconfig.compilerOptions, {
+					outDir: '../dist/pkg',
+					types: ['node'],
+				});
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}

@@ -42,7 +42,7 @@ import {
 } from './spec.js';
 import type { Package } from './npm.js';
 import { checkBranchClean, checkBranchUpToDate } from './git.js';
-import { requiredBaseCompilerOptions } from './audit.js';
+import { requiredRootCompilerOptions } from './audit.js';
 import { bundleDeclarations } from './tsc.js';
 import { file } from './file.js';
 import { specConfig } from './eslint-config.js';
@@ -96,9 +96,9 @@ ${source}`,
 }
 
 async function createAuditFixture(
-	rootTsconfig: object = { extends: './tsconfig.base.json', files: [] },
-	base: object | false = {
-		compilerOptions: requiredBaseCompilerOptions,
+	rootTsconfig: object = {
+		compilerOptions: requiredRootCompilerOptions,
+		files: [],
 	},
 ) {
 	const dir = await mkdtemp(join(tmpdir(), 'cxl-build-audit-'));
@@ -112,8 +112,6 @@ async function createAuditFixture(
 		}),
 	);
 	await writeFile(join(dir, 'tsconfig.json'), JSON.stringify(rootTsconfig));
-	if (base)
-		await writeFile(join(dir, 'tsconfig.base.json'), JSON.stringify(base));
 	await writeFile(
 		join(packageDir, 'package.json'),
 		JSON.stringify({
@@ -136,7 +134,10 @@ async function createAuditFixture(
 	);
 	await writeFile(
 		join(packageDir, 'tsconfig.json'),
-		JSON.stringify({ compilerOptions: { outDir: '../dist/pkg' } }),
+		JSON.stringify({
+			extends: '../tsconfig.json',
+			compilerOptions: { outDir: '../dist/pkg' },
+		}),
 	);
 	await writeFile(
 		join(packageDir, 'tsconfig.test.json'),
@@ -323,39 +324,30 @@ export default spec('build', s => {
 			}
 		});
 
-		it.should('require tsconfig.base.json in the root directory', async a => {
-			const { dir, packageDir } = await createAuditFixture(undefined, false);
-			try {
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
-				const baseTsconfig = JSON.parse(
-					await readFile(join(dir, 'tsconfig.base.json'), 'utf8'),
-				) as { compilerOptions?: object };
-				a.equalValues(
-					baseTsconfig.compilerOptions,
-					requiredBaseCompilerOptions,
-				);
-			} finally {
-				await rm(dir, { recursive: true, force: true });
-			}
-		});
-
-		it.should('require root tsconfig.json to extend the base config', async a => {
-			const { dir, packageDir } = await createAuditFixture({ files: [] });
+		it.should('require the root tsconfig not to extend another config', async a => {
+			const { dir, packageDir } = await createAuditFixture({
+				extends: './other.json',
+				compilerOptions: {
+					target: 'es2022',
+					...requiredRootCompilerOptions,
+				},
+				files: [],
+			});
 			try {
 				const [command, args] = auditCommand(packageDir);
 				execFileSync(command, args);
 				const rootTsconfig = JSON.parse(
 					await readFile(join(dir, 'tsconfig.json'), 'utf8'),
-				) as { extends?: string };
-				a.equal(rootTsconfig.extends, './tsconfig.base.json');
+				) as { extends?: string; compilerOptions?: { target?: string } };
+				a.equal(rootTsconfig.extends, undefined);
+				a.equal(rootTsconfig.compilerOptions?.target, 'es2022');
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}
 		});
 
 		it.should('require canonical root compiler options', async a => {
-			const { dir, packageDir } = await createAuditFixture(undefined, {
+			const { dir, packageDir } = await createAuditFixture({
 				compilerOptions: {
 					strict: false,
 					module: 'esnext',
@@ -366,13 +358,51 @@ export default spec('build', s => {
 			try {
 				const [command, args] = auditCommand(packageDir);
 				execFileSync(command, args);
-				const baseTsconfig = JSON.parse(
-					await readFile(join(dir, 'tsconfig.base.json'), 'utf8'),
+				const rootTsconfig = JSON.parse(
+					await readFile(join(dir, 'tsconfig.json'), 'utf8'),
 				) as { compilerOptions?: Record<string, unknown> };
-				a.equalValues(baseTsconfig.compilerOptions, {
+				a.equalValues(rootTsconfig.compilerOptions, {
 					target: 'es2022',
-					...requiredBaseCompilerOptions,
+					...requiredRootCompilerOptions,
 				});
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('require package tsconfig inheritance', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				await writeFile(
+					join(packageDir, 'tsconfig.json'),
+					JSON.stringify({
+						extends: './other.json',
+						compilerOptions: {
+							outDir: './wrong',
+							strict: false,
+							module: 'esnext',
+							types: ['node'],
+							lib: ['dom'],
+						},
+						files: ['index.ts'],
+					}),
+				);
+				const [command, args] = auditCommand(packageDir);
+				execFileSync(command, args);
+				const tsconfig = JSON.parse(
+					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
+				) as {
+					extends?: string;
+					compilerOptions?: Record<string, unknown>;
+					files?: string[];
+				};
+				a.equal(tsconfig.extends, '../tsconfig.json');
+				a.equalValues(tsconfig.compilerOptions, {
+					outDir: '../dist/pkg',
+					types: ['node'],
+					lib: ['dom'],
+				});
+				a.equalValues(tsconfig.files, ['index.ts']);
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}

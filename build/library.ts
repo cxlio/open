@@ -107,7 +107,6 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 	const tsconfigInputs = [
 		'tsconfig.json',
 		'../tsconfig.json',
-		'../tsconfig.base.json',
 	];
 	const declarationBuild = fromAsync(() =>
 		cachedBuild(

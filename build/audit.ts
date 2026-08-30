@@ -53,11 +53,10 @@ type Linter = (data: LintData) => Promise<LinterResult>;
 
 const BugsUrl = 'https://github.com/cxlio/cxl/issues';
 const TsconfigJson = 'tsconfig.json';
-const TsconfigBaseJson = 'tsconfig.base.json';
 const TsconfigTestJson = 'tsconfig.test.json';
 const LocalTsconfigJson = './tsconfig.json';
-const LocalTsconfigBaseJson = './tsconfig.base.json';
-export const requiredBaseCompilerOptions = {
+const RootTsconfigJson = '../tsconfig.json';
+export const requiredRootCompilerOptions = {
 	incremental: true,
 	strict: true,
 	module: 'nodenext',
@@ -71,6 +70,9 @@ export const requiredBaseCompilerOptions = {
 	composite: true,
 	types: [],
 } as const;
+const inheritedPackageCompilerOptions = Object.keys(
+	requiredRootCompilerOptions,
+).filter(name => name !== 'types');
 const TestScript = 'npm run build -- test';
 const baseDir = path.resolve('.');
 const requiredPackageFields: (keyof Package)[] = [
@@ -108,31 +110,34 @@ async function fixDependencies({ projectPath, rootPkg }: LintData) {
 }
 
 async function fixTsconfig({ projectPath, name }: LintData) {
-	const pkgPath = `${projectPath}/package.json`;
-	const pkg = await readJson<Package>(pkgPath);
+	const tsconfigPath = path.join(projectPath, TsconfigJson);
 	let tsconfig = await readJson<Tsconfig | false>(
-		path.join(projectPath, TsconfigJson),
+		tsconfigPath,
 		false,
 	);
-	const oldPackage = JSON.stringify(pkg, null, '\t');
+	const oldTsconfig = tsconfig
+		? JSON.stringify(tsconfig, null, '\t')
+		: undefined;
 
 	if (!tsconfig) {
 		tsconfig = {
-			extends: '../tsconfig.json',
+			extends: RootTsconfigJson,
 			compilerOptions: {
 				outDir: `../dist/${name}`,
 			},
 			files: [],
 			references: [],
 		};
-		await fs.writeFile(
-			path.join(projectPath, TsconfigJson),
-			JSON.stringify(tsconfig, null, '\t'),
-		);
 	}
+	tsconfig.extends = RootTsconfigJson;
+	tsconfig.compilerOptions ??= {};
+	tsconfig.compilerOptions.outDir = `../dist/${name}`;
+	for (const option of inheritedPackageCompilerOptions)
+		delete tsconfig.compilerOptions[option];
 
-	const newPackage = JSON.stringify(pkg, null, '\t');
-	if (oldPackage !== newPackage) await fs.writeFile(pkgPath, newPackage);
+	const newTsconfig = JSON.stringify(tsconfig, null, '\t');
+	if (oldTsconfig !== newTsconfig)
+		await fs.writeFile(tsconfigPath, newTsconfig);
 }
 
 async function fixTest({ projectPath, name }: LintData) {
@@ -526,12 +531,22 @@ async function lintTsconfig({ projectPath, name }: LintData) {
 	const rules = [
 		rule(!!tsconfig, 'tsconfig.json should be present'),
 		rule(
+			tsconfig?.extends === RootTsconfigJson,
+			'tsconfig.json should extend "../tsconfig.json"',
+		),
+		rule(
 			!!tsconfig?.compilerOptions,
 			'tsconfig.json should have compilerOptions',
 		),
 		rule(
 			tsconfig?.compilerOptions?.outDir === `../dist/${name}`,
 			'tsconfig.json should have a valid outDir compiler option',
+		),
+		...inheritedPackageCompilerOptions.map(option =>
+			rule(
+				!Object.hasOwn(tsconfig?.compilerOptions ?? {}, option),
+				`tsconfig.json should inherit compilerOptions.${option}`,
+			),
 		),
 	];
 	//const references = tsconfig?.references;
@@ -562,48 +577,34 @@ async function lintTsconfig({ projectPath, name }: LintData) {
 
 async function fixRootTsconfig({ projectPath }: LintData) {
 	const rootDir = path.dirname(projectPath);
-	const baseTsconfigPath = path.join(rootDir, TsconfigBaseJson);
 	const rootTsconfigPath = path.join(rootDir, TsconfigJson);
-	const [baseTsconfig, rootTsconfig] = await Promise.all([
-		readJson<Tsconfig | null>(baseTsconfigPath, null),
-		readJson<Tsconfig | null>(rootTsconfigPath, null),
-	]);
-	const fixedBaseTsconfig = baseTsconfig ?? {};
+	const rootTsconfig = await readJson<Tsconfig | null>(rootTsconfigPath, null);
 	const fixedRootTsconfig = rootTsconfig ?? {};
-	const oldBaseTsconfig = JSON.stringify(fixedBaseTsconfig, null, '\t');
 	const oldRootTsconfig = JSON.stringify(fixedRootTsconfig, null, '\t');
 
-	fixedBaseTsconfig.compilerOptions = {
-		...fixedBaseTsconfig.compilerOptions,
-		...requiredBaseCompilerOptions,
+	fixedRootTsconfig.compilerOptions = {
+		...fixedRootTsconfig.compilerOptions,
+		...requiredRootCompilerOptions,
 	};
-	fixedRootTsconfig.extends = LocalTsconfigBaseJson;
+	delete fixedRootTsconfig.extends;
 
-	const newBaseTsconfig = JSON.stringify(fixedBaseTsconfig, null, '\t');
 	const newRootTsconfig = JSON.stringify(fixedRootTsconfig, null, '\t');
-	await Promise.all([
-		oldBaseTsconfig === newBaseTsconfig
-			? undefined
-			: fs.writeFile(baseTsconfigPath, newBaseTsconfig),
-		oldRootTsconfig === newRootTsconfig
-			? undefined
-			: fs.writeFile(rootTsconfigPath, newRootTsconfig),
-	]);
+	if (oldRootTsconfig !== newRootTsconfig)
+		await fs.writeFile(rootTsconfigPath, newRootTsconfig);
 }
 
 async function lintRootTsconfig({ projectPath }: LintData) {
 	const rootDir = path.dirname(projectPath);
-	const baseTsconfigPath = path.join(rootDir, TsconfigBaseJson);
-	const [baseTsconfig, tsconfig] = await Promise.all([
-		readJson<Tsconfig | null>(baseTsconfigPath, null),
-		readJson<Tsconfig | null>(path.join(rootDir, TsconfigJson), null),
-	]);
-	const optionRules = baseTsconfig
-		? Object.entries(requiredBaseCompilerOptions).map(([name, expected]) =>
+	const tsconfig = await readJson<Tsconfig | null>(
+		path.join(rootDir, TsconfigJson),
+		null,
+	);
+	const optionRules = tsconfig
+		? Object.entries(requiredRootCompilerOptions).map(([name, expected]) =>
 				rule(
-					JSON.stringify(baseTsconfig.compilerOptions?.[name]) ===
+					JSON.stringify(tsconfig.compilerOptions?.[name]) ===
 						JSON.stringify(expected),
-					`Root tsconfig.base.json compilerOptions.${name} must be ${JSON.stringify(expected)}.`,
+					`Root tsconfig.json compilerOptions.${name} must be ${JSON.stringify(expected)}.`,
 				),
 			)
 		: [];
@@ -613,13 +614,10 @@ async function lintRootTsconfig({ projectPath }: LintData) {
 		project: 'root',
 		fix: fixRootTsconfig,
 		rules: [
+			rule(!!tsconfig, 'Missing root "tsconfig.json" file.'),
 			rule(
-				!!baseTsconfig,
-				'Missing root "tsconfig.base.json" file.',
-			),
-			rule(
-				tsconfig?.extends === LocalTsconfigBaseJson,
-				'Root tsconfig.json extends should be "./tsconfig.base.json".',
+				tsconfig?.extends === undefined,
+				'Root tsconfig.json should not extend another configuration.',
 			),
 			...optionRules,
 		],

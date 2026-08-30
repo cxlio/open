@@ -3,9 +3,9 @@ import { resolve, dirname, relative } from 'path';
 import { Observable, fromAsync } from '../rx/index.js';
 import { readJson } from '../program/index.js';
 import {
-	Output,
 	appLog,
 	buildOutputOptions,
+	type Output,
 } from './builder.js';
 
 import type { TsconfigJson } from './tsc.js';

@@ -1,4 +1,4 @@
-import type { JsonResult, Result, RunnerCommand, Test } from '../spec';
+import type { JsonResult, Result, RunnerCommand, Test } from '../spec/index.js';
 import {
 	escapeSpecificationHtml,
 	specificationCss,

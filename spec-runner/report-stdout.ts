@@ -1,6 +1,6 @@
 import { colors } from '../program/index.js';
 
-import {
+import type {
 	Report,
 	CoverageSummary,
 	TestReport,

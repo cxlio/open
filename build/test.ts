@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
-import { execFile, execFileSync, spawnSync } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 import { build as esbuild } from 'esbuild-wasm';
 import { ESLint } from 'eslint';
 import { formatHelp, sh } from '../program/index.js';
@@ -42,6 +42,7 @@ import {
 } from './spec.js';
 import type { Package } from './npm.js';
 import { checkBranchClean, checkBranchUpToDate } from './git.js';
+import { requiredBaseCompilerOptions } from './audit.js';
 import { bundleDeclarations } from './tsc.js';
 import { file } from './file.js';
 import { specConfig } from './eslint-config.js';
@@ -96,7 +97,9 @@ ${source}`,
 
 async function createAuditFixture(
 	rootTsconfig: object = { extends: './tsconfig.base.json', files: [] },
-	base = true,
+	base: object | false = {
+		compilerOptions: requiredBaseCompilerOptions,
+	},
 ) {
 	const dir = await mkdtemp(join(tmpdir(), 'cxl-build-audit-'));
 	const packageDir = join(dir, 'pkg');
@@ -109,7 +112,8 @@ async function createAuditFixture(
 		}),
 	);
 	await writeFile(join(dir, 'tsconfig.json'), JSON.stringify(rootTsconfig));
-	if (base) await writeFile(join(dir, 'tsconfig.base.json'), '{}');
+	if (base)
+		await writeFile(join(dir, 'tsconfig.base.json'), JSON.stringify(base));
 	await writeFile(
 		join(packageDir, 'package.json'),
 		JSON.stringify({
@@ -230,6 +234,15 @@ export default spec('build', s => {
 			);
 		});
 
+		it.should('run audit before the default build target', a => {
+			a.equalValues(buildTargets(['audit'], ['audit']), ['audit', undefined]);
+			a.equalValues(buildTargets(['test', 'audit'], ['test', 'audit']), [
+				'audit',
+				undefined,
+				'test',
+			]);
+		});
+
 		it.should('generate build help', a => {
 			a.equal(
 				formatHelp(buildParameters),
@@ -314,8 +327,14 @@ export default spec('build', s => {
 			const { dir, packageDir } = await createAuditFixture(undefined, false);
 			try {
 				const [command, args] = auditCommand(packageDir);
-				const result = spawnSync(command, args, { encoding: 'utf8' });
-				a.ok(result.stderr.includes('Missing root "tsconfig.base.json" file.'));
+				execFileSync(command, args);
+				const baseTsconfig = JSON.parse(
+					await readFile(join(dir, 'tsconfig.base.json'), 'utf8'),
+				) as { compilerOptions?: object };
+				a.equalValues(
+					baseTsconfig.compilerOptions,
+					requiredBaseCompilerOptions,
+				);
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}
@@ -325,16 +344,40 @@ export default spec('build', s => {
 			const { dir, packageDir } = await createAuditFixture({ files: [] });
 			try {
 				const [command, args] = auditCommand(packageDir);
-				const result = spawnSync(command, args, { encoding: 'utf8' });
-				a.ok(
-					result.stderr.includes(
-						'Root tsconfig.json extends should be "./tsconfig.base.json".',
-					),
-				);
+				execFileSync(command, args);
+				const rootTsconfig = JSON.parse(
+					await readFile(join(dir, 'tsconfig.json'), 'utf8'),
+				) as { extends?: string };
+				a.equal(rootTsconfig.extends, './tsconfig.base.json');
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}
 		});
+
+		it.should('require canonical root compiler options', async a => {
+			const { dir, packageDir } = await createAuditFixture(undefined, {
+				compilerOptions: {
+					strict: false,
+					module: 'esnext',
+					types: ['node'],
+					target: 'es2022',
+				},
+			});
+			try {
+				const [command, args] = auditCommand(packageDir);
+				execFileSync(command, args);
+				const baseTsconfig = JSON.parse(
+					await readFile(join(dir, 'tsconfig.base.json'), 'utf8'),
+				) as { compilerOptions?: Record<string, unknown> };
+				a.equalValues(baseTsconfig.compilerOptions, {
+					target: 'es2022',
+					...requiredBaseCompilerOptions,
+				});
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
 	});
 
 	s.test('exec', it => {

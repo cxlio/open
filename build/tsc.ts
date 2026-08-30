@@ -13,7 +13,7 @@ import type {
 	ParseConfigFileHost,
 } from 'typescript';
 import * as ts from 'typescript';
-import { Output } from './builder.js';
+import type { Output } from './builder.js';
 import { getPackageName } from './package.js';
 import { readJson } from '../program/index.js';
 import type { Package } from './npm.js';

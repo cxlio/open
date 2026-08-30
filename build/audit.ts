@@ -42,7 +42,7 @@ interface LinterResult {
 interface Tsconfig {
 	references?: { path: string }[];
 	extends?: string;
-	compilerOptions?: Record<string, string>;
+	compilerOptions?: Record<string, unknown> & { outDir?: string };
 	files?: string[];
 	include?: string[];
 	exclude?: string[];
@@ -57,6 +57,20 @@ const TsconfigBaseJson = 'tsconfig.base.json';
 const TsconfigTestJson = 'tsconfig.test.json';
 const LocalTsconfigJson = './tsconfig.json';
 const LocalTsconfigBaseJson = './tsconfig.base.json';
+export const requiredBaseCompilerOptions = {
+	incremental: true,
+	strict: true,
+	module: 'nodenext',
+	moduleResolution: 'nodenext',
+	verbatimModuleSyntax: true,
+	isolatedModules: true,
+	noUnusedLocals: true,
+	noUnusedParameters: true,
+	noUncheckedIndexedAccess: true,
+	noUncheckedSideEffectImports: true,
+	composite: true,
+	types: [],
+} as const;
 const TestScript = 'npm run build -- test';
 const baseDir = path.resolve('.');
 const requiredPackageFields: (keyof Package)[] = [
@@ -546,25 +560,68 @@ async function lintTsconfig({ projectPath, name }: LintData) {
 	};
 }
 
+async function fixRootTsconfig({ projectPath }: LintData) {
+	const rootDir = path.dirname(projectPath);
+	const baseTsconfigPath = path.join(rootDir, TsconfigBaseJson);
+	const rootTsconfigPath = path.join(rootDir, TsconfigJson);
+	const [baseTsconfig, rootTsconfig] = await Promise.all([
+		readJson<Tsconfig | null>(baseTsconfigPath, null),
+		readJson<Tsconfig | null>(rootTsconfigPath, null),
+	]);
+	const fixedBaseTsconfig = baseTsconfig ?? {};
+	const fixedRootTsconfig = rootTsconfig ?? {};
+	const oldBaseTsconfig = JSON.stringify(fixedBaseTsconfig, null, '\t');
+	const oldRootTsconfig = JSON.stringify(fixedRootTsconfig, null, '\t');
+
+	fixedBaseTsconfig.compilerOptions = {
+		...fixedBaseTsconfig.compilerOptions,
+		...requiredBaseCompilerOptions,
+	};
+	fixedRootTsconfig.extends = LocalTsconfigBaseJson;
+
+	const newBaseTsconfig = JSON.stringify(fixedBaseTsconfig, null, '\t');
+	const newRootTsconfig = JSON.stringify(fixedRootTsconfig, null, '\t');
+	await Promise.all([
+		oldBaseTsconfig === newBaseTsconfig
+			? undefined
+			: fs.writeFile(baseTsconfigPath, newBaseTsconfig),
+		oldRootTsconfig === newRootTsconfig
+			? undefined
+			: fs.writeFile(rootTsconfigPath, newRootTsconfig),
+	]);
+}
+
 async function lintRootTsconfig({ projectPath }: LintData) {
 	const rootDir = path.dirname(projectPath);
-	const tsconfig = await readJson<Tsconfig | null>(
-		path.join(rootDir, TsconfigJson),
-		null,
-	);
+	const baseTsconfigPath = path.join(rootDir, TsconfigBaseJson);
+	const [baseTsconfig, tsconfig] = await Promise.all([
+		readJson<Tsconfig | null>(baseTsconfigPath, null),
+		readJson<Tsconfig | null>(path.join(rootDir, TsconfigJson), null),
+	]);
+	const optionRules = baseTsconfig
+		? Object.entries(requiredBaseCompilerOptions).map(([name, expected]) =>
+				rule(
+					JSON.stringify(baseTsconfig.compilerOptions?.[name]) ===
+						JSON.stringify(expected),
+					`Root tsconfig.base.json compilerOptions.${name} must be ${JSON.stringify(expected)}.`,
+				),
+			)
+		: [];
 
 	return {
 		id: 'root-tsconfig',
 		project: 'root',
+		fix: fixRootTsconfig,
 		rules: [
 			rule(
-				!!(await exists(path.join(rootDir, TsconfigBaseJson))),
+				!!baseTsconfig,
 				'Missing root "tsconfig.base.json" file.',
 			),
 			rule(
 				tsconfig?.extends === LocalTsconfigBaseJson,
 				'Root tsconfig.json extends should be "./tsconfig.base.json".',
 			),
+			...optionRules,
 		],
 	};
 }

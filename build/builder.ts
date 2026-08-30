@@ -1,14 +1,14 @@
 import { dirname, relative, resolve } from 'path';
 import { existsSync, utimesSync, writeFileSync } from 'fs';
-import { SpawnOptions, spawn, execSync } from 'child_process';
+import { spawn, execSync, type SpawnOptions } from 'child_process';
 
 import {
-	Logger,
 	colors,
 	sh,
 	log,
 	operation,
 	parseArgv,
+	type Logger,
 } from '../program/index.js';
 import { Observable } from '../rx/index.js';
 import { BASEDIR, readPackage } from './package.js';
@@ -91,7 +91,9 @@ export function buildTargets(
 			);
 		}
 	}
-	return [undefined, ...targets];
+	return targets.includes('audit')
+		? ['audit', undefined, ...targets.filter(target => target !== 'audit')]
+		: [undefined, ...targets];
 }
 
 export function formatArtifactSummary(artifacts: BuildArtifact[]) {

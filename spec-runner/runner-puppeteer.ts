@@ -5,10 +5,10 @@ import { basename, resolve, relative, join, extname } from 'path';
 import { cpus, tmpdir } from 'os';
 import { resolveImport } from './resolve.js';
 import {
-	BenchmarkEnvironment,
 	hasBenchmarks,
 	processBenchmarks,
 } from './benchmark.js';
+import type { BenchmarkEnvironment } from './benchmark.js';
 
 import type {
 	FigureData,
@@ -19,7 +19,7 @@ import type {
 import type { SpecRunner } from './index.js';
 import type { PNG } from 'pngjs';
 
-import { TestCoverage, generateReport } from './report.js';
+import { generateReport, type TestCoverage } from './report.js';
 import { writeSpecificationDocument } from './specification-file.js';
 
 const contentTypes: Record<string, string> = {

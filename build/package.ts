@@ -3,8 +3,8 @@ import { existsSync, readFileSync } from 'fs';
 import { join, relative, resolve } from 'path';
 import { file } from './file.js';
 import { execSync } from 'child_process';
-import { Output } from './builder.js';
-import { License, Package } from './npm.js';
+import type { Output } from './builder.js';
+import type { License, Package } from './npm.js';
 import { getErrorCode, readJson } from '../program/index.js';
 import * as esbuildApi from 'esbuild-wasm';
 

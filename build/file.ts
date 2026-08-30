@@ -12,7 +12,7 @@ import {
 
 import { promises as fs, readFileSync } from 'fs';
 import { basename as pathBasename, dirname, resolve } from 'path';
-import { Output, Task, exec, shell } from './builder.js';
+import { exec, shell, type Output, type Task } from './builder.js';
 
 /**
  * Provides an Observable that emits the absolute paths of all entries in a given

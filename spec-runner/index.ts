@@ -2,10 +2,10 @@
 import { spawn, execSync } from 'child_process';
 
 import {
-	Logger,
-	ParametersResult,
 	program,
 	parseArgv,
+	type Logger,
+	type ParametersResult,
 } from '../program/index.js';
 
 import { run } from './runner.js';

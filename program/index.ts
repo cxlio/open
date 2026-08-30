@@ -1,6 +1,6 @@
 import { readFile, stat, mkdir } from 'fs/promises';
 import { join, resolve } from 'path';
-import { SpawnOptions, spawn } from 'child_process';
+import { spawn, type SpawnOptions } from 'child_process';
 import * as readline from 'node:readline/promises';
 import { inspect } from 'util';
 

@@ -2,7 +2,10 @@ import { observable } from '../rx/index.js';
 
 import type { Output } from './builder.js';
 
-import { buildDocs as build3doc, BuildDocsOptions } from '@cxl/3doc/render.js';
+import {
+	buildDocs as build3doc,
+	type BuildDocsOptions,
+} from '@cxl/3doc/render.js';
 
 export function buildDocs(options: BuildDocsOptions) {
 	return observable<Output>(subs => {

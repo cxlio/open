@@ -5,9 +5,10 @@ import { mkdir, readdir, rm, writeFile } from 'fs/promises';
 import { EMPTY, concat, fromAsync } from '../rx/index.js';
 
 import {
-	BuildConfiguration,
 	build,
 	buildOutputOptions,
+	buildTargets,
+	type BuildConfiguration,
 } from './builder.js';
 import {
 	buildEsbuild,
@@ -26,15 +27,15 @@ import {
 	bundleDeclarations,
 	getProjectOutputFiles,
 	tscVersion,
-	TsconfigJson,
 	tsconfig,
+	type TsconfigJson,
 } from './tsc.js';
 import { buildDocs } from './docs.js';
 import { generateTestFile, runBenchmarks, runTests } from './spec.js';
 import { audit } from './audit.js';
 import { readJson } from '../program/index.js';
 
-import { Package, publishNpm } from './npm.js';
+import { publishNpm, type Package } from './npm.js';
 import { cachedBuild } from './cache.js';
 
 const PackageCacheVersion = 1;
@@ -59,6 +60,11 @@ async function removePackageFiles(dir: string, pattern: RegExp) {
 }
 
 export async function buildLibrary(...extra: BuildConfiguration[]) {
+	const selectedTargets = buildTargets();
+	const auditedBeforeBuild =
+		selectedTargets.includes('audit') || selectedTargets.includes('package');
+	if (auditedBeforeBuild) await audit();
+
 	const cwd = process.cwd();
 	const { grep } = buildOutputOptions();
 	const tsconfigFile = await readJson<TsconfigJson>(cwd + '/tsconfig.json');
@@ -276,7 +282,7 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 		{
 			target: 'audit',
 			outputDir,
-			tasks: [fromAsync(audit).ignoreElements()],
+			tasks: auditedBeforeBuild ? [] : [fromAsync(audit).ignoreElements()],
 		},
 
 		{
@@ -299,7 +305,7 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 			tasks: [
 				readme(),
 				eslintTsconfig(tsconfigFile),
-				fromAsync(audit).ignoreElements(),
+				...(auditedBeforeBuild ? [] : [fromAsync(audit).ignoreElements()]),
 			],
 		},
 		{

@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 
 import { getErrorCode, sh } from '../program/index.js';
-import { Package, readPackage } from './npm.js';
+import { readPackage, type Package } from './npm.js';
 
 export async function buildRoot() {
 	const dirs = await fs.readdir('.');

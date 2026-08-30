@@ -154,25 +154,30 @@ export function getPackageDeclarationEntryPoints(
 
 export function esbuild(options: esbuildApi.BuildOptions) {
 	return new Observable<never>(subs => {
-		esbuildApi
-			.build({
-				minify: true,
-				bundle: true,
-				splitting: true,
-				format: 'esm',
-				tsconfig: 'tsconfig.json',
-				platform: 'browser',
-				define: {
-					CXL_DEBUG: 'false',
-				},
-				...options,
-			})
+		buildEsbuild(options)
 			.then(
 				() => subs.complete(),
 				e => subs.error(e),
 			);
 	});
 }
+
+export function buildEsbuild(options: esbuildApi.BuildOptions) {
+	return esbuildApi.build({
+		minify: true,
+		bundle: true,
+		splitting: true,
+		format: 'esm',
+		tsconfig: 'tsconfig.json',
+		platform: 'browser',
+		define: {
+			CXL_DEBUG: 'false',
+		},
+		...options,
+	});
+}
+
+export const esbuildVersion = esbuildApi.version;
 
 export async function readPackage(base: string = BASEDIR) {
 	const pkg = resolve(base, 'package.json');

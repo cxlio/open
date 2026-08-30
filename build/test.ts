@@ -46,6 +46,7 @@ import { bundleDeclarations } from './tsc.js';
 import { file } from './file.js';
 import { specConfig } from './eslint-config.js';
 import { rx } from './index.js';
+import { cachedBuild } from './cache.js';
 import * as ts from 'typescript';
 
 async function errorMessage(fn: () => Promise<unknown>) {
@@ -434,6 +435,82 @@ export default spec('build', s => {
 				outputs.map(output => output.path),
 				['first.txt', 'second.txt'],
 			);
+		});
+	});
+
+	s.test('build cache', it => {
+		it.should('reuse outputs until inputs change or outputs disappear', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-cache-'));
+			try {
+				const input = join(dir, 'input.js');
+				const outputDir = join(dir, 'package');
+				const output = join(outputDir, 'index.js');
+				const options = {
+					manifest: join(dir, 'cache.json'),
+					inputs: [input],
+					key: JSON.stringify({ recipe: 1 }),
+					outputDir,
+				};
+				let builds = 0;
+				const run = () =>
+					cachedBuild(options, async () => {
+						builds++;
+						await mkdir(outputDir, { recursive: true });
+						await writeFile(output, String(builds));
+						return [output];
+					});
+
+				await writeFile(input, 'first');
+				a.ok(await run());
+				a.ok(!(await run()));
+				a.equal(builds, 1);
+
+				await writeFile(input, 'second');
+				a.ok(await run());
+				await rm(output);
+				a.ok(await run());
+				options.key = JSON.stringify({ recipe: 2 });
+				a.ok(await run());
+				a.equal(builds, 4);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('not update the manifest when a build fails', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-cache-'));
+			try {
+				const input = join(dir, 'input.js');
+				const outputDir = join(dir, 'package');
+				const output = join(outputDir, 'index.js');
+				const manifest = join(dir, 'cache.json');
+				const options = {
+					manifest,
+					inputs: [input],
+					key: JSON.stringify({ recipe: 1 }),
+					outputDir,
+				};
+				await writeFile(input, 'first');
+				await cachedBuild(options, async () => {
+					await mkdir(outputDir, { recursive: true });
+					await writeFile(output, 'first');
+					return [output];
+				});
+				const previous = await readFile(manifest, 'utf8');
+
+				await writeFile(input, 'second');
+				a.equal(
+					await errorMessage(() =>
+						cachedBuild(options, async () => {
+							throw new Error('failed');
+						}),
+					),
+					'failed',
+				);
+				a.equal(await readFile(manifest, 'utf8'), previous);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
 		});
 	});
 

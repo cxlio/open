@@ -1,15 +1,17 @@
-import { basename, join } from 'path';
+import { basename, dirname, join, resolve } from 'path';
 import { existsSync } from 'fs';
+import { mkdir, readdir, rm, writeFile } from 'fs/promises';
 
-import { EMPTY, concat, from, fromAsync } from '../rx/index.js';
+import { EMPTY, concat, fromAsync } from '../rx/index.js';
 
 import {
 	BuildConfiguration,
 	build,
 	buildOutputOptions,
-	exec,
 } from './builder.js';
 import {
+	buildEsbuild,
+	esbuildVersion,
 	getPackageBundleEntryPoints,
 	getPackageDeclarationEntryPoints,
 	getPackageEntryPoints,
@@ -17,13 +19,13 @@ import {
 	getPackagePlatform,
 	pkg,
 	readme,
-	esbuild,
 } from './package.js';
 import { file } from './file.js';
 import { eslintTestTsconfig, eslintTsconfig } from './lint.js';
 import {
 	bundleDeclarations,
 	getProjectOutputFiles,
+	tscVersion,
 	TsconfigJson,
 	tsconfig,
 } from './tsc.js';
@@ -33,6 +35,28 @@ import { audit } from './audit.js';
 import { readJson } from '../program/index.js';
 
 import { Package, publishNpm } from './npm.js';
+import { cachedBuild } from './cache.js';
+
+const PackageCacheVersion = 1;
+
+async function packageFiles(dir: string): Promise<string[]> {
+	if (!existsSync(dir)) return [];
+	const entries = await readdir(dir, { withFileTypes: true });
+	const files = await Promise.all(
+		entries.map(entry => {
+			const path = join(dir, entry.name);
+			return entry.isDirectory() ? packageFiles(path) : [path];
+		}),
+	);
+	return files.flat();
+}
+
+async function removePackageFiles(dir: string, pattern: RegExp) {
+	const files = await packageFiles(dir);
+	await Promise.all(
+		files.filter(file => pattern.test(file)).map(file => rm(file)),
+	);
+}
 
 export async function buildLibrary(...extra: BuildConfiguration[]) {
 	const cwd = process.cwd();
@@ -73,6 +97,91 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 		pkgJson,
 		declarationFiles,
 	);
+	const cacheDir = join(outputDir, '.package-cache');
+	const tsconfigInputs = [
+		'tsconfig.json',
+		'../tsconfig.json',
+		'../tsconfig.base.json',
+	];
+	const declarationBuild = fromAsync(() =>
+		cachedBuild(
+			{
+				manifest: join(cacheDir, 'declarations.json'),
+				inputs: [...declarationFiles, ...tsconfigInputs],
+				key: JSON.stringify({
+					version: PackageCacheVersion,
+					typescript: tscVersion,
+					entryPoints: declarationEntryPoints,
+					external,
+				}),
+				outputDir: pkgDir,
+			},
+			async () => {
+				await removePackageFiles(pkgDir, /\.d\.(?:ts|mts|cts)$/);
+				return Promise.all(
+					declarationEntryPoints.map(async entry => {
+						const output = resolve(pkgDir, entry.out);
+						await mkdir(dirname(output), { recursive: true });
+						await writeFile(
+							output,
+							await bundleDeclarations(entry.in, external),
+						);
+						return output;
+					}),
+				);
+			},
+		),
+	).ignoreElements();
+	const javascriptBuild = fromAsync(() =>
+		cachedBuild(
+			{
+				manifest: join(cacheDir, 'javascript.json'),
+				inputs: [...javascriptFiles, ...tsconfigInputs],
+				key: JSON.stringify({
+					version: PackageCacheVersion,
+					esbuild: esbuildVersion,
+					entryPoints,
+					bundleEntryPoint: needsBundle ? bundleEntryPoint : undefined,
+					external,
+					platform,
+				}),
+				outputDir: pkgDir,
+			},
+			async () => {
+				await removePackageFiles(
+					pkgDir,
+					/\.(?:[cm]?js|css)(?:\.map)?$/,
+				);
+				const builds = [
+					buildEsbuild({
+						entryPoints,
+						platform,
+						outdir: pkgDir,
+						external,
+						metafile: true,
+					}),
+				];
+				if (needsBundle)
+					builds.push(
+						buildEsbuild({
+							entryPoints: bundleEntryPoint,
+							platform,
+							outdir: pkgDir,
+							external,
+							metafile: true,
+						}),
+					);
+				const results = await Promise.all(builds);
+				const outputs: string[] = [];
+				for (const result of results) {
+					if (!result.metafile) throw new Error('Missing esbuild metafile');
+					for (const output of Object.keys(result.metafile.outputs))
+						outputs.push(resolve(output));
+				}
+				return outputs;
+			},
+		),
+	).ignoreElements();
 
 	return build(
 		{
@@ -190,7 +299,6 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 			tasks: [
 				readme(),
 				eslintTsconfig(tsconfigFile),
-				exec(`rm -rf ${pkgDir}`),
 				fromAsync(audit).ignoreElements(),
 			],
 		},
@@ -201,36 +309,8 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 				file('README.md', 'README.md'),
 				file('LICENSE.md', 'LICENSE.md').catchError(() => EMPTY),
 				pkg(pkgMain),
-				from(declarationEntryPoints).concatMap(entry =>
-					fromAsync(async () => ({
-						path: entry.out,
-						source: Buffer.from(
-							await bundleDeclarations(entry.in, external),
-						),
-					})),
-				),
-				esbuild({
-					entryPoints,
-					platform,
-					outdir: pkgDir,
-					external,
-				}),
-				/*esbuild({
-					entryPoints: dtsEntryPoints,
-					platform: isBrowser ? 'browser' : 'node',
-					outdir: pkgDir,
-					external,
-				}),*/
-				...(needsBundle
-					? [
-							esbuild({
-								entryPoints: bundleEntryPoint,
-								platform,
-								outdir: pkgDir,
-								external,
-							}),
-						]
-					: []),
+				declarationBuild,
+				javascriptBuild,
 			],
 		},
 		{

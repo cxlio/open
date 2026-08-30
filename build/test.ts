@@ -538,13 +538,14 @@ void composed;
 					a.ok(!text.includes('__subscribe'));
 				}
 				const program = ts.createProgram([consumer], {
-					baseUrl: dir,
+					lib: ['lib.es2023.d.ts'],
 					module: ts.ModuleKind.ESNext,
-					moduleResolution: ts.ModuleResolutionKind.Node10,
+					moduleResolution: ts.ModuleResolutionKind.Bundler,
 					noEmit: true,
 					paths: { '@cxl/build': [declarationPath] },
 					skipLibCheck: false,
 					strict: true,
+					types: ['node'],
 				});
 				a.equalValues(
 					ts.getPreEmitDiagnostics(program).map(diagnostic =>
@@ -647,7 +648,7 @@ export = Legacy;
 						compilerOptions: {
 							allowSyntheticDefaultImports: true,
 							module: 'esnext',
-							moduleResolution: 'node',
+							moduleResolution: 'bundler',
 							paths: { 'alias/*': ['./alias-source/*'] },
 						},
 						files: [],
@@ -661,7 +662,7 @@ export = Legacy;
 							composite: true,
 							declaration: true,
 							module: 'esnext',
-							moduleResolution: 'node',
+							moduleResolution: 'bundler',
 							outDir: '../alias-output',
 						},
 						files: ['value.ts'],
@@ -722,11 +723,13 @@ void result;
 `,
 					);
 					const program = ts.createProgram([consumer], {
+						lib: ['lib.es2023.d.ts'],
 						module: ts.ModuleKind.ESNext,
-						moduleResolution: ts.ModuleResolutionKind.Node10,
+						moduleResolution: ts.ModuleResolutionKind.Bundler,
 						noEmit: true,
 						strict: true,
 						skipLibCheck: false,
+						types: ['node'],
 					});
 					a.equalValues(
 						ts.getPreEmitDiagnostics(program).map(diagnostic =>

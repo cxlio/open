@@ -6,7 +6,7 @@
 		"module": "esnext",
 		"lib": ["ES2023"],
 		"sourceMap": false,
-		"moduleResolution": "Node",
+		"moduleResolution": "bundler",
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"noUncheckedIndexedAccess": true,

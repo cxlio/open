@@ -230,10 +230,9 @@ async function declarationProgram(entryFile: string, tsconfig: string) {
 	const options: ts.CompilerOptions = {
 		allowSyntheticDefaultImports:
 			project?.options?.allowSyntheticDefaultImports,
-		baseUrl: '/',
 		esModuleInterop: project?.options?.esModuleInterop,
 		module: ts.ModuleKind.ESNext,
-		moduleResolution: ts.ModuleResolutionKind.Node10,
+		moduleResolution: ts.ModuleResolutionKind.Bundler,
 		paths,
 		skipLibCheck: true,
 		target: ts.ScriptTarget.Latest,

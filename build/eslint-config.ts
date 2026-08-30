@@ -2,8 +2,7 @@ import js from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import ts from 'typescript-eslint';
 import { configs as sonarjsConfigs } from 'eslint-plugin-sonarjs';
-import type { Rule } from 'eslint';
-import type { FlatConfig } from 'typescript-eslint';
+import type { Linter, Rule } from 'eslint';
 import * as typescript from 'typescript';
 
 type AncestorNode = ReturnType<
@@ -249,7 +248,7 @@ const localPlugin = {
 	},
 };
 
-export const tsConfig: FlatConfig.Config = {
+export const tsConfig: Linter.Config = {
 	files: ['**/*.ts', '**/*.tsx'],
 	plugins: {
 		local: localPlugin,

@@ -1,21 +1,10 @@
 declare function __cxlRunner(msg: RunnerCommand): Promise<Result>;
 
 type EventType =
-	| 'afterAll'
-	| 'afterEach'
-	| 'beforeAll'
-	| 'beforeEach'
-	| 'syncComplete';
+	'afterAll' | 'afterEach' | 'beforeAll' | 'beforeEach' | 'syncComplete';
 type TestEvent = { type: EventType; promises: Promise<unknown>[] };
 type Value =
-	| object
-	| string
-	| number
-	| boolean
-	| bigint
-	| symbol
-	| null
-	| undefined;
+	object | string | number | boolean | bigint | symbol | null | undefined;
 
 export type TestFn<T = TestApi> = (test: T) => void | Promise<unknown>;
 
@@ -175,7 +164,8 @@ async function measureBenchmark(
 	options: BenchmarkOptions,
 ): Promise<BenchmarkData> {
 	const resolved = { ...DEFAULT_BENCHMARK_OPTIONS, ...options };
-	if (resolved.warmup < 0) throw new Error('Benchmark warmup must not be negative');
+	if (resolved.warmup < 0)
+		throw new Error('Benchmark warmup must not be negative');
 	if (resolved.sampleTime <= 0)
 		throw new Error('Benchmark sampleTime must be positive');
 	if (!Number.isInteger(resolved.samples) || resolved.samples <= 0)
@@ -187,7 +177,9 @@ async function measureBenchmark(
 	const runSync = () => {
 		const value = run();
 		if (value instanceof Promise)
-			throw new Error('Benchmark changed from synchronous to asynchronous');
+			throw new Error(
+				'Benchmark changed from synchronous to asynchronous',
+			);
 		return value;
 	};
 
@@ -412,7 +404,9 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		if (this.benchmarkCalled)
 			throw new Error('benchmark() called multiple times');
 		this.benchmarkCalled = true;
-		const measurement = testQueue.then(() => measureBenchmark(run, options));
+		const measurement = testQueue.then(() =>
+			measureBenchmark(run, options),
+		);
 		testQueue = measurement.catch(() => undefined);
 		return measurement.then(data => {
 			this.$test.push({
@@ -566,10 +560,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		object: T & Record<K, FunctionsOf<T>[K]>,
 		method: K,
 	): Spy<
-		SpyFn<
-			Parameters<FunctionsOf<T>[K]>,
-			ReturnType<FunctionsOf<T>[K]>
-		>
+		SpyFn<Parameters<FunctionsOf<T>[K]>, ReturnType<FunctionsOf<T>[K]>>
 	> => {
 		const spy = spyFn(object, method);
 		this.$test.events.subscribe({
@@ -692,10 +683,6 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		for (const r of results) this.$test.push(r);
 	};
 
-	sleep = async (n: number) => {
-		await new Promise(resolve => setTimeout(resolve, n));
-	};
-
 	figure = (name: string, html: string, init?: (node: Node) => void) => {
 		if (typeof __cxlRunner !== 'undefined')
 			return new Promise<void>(resolve => {
@@ -812,15 +799,17 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		let id = 0;
 		const rafs: Record<number, FrameRequestCallback> = {};
 
-		const requestAnimationFrame: typeof globalThis.requestAnimationFrame = cb => {
-			id++;
-			rafs[id] = cb;
-			return id;
-		};
+		const requestAnimationFrame: typeof globalThis.requestAnimationFrame =
+			cb => {
+				id++;
+				rafs[id] = cb;
+				return id;
+			};
 
-		const cancelAnimationFrame: typeof globalThis.cancelAnimationFrame = rafId => {
-			delete rafs[rafId];
-		};
+		const cancelAnimationFrame: typeof globalThis.cancelAnimationFrame =
+			rafId => {
+				delete rafs[rafId];
+			};
 		this.mock(globalThis, 'requestAnimationFrame', requestAnimationFrame);
 		this.mock(globalThis, 'cancelAnimationFrame', cancelAnimationFrame);
 
@@ -837,8 +826,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 
 	action = (action: RunnerAction) => {
 		const element = actionElement(this, action.element);
-		if (action.type !== 'drag')
-			return __cxlRunner({ ...action, element });
+		if (action.type !== 'drag') return __cxlRunner({ ...action, element });
 
 		return __cxlRunner({
 			...action,
@@ -863,12 +851,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		return this.action({ type: 'drag', element, target });
 	};
 
-	protected equalDeep<T>(
-		a: T,
-		b: T,
-		partial: boolean,
-		desc?: string,
-	) {
+	protected equalDeep<T>(a: T, b: T, partial: boolean, desc?: string) {
 		if (a instanceof ArrayBuffer && b instanceof ArrayBuffer) {
 			return this.equalBuffer(a, b, desc);
 		}
@@ -1126,10 +1109,14 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 			else await promise;
 			syncCompleteNeeded = false;
 			if (this.only.length) {
-				await Promise.all(this.only.map(test => test.run(grep, targetPath)));
+				await Promise.all(
+					this.only.map(test => test.run(grep, targetPath)),
+				);
 				throw new Error('"only" was used');
 			} else if (this.tests.length)
-				await Promise.all(this.tests.map(test => test.run(grep, targetPath)));
+				await Promise.all(
+					this.tests.map(test => test.run(grep, targetPath)),
+				);
 
 			if (
 				!this.parent &&
@@ -1140,9 +1127,7 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 			)
 				this.skipped = true;
 		} catch (e) {
-			this.pushError(
-				typeof e === 'object' && e !== null ? e : String(e),
-			);
+			this.pushError(typeof e === 'object' && e !== null ? e : String(e));
 			console.error(String(e));
 		} finally {
 			if (syncCompleteNeeded) await this.emit('syncComplete');
@@ -1177,7 +1162,8 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 
 	private shouldSkip(grep?: RegExp, targetPath?: string) {
 		return targetPath
-			? targetPath !== this.path() && !targetPath.startsWith(`${this.path()} `)
+			? targetPath !== this.path() &&
+					!targetPath.startsWith(`${this.path()} `)
 			: !!grep && !!this.parent && !matchesGrep(grep, this.path());
 	}
 }
@@ -1210,12 +1196,7 @@ export function mockFn<A extends Value[], B>(
 function spyFn<T extends object, K extends keyof FunctionsOf<T>>(
 	object: T & Record<K, FunctionsOf<T>[K]>,
 	method: K,
-): Spy<
-	SpyFn<
-		Parameters<FunctionsOf<T>[K]>,
-		ReturnType<FunctionsOf<T>[K]>
-	>
->;
+): Spy<SpyFn<Parameters<FunctionsOf<T>[K]>, ReturnType<FunctionsOf<T>[K]>>>;
 function spyFn<A extends Value[], R, K extends PropertyKey>(
 	object: Record<K, (...args: A) => R>,
 	method: K,
@@ -1243,10 +1224,7 @@ function spyFn<A extends Value[], R, K extends PropertyKey>(
 	};
 	let called = 0;
 
-	const spyFn = function (
-		this: Record<K, (...args: A) => R>,
-		...args: A
-	): R {
+	const spyFn = function (this: Record<K, (...args: A) => R>, ...args: A): R {
 		called++;
 		const result = originalFn.apply(this, args);
 		sub.next((spy.lastEvent = { called, arguments: args, result }));

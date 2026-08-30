@@ -1,6 +1,6 @@
 import { TestApi, spec, mockFn } from '../spec/index.js';
 import {
-	KeyboardLayout,
+	type KeyboardLayout,
 	normalize,
 	parseKey,
 	handleKeyboard,

@@ -2,42 +2,36 @@ import { spec, TestApi } from '../../spec/index.js';
 import { subject, throttleTime } from '../index.js';
 
 export default spec('throttleTime', (suite: TestApi) => {
-	suite.test('emits after delay', async a => {
+	suite.test('emits after delay', a => {
+		const time = a.mockSetTimeout();
 		const source = subject<number>();
 		const results: number[] = [];
-		const done = new Promise<number[]>(resolve => {
-			source.pipe(throttleTime(10)).subscribe({
-				next: v => results.push(v),
-				complete: () => resolve(results),
-			});
+		source.pipe(throttleTime(10)).subscribe({
+			next: value => results.push(value),
 		});
 
 		source.next(1);
 		source.next(2);
-		await a.sleep(15);
+		time.advance(10);
 		source.next(3);
 		source.complete();
 
-		const values = await done;
-		a.equalValues(values, [1, 3]);
+		a.equalValues(results, [1, 3]);
 	});
 
-	suite.test('ignores values during window', async a => {
+	suite.test('ignores values during window', a => {
+		const time = a.mockSetTimeout();
 		const source = subject<number>();
 		const results: number[] = [];
-		const done = new Promise<number[]>(resolve => {
-			source.pipe(throttleTime(30)).subscribe({
-				next: v => results.push(v),
-				complete: () => resolve(results),
-			});
+		source.pipe(throttleTime(30)).subscribe({
+			next: value => results.push(value),
 		});
 
 		source.next(1);
 		source.next(2);
-		await a.sleep(5);
+		time.advance(5);
 		source.complete();
 
-		const values = await done;
-		a.equalValues(values, [1]);
+		a.equalValues(results, [1]);
 	});
 });

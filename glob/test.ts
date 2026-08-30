@@ -1,5 +1,5 @@
 import { TestApi, spec } from '../spec/index.js';
-import { Options, globToRegex } from './index.js';
+import { type Options, globToRegex } from './index.js';
 
 export default spec('glob', s => {
 	function isMatch(

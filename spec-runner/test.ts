@@ -1,10 +1,7 @@
 import { spec } from '../spec/index.js';
-import type {
-	BenchmarkData,
-	JsonResult,
-} from '../spec/index.js';
+import type { BenchmarkData, JsonResult } from '../spec/index.js';
 import browserRunner from './runner-puppeteer.js';
-import { Coverage, generateReport } from './report.js';
+import { type Coverage, generateReport } from './report.js';
 import { processBenchmarks } from './benchmark.js';
 import { run } from './runner.js';
 import {
@@ -222,7 +219,10 @@ export default spec('failure fixture', s => {
 			a.ok(allFailures.stderr.includes('failure 7'), allFailures.stderr);
 			a.equal(allFailures.stderr.includes('Showing failures'), false);
 
-			const fiveFailures = await runFailingCli([...args, '--fiveFailures']);
+			const fiveFailures = await runFailingCli([
+				...args,
+				'--fiveFailures',
+			]);
 			a.ok(fiveFailures.stderr.includes('failure 5'));
 			a.equal(fiveFailures.stderr.includes('Showing failures'), false);
 
@@ -361,7 +361,9 @@ export default spec('failure fixture', s => {
 					{
 						functionName: 'unused',
 						isBlockCoverage: true,
-						ranges: [{ startOffset: 100, endOffset: 120, count: 0 }],
+						ranges: [
+							{ startOffset: 100, endOffset: 120, count: 0 },
+						],
 					},
 				],
 			},
@@ -404,7 +406,11 @@ export default spec('failure fixture', s => {
 								functionName: '',
 								isBlockCoverage: true,
 								ranges: [
-									{ startOffset: 0, endOffset: 100, count: 0 },
+									{
+										startOffset: 0,
+										endOffset: 100,
+										count: 0,
+									},
 								],
 							},
 						],
@@ -416,7 +422,10 @@ export default spec('failure fixture', s => {
 			a.equal(report.coverage?.[0]?.url, 'index.js');
 			a.equal(report.coverage?.[1]?.url, 'missing.js');
 			a.equal(report.summary.coverage?.blockCoveragePct, 37.5);
-			a.equal(report.summary.coverage?.functionCoveragePct, 33.33333333333333);
+			a.equal(
+				report.summary.coverage?.functionCoveragePct,
+				33.33333333333333,
+			);
 		});
 
 		it.should('deduplicate equivalent expected coverage paths', async a => {

@@ -1,4 +1,4 @@
-import { spec, type TestApi } from './index.js';
+import { spec, type RunnerCommand, type TestApi } from './index.js';
 import { ref } from '../rx/index.js';
 
 export default spec('spec', s => {
@@ -43,6 +43,56 @@ export default spec('spec', s => {
 		a.throws(() => a.assert(false), {
 			message: 'Expected value to be truthy',
 		});
+	});
+
+	s.test('afterAll failures are reported', async a => {
+		const assertions = spec('cleanup', s => {
+			s.afterAll(() => {
+				throw new Error('cleanup failed');
+			});
+		});
+		await assertions.run();
+		a.equal(assertions.toJSON().results[0]?.failureMessage, 'cleanup failed');
+	});
+
+	s.test('proxy registrations are released by their owner', async a => {
+		const commands: RunnerCommand[] = [];
+		Object.assign(globalThis, {
+			__cxlRunner: async (command: RunnerCommand) => {
+				commands.push(command);
+				return { success: true, failureMessage: 'Proxy' };
+			},
+		});
+		try {
+			const assertions = spec('proxy', s => {
+				s.test('owner', async a => {
+					await a.proxy('/static', 'http://127.0.0.1:8122');
+					await a.proxy('/api', {
+						target: 'http://127.0.0.1:8123',
+						command: 'node',
+						args: ['server.js'],
+					});
+				});
+			});
+			await assertions.run();
+		} finally {
+			Reflect.deleteProperty(globalThis, '__cxlRunner');
+		}
+
+		a.equal(commands[0]?.type, 'proxy');
+		a.equal(commands[1]?.type, 'proxyService');
+		a.equal(commands[2]?.type, 'proxyRelease');
+		a.equal(commands[3]?.type, 'proxyRelease');
+		if (
+			commands[0]?.type === 'proxy' &&
+			commands[1]?.type === 'proxyService' &&
+			commands[2]?.type === 'proxyRelease' &&
+			commands[3]?.type === 'proxyRelease'
+		)
+			a.equalValues(
+				[commands[0].registrationId, commands[1].registrationId],
+				[commands[2].registrationId, commands[3].registrationId],
+			);
 	});
 
 	s.test('spyFn preserves method parameters', a => {

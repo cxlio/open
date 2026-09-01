@@ -1,5 +1,6 @@
 import { Browser, Page, HTTPRequest, CDPSession } from 'puppeteer';
 import * as puppeteer from 'puppeteer';
+import { spawn, type ChildProcess } from 'child_process';
 import { readFile, writeFile, mkdir, mkdtemp, rm } from 'fs/promises';
 import { basename, resolve, relative, join, extname } from 'path';
 import { cpus, tmpdir } from 'os';
@@ -49,6 +50,226 @@ interface HTMLElement {
 	style: { zIndex: string };
 	getRootNode(): HTMLElement | null;
 	blur(): void;
+}
+
+type ProxyCommand = Extract<
+	RunnerCommand,
+	{ type: 'proxy' | 'proxyService' }
+>;
+
+interface ProxyRegistration {
+	registrationId: number;
+	ownerId: number;
+	route: string;
+	target: string;
+	active: boolean;
+	child?: ChildProcess;
+	command?: string;
+	args?: readonly string[];
+	stdout: string;
+	stderr: string;
+	stopping: boolean;
+	failureReason?: string;
+}
+
+const proxyOutputLimit = 64 * 1024;
+const proxyShutdownTimeout = 1000;
+
+function appendProxyOutput(output: string, data: Buffer) {
+	return `${output}${data.toString()}`.slice(-proxyOutputLimit);
+}
+
+function waitForExit(child: ChildProcess, timeout: number) {
+	if (child.exitCode !== null || child.signalCode !== null)
+		return Promise.resolve(true);
+	return new Promise<boolean>(resolve => {
+		const onExit = () => {
+			clearTimeout(timeoutId);
+			resolve(true);
+		};
+		const timeoutId = setTimeout(() => {
+			child.off('exit', onExit);
+			resolve(false);
+		}, timeout);
+		child.once('exit', onExit);
+	});
+}
+
+function proxyFailure(registration: ProxyRegistration, reason: string) {
+	const command = registration.command
+		? `\ncommand: ${JSON.stringify([
+				registration.command,
+				...(registration.args ?? []),
+			])}`
+		: '';
+	const stdout = registration.stdout
+		? `\nstdout:\n${registration.stdout}`
+		: '';
+	const stderr = registration.stderr
+		? `\nstderr:\n${registration.stderr}`
+		: '';
+	return `${reason}${command}${stdout}${stderr}`;
+}
+
+export class ProxyManager {
+	private registrations = new Map<number, ProxyRegistration>();
+	private routes = new Map<string, ProxyRegistration>();
+
+	constructor(private log: (message: string) => void) {}
+
+	async register(command: ProxyCommand): Promise<Result> {
+		const existing = this.routes.get(command.route);
+		if (existing)
+			return {
+				success: false,
+				failureMessage: `Proxy route "${command.route}" is already owned by test ${existing.ownerId}.`,
+			};
+
+		const registration: ProxyRegistration = {
+			registrationId: command.registrationId,
+			ownerId: command.ownerId,
+			route: command.route,
+			target:
+				command.type === 'proxyService'
+					? command.server.target
+					: command.target,
+			active: false,
+			stdout: '',
+			stderr: '',
+			stopping: false,
+		};
+		this.registrations.set(command.registrationId, registration);
+		this.routes.set(command.route, registration);
+
+		if (command.type === 'proxyService') {
+			registration.command = command.server.command;
+			registration.args = command.server.args;
+			try {
+				await this.spawn(registration);
+			} catch (error) {
+				this.delete(registration);
+				await this.stop(registration);
+				return {
+					success: false,
+					failureMessage: proxyFailure(
+						registration,
+						`Could not start proxy service: ${String(error)}`,
+					),
+				};
+			}
+		}
+
+		registration.active = true;
+		return { success: true, failureMessage: 'Proxy' };
+	}
+
+	async release(registrationId: number): Promise<Result> {
+		const registration = this.registrations.get(registrationId);
+		if (!registration) return { success: true, failureMessage: 'Proxy' };
+		this.delete(registration);
+		const failureReason = registration.failureReason;
+		try {
+			await this.stop(registration);
+		} catch (error) {
+			return {
+				success: false,
+				failureMessage: proxyFailure(
+					registration,
+					`Could not stop proxy service: ${String(error)}`,
+				),
+			};
+		}
+		return failureReason
+			? {
+					success: false,
+					failureMessage: proxyFailure(registration, failureReason),
+				}
+			: { success: true, failureMessage: 'Proxy' };
+	}
+
+	find(pathname: string): [string, string] | undefined {
+		let result: [string, string] | undefined;
+		for (const [route, registration] of this.routes) {
+			if (
+				registration.active &&
+				(pathname === route ||
+					pathname.startsWith(
+						route.endsWith('/') ? route : `${route}/`,
+					)) &&
+				(!result || route.length > result[0].length)
+			)
+				result = [route, registration.target];
+		}
+		return result;
+	}
+
+	async close() {
+		const results = await Promise.all(
+			[...this.registrations.values()].map(registration =>
+				this.release(registration.registrationId),
+			),
+		);
+		for (const result of results) {
+			if (!result.success) this.log(result.failureMessage);
+		}
+	}
+
+	private async spawn(registration: ProxyRegistration) {
+		const child = spawn(registration.command ?? '', [
+			...(registration.args ?? []),
+		], {
+			stdio: ['ignore', 'pipe', 'pipe'],
+		});
+		registration.child = child;
+		child.stdout.on('data', (data: Buffer) => {
+			registration.stdout = appendProxyOutput(registration.stdout, data);
+		});
+		child.stderr.on('data', (data: Buffer) => {
+			registration.stderr = appendProxyOutput(registration.stderr, data);
+		});
+		child.on('exit', (code, signal) => {
+			if (!registration.stopping)
+				registration.failureReason = `Proxy service exited unexpectedly (${signal ? `signal ${signal}` : `code ${code}`}).`;
+		});
+		child.on('error', error => {
+			if (!registration.stopping)
+				registration.failureReason = `Proxy service failed: ${String(error)}`;
+		});
+		await new Promise<void>((resolve, reject) => {
+			const onSpawn = () => {
+				child.off('error', onError);
+				resolve();
+			};
+			const onError = (error: Error) => {
+				child.off('spawn', onSpawn);
+				reject(error);
+			};
+			child.once('spawn', onSpawn);
+			child.once('error', onError);
+		});
+	}
+
+	private delete(registration: ProxyRegistration) {
+		this.registrations.delete(registration.registrationId);
+		if (this.routes.get(registration.route) === registration)
+			this.routes.delete(registration.route);
+	}
+
+	private async stop(registration: ProxyRegistration) {
+		const child = registration.child;
+		if (
+			!child?.pid ||
+			child.exitCode !== null ||
+			child.signalCode !== null
+		)
+			return;
+		registration.stopping = true;
+		child.kill('SIGTERM');
+		if (await waitForExit(child, proxyShutdownTimeout)) return;
+		child.kill('SIGKILL');
+		if (!(await waitForExit(child, proxyShutdownTimeout)))
+			throw new Error(`Process ${child.pid} did not exit.`);
+	}
 }
 
 async function startCoverage(page: Page) {
@@ -126,7 +347,8 @@ async function createPage(
 	browser: Browser,
 	concurrency: number,
 ) {
-	const proxies = new Map<string, string>();
+	const proxies = new ProxyManager(message => app.log(message));
+	let page: Page;
 	const element = (selector: string) =>
 		page.$(selector).then(element => {
 			if (!element)
@@ -195,9 +417,10 @@ async function createPage(
 				});
 		} else if (type === 'testElement') {
 			return { success: true, failureMessage: 'testElement supported' };
-		} else if (type === 'proxy') {
-			proxies.set(cmd.route, cmd.target);
-			return { success: true, failureMessage: 'Proxy' };
+		} else if (type === 'proxy' || type === 'proxyService') {
+			return proxies.register(cmd);
+		} else if (type === 'proxyRelease') {
+			return proxies.release(cmd.registrationId);
 		} else if (type === 'concurrency') {
 			return {
 				success: true,
@@ -212,49 +435,54 @@ async function createPage(
 		};
 	}
 
-	const pageError: Result[] = [];
-	const page = await openPage(browser);
-	const coverageSession = app.ignoreCoverage
-		? undefined
-		: await startCoverage(page);
-	const entryFile = app.vfsRoot
-		? `./${relative(app.vfsRoot, app.entryFile)}`
-		: app.entryFile;
+	try {
+		const pageError: Result[] = [];
+		page = await openPage(browser);
+		const coverageSession = app.ignoreCoverage
+			? undefined
+			: await startCoverage(page);
+		const entryFile = app.vfsRoot
+			? `./${relative(app.vfsRoot, app.entryFile)}`
+			: app.entryFile;
 
-	page.on('console', msg => {
-		if (app.verbose) handleConsole(msg, app).catch(e => console.error(e));
-	});
-	page.on('pageerror', msg => {
-		app.log(msg);
-		pageError.push({ success: false, failureMessage: String(msg) });
-	});
-	page.on('requestfailed', req => {
-		app.log(
-			`requestfailed: ${req.method()} ${req.url()} ${
-				req.failure()?.errorText
-			}`,
-		);
-	});
+		page.on('console', msg => {
+			if (app.verbose)
+				handleConsole(msg, app).catch(e => console.error(e));
+		});
+		page.on('pageerror', msg => {
+			app.log(msg);
+			pageError.push({ success: false, failureMessage: String(msg) });
+		});
+		page.on('requestfailed', req => {
+			app.log(
+				`requestfailed: ${req.method()} ${req.url()} ${
+					req.failure()?.errorText
+				}`,
+			);
+		});
 
-	await page.exposeFunction('__cxlRunner', cxlRunner);
-	if (app.browserUrl) await goto(app, page, app.browserUrl);
+		await page.exposeFunction('__cxlRunner', cxlRunner);
+		if (app.browserUrl) await goto(app, page, app.browserUrl);
 
-	// Prevent unexpected focus behavior
-	await page.bringToFront();
+		// Prevent unexpected focus behavior
+		await page.bringToFront();
 
-	const suite = await mjsRunner(page, app, entryFile, proxies);
-	if (pageError.length) suite.results.push(...pageError);
+		const suite = await mjsRunner(page, app, entryFile, proxies);
+		if (pageError.length) suite.results.push(...pageError);
 
-	const coverage = app.ignoreCoverage
-		? undefined
-		: await generateCoverage(coverageSession, app);
-	return { suite, coverage };
+		const coverage = app.ignoreCoverage
+			? undefined
+			: await generateCoverage(coverageSession, app);
+		return { suite, coverage };
+	} finally {
+		await proxies.close();
+	}
 }
 
 function virtualFileServer(
 	page: Page,
 	app: SpecRunner,
-	proxies: Map<string, string>,
+	proxies: ProxyManager,
 ) {
 	const cwd = app.vfsRoot ? resolve(app.vfsRoot) : process.cwd();
 
@@ -272,20 +500,6 @@ function virtualFileServer(
 			console.log(e);
 		}
 		return path;
-	}
-
-	function findProxy(pathname: string) {
-		let result: [string, string] | undefined;
-		for (const [route, target] of proxies) {
-			if (
-				pathname === route ||
-				pathname.startsWith(route.endsWith('/') ? route : `${route}/`)
-			) {
-				if (!result || route.length > result[0].length)
-					result = [route, target];
-			}
-		}
-		return result;
 	}
 
 	async function proxyRequest(
@@ -330,7 +544,7 @@ function virtualFileServer(
 		try {
 			const url = new URL(req.url());
 			if (url.hostname === 'cxl-tester') {
-				const proxy = findProxy(url.pathname);
+				const proxy = proxies.find(url.pathname);
 				if (proxy)
 					return proxyRequest(req, url, proxy[0], proxy[1]);
 
@@ -386,7 +600,7 @@ async function mjsRunner(
 	page: Page,
 	app: SpecRunner,
 	entry: string,
-	proxies: Map<string, string>,
+	proxies: ProxyManager,
 ) {
 	await page.setRequestInterception(true);
 

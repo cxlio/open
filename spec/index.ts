@@ -82,6 +82,18 @@ export type RunnerAction =
 			target: string | Element;
 	  };
 
+export interface ProxyServerInit {
+	target: string;
+	command: string;
+	args?: readonly string[];
+}
+
+interface ProxyRegistrationCommand {
+	route: string;
+	ownerId: number;
+	registrationId: number;
+}
+
 export type RunnerCommand =
 	| FigureData
 	| {
@@ -101,11 +113,12 @@ export type RunnerCommand =
 	| {
 			type: 'testElement';
 	  }
-	| {
-			type: 'proxy';
-			route: string;
-			target: string;
-	  }
+	| (ProxyRegistrationCommand & { type: 'proxy'; target: string })
+	| (ProxyRegistrationCommand & {
+			type: 'proxyService';
+			server: ProxyServerInit;
+	  })
+	| { type: 'proxyRelease'; registrationId: number }
 	| { type: 'concurrency' }
 	| { type: 'run'; suites: Test[]; baselinePath?: string };
 
@@ -134,6 +147,7 @@ interface TestConfig {
 let lastTestId = 1;
 let testQueue: Promise<unknown> = Promise.resolve();
 let actionId = 0;
+let proxyRegistrationId = 0;
 
 function actionElement(
 	test: { readonly id: number; readonly dom: Element },
@@ -835,8 +849,28 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 		});
 	};
 
-	proxy = (route: string, target: string) => {
-		return __cxlRunner({ type: 'proxy', route, target });
+	proxy = (route: string, target: string | ProxyServerInit) => {
+		const registrationId = proxyRegistrationId++;
+		this.afterAll(async () => {
+			const result = await __cxlRunner({
+				type: 'proxyRelease',
+				registrationId,
+			});
+			if (!result.success) throw new Error(result.failureMessage);
+		});
+		const registration = {
+			route,
+			ownerId: this.id,
+			registrationId,
+		};
+		const command: RunnerCommand =
+			typeof target === 'string'
+				? { ...registration, type: 'proxy', target }
+				: { ...registration, type: 'proxyService', server: target };
+		return __cxlRunner(command).then(result => {
+			if (!result.success) throw new Error(result.failureMessage);
+			return result;
+		});
 	};
 
 	hover = (element?: string | Element) => {
@@ -1130,10 +1164,10 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 			this.pushError(typeof e === 'object' && e !== null ? e : String(e));
 			console.error(String(e));
 		} finally {
-			if (syncCompleteNeeded) await this.emit('syncComplete');
+			if (syncCompleteNeeded) await this.emitResult('syncComplete');
 			this.domContainer?.parentNode?.removeChild(this.domContainer);
 			this.domContainer = undefined;
-			await this.emit('afterAll');
+			await this.emitResult('afterAll');
 			this.runTime = performance.now() - start;
 		}
 
@@ -1158,6 +1192,15 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 		const ev: TestEvent = { type, promises: [] };
 		this.events.next(ev);
 		await Promise.all(ev.promises);
+	}
+
+	private async emitResult(type: EventType) {
+		try {
+			await this.emit(type);
+		} catch (e) {
+			this.pushError(typeof e === 'object' && e !== null ? e : String(e));
+			console.error(String(e));
+		}
 	}
 
 	private shouldSkip(grep?: RegExp, targetPath?: string) {

@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-import { spawn, execSync } from 'child_process';
-
 import {
 	program,
 	parseArgv,
@@ -71,10 +69,6 @@ const parameters = {
 		type: 'string',
 		help: 'Root directory to serve via the virtual file server.',
 	},
-	startServer: {
-		type: 'string',
-		help: 'Command to start an external server while tests run (e.g. "npm run dev").',
-	},
 	reportPath: {
 		type: 'string',
 		help: 'Path to write the JSON test report (default: "test-report.json").',
@@ -99,15 +93,6 @@ const parameters = {
 	},
 } as const;
 
-function startServer(cmd: string) {
-	const [bin, ...args] = cmd.split(' ');
-	if (!bin) return;
-	const proc = spawn(bin, args);
-	proc.stdout.on('data', (data: Buffer) => console.log(data.toString()));
-	proc.stderr.on('data', (data: Buffer) => console.error(data.toString()));
-	return proc;
-}
-
 const start = program({}, async ({ log }) => {
 	const args = parseArgv(parameters);
 	if (
@@ -131,22 +116,7 @@ const start = program({}, async ({ log }) => {
 		grep: parseGrep(grepPattern),
 	};
 
-	const server = config.startServer && startServer(config.startServer);
-	if (server) {
-		log(`"${args.startServer}" started. PID: ${server.pid}`);
-	}
-
 	const report = await run(config);
-
-	try {
-		if (server && !server.killed) {
-			log(`Attempting to kill ${server.pid} "${args.startServer}"`);
-			execSync(`kill -9 ${server.pid}`);
-			server.kill();
-		}
-	} catch {
-		log(`Could not kill "${args.startServer}"`);
-	}
 
 	printReportV2(report, {
 		verbose: !!config.verbose,

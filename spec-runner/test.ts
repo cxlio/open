@@ -1,6 +1,6 @@
 import { spec } from '../spec/index.js';
 import type { BenchmarkData, JsonResult } from '../spec/index.js';
-import browserRunner from './runner-puppeteer.js';
+import browserRunner, { ProxyManager } from './runner-puppeteer.js';
 import { type Coverage, generateReport } from './report.js';
 import { processBenchmarks } from './benchmark.js';
 import { run } from './runner.js';
@@ -10,8 +10,19 @@ import {
 } from './specification.js';
 import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
 import { execFile } from 'child_process';
+import { createServer } from 'http';
 import { tmpdir } from 'os';
 import { join } from 'path';
+
+function assertPortAvailable(port: number) {
+	const server = createServer();
+	return new Promise<void>((resolve, reject) => {
+		server.once('error', reject);
+		server.listen(port, '127.0.0.1', () => {
+			server.close(error => (error ? reject(error) : resolve()));
+		});
+	});
+}
 
 function runCli(args: string[]) {
 	return new Promise<string>((resolve, reject) => {
@@ -327,6 +338,118 @@ export default spec('failure fixture', s => {
 
 	s.test('browser-runner', a => {
 		a.ok(browserRunner);
+	});
+
+	s.test('proxy manager', it => {
+		it.should('register and release routes', async a => {
+			const manager = new ProxyManager(() => undefined);
+			const result = await manager.register({
+				type: 'proxy',
+				route: '/api',
+				target: 'http://127.0.0.1:8123',
+				ownerId: 1,
+				registrationId: 1,
+			});
+			a.equal(result.success, true);
+			a.equalValues(manager.find('/api/clang'), [
+				'/api',
+				'http://127.0.0.1:8123',
+			]);
+			await manager.register({
+				type: 'proxy',
+				route: '/api/clang',
+				target: 'http://127.0.0.1:8124',
+				ownerId: 1,
+				registrationId: 2,
+			});
+			a.equalValues(manager.find('/api/clang/parse'), [
+				'/api/clang',
+				'http://127.0.0.1:8124',
+			]);
+			await manager.release(1);
+			a.equalValues(manager.find('/api/clang'), [
+				'/api/clang',
+				'http://127.0.0.1:8124',
+			]);
+			await manager.release(2);
+			a.equal(manager.find('/api/clang'), undefined);
+		});
+
+		it.should('start and stop managed services', async a => {
+			const manager = new ProxyManager(() => undefined);
+			const result = await manager.register({
+				type: 'proxyService',
+				route: '/api',
+				server: {
+					target: 'http://127.0.0.1:8123',
+					command: process.execPath,
+					args: ['--eval', 'setInterval(() => undefined, 1000)'],
+				},
+				ownerId: 1,
+				registrationId: 1,
+			});
+			a.equal(result.success, true);
+			a.equalValues(manager.find('/api/clang'), [
+				'/api',
+				'http://127.0.0.1:8123',
+			]);
+			a.equal((await manager.release(1)).success, true);
+			a.equal(manager.find('/api/clang'), undefined);
+		});
+
+		it.should('report spawn failures', async a => {
+			const manager = new ProxyManager(() => undefined);
+			const command = join(tmpdir(), 'missing-cxl-proxy-command');
+			const result = await manager.register({
+				type: 'proxyService',
+				route: '/api',
+				server: {
+					target: 'http://127.0.0.1:8123',
+					command,
+				},
+				ownerId: 1,
+				registrationId: 1,
+			});
+			a.equal(result.success, false);
+			a.ok(result.failureMessage.includes(command));
+			a.equal(manager.find('/api'), undefined);
+		});
+	});
+
+	s.test('managed proxy browser execution', async a => {
+		a.setTimeout(60000);
+		const report = await run({
+			node: false,
+			mjs: true,
+			entryFile: './test-proxy-fixture.js',
+			vfsRoot: '../',
+			ignoreCoverage: true,
+			updateBaselines: false,
+			reportPath: 'proxy-report.json',
+			sources: new Map(),
+			log: console.log.bind(console),
+		});
+		a.equal(report.success, true, JSON.stringify(report));
+		await assertPortAvailable(43123);
+	});
+
+	s.test('managed proxy process failures include output', async a => {
+		a.setTimeout(60000);
+		const report = await run({
+			node: false,
+			mjs: true,
+			entryFile: './test-proxy-failure-fixture.js',
+			vfsRoot: '../',
+			ignoreCoverage: true,
+			updateBaselines: false,
+			reportPath: 'proxy-failure-report.json',
+			sources: new Map(),
+			log: console.log.bind(console),
+		});
+		const output = JSON.stringify(report);
+		a.equal(report.success, false);
+		a.ok(output.includes('service stdout'));
+		a.ok(output.includes('service stderr'));
 	});
 
 	s.test('browser binary static-file execution', async a => {

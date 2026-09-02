@@ -1,11 +1,23 @@
 import { resolve, dirname } from 'path';
 import * as inspector from 'inspector';
 
-import type { Test, JsonResult } from '../spec/index.js';
+import type {
+	Test,
+	JsonResult,
+	Result,
+	RunnerCommand,
+} from '../spec/index.js';
 import type { SpecRunner } from './index.js';
 
 import { generateReport } from './report.js';
 import { writeSpecificationDocument } from './specification-file.js';
+import { ProxyManager } from './runner-puppeteer.js';
+
+type RunnerBridge = (command: RunnerCommand) => Promise<Result> | Result;
+
+declare global {
+	var __cxlRunner: RunnerBridge | undefined;
+}
 
 function post(
 	session: inspector.Session,
@@ -47,10 +59,23 @@ async function recordCoverage(
 }
 
 export default async function runNode(app: SpecRunner) {
+	const proxies = new ProxyManager(message => app.log(message));
+
 	async function runSuite() {
 		const stdout = process.stdout.write;
 		const stderr = process.stderr.write;
+		const previousRunner = globalThis.__cxlRunner;
 		const ignoreOutput = () => true;
+		globalThis.__cxlRunner = command => {
+			if (command.type === 'proxy' || command.type === 'proxyService')
+				return proxies.register(command);
+			if (command.type === 'proxyRelease')
+				return proxies.release(command.registrationId);
+			return {
+				success: false,
+				failureMessage: `Feature not supported: ${command.type}`,
+			};
+		};
 		if (!app.verbose) {
 			process.stdout.write = ignoreOutput;
 			process.stderr.write = ignoreOutput;
@@ -62,6 +87,11 @@ export default async function runNode(app: SpecRunner) {
 		} finally {
 			process.stdout.write = stdout;
 			process.stderr.write = stderr;
+			try {
+				await proxies.close();
+			} finally {
+				globalThis.__cxlRunner = previousRunner;
+			}
 		}
 	}
 

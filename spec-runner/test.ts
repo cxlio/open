@@ -433,6 +433,45 @@ export default spec('failure fixture', s => {
 		await assertPortAvailable(43123);
 	});
 
+	s.test('managed proxy node execution', async a => {
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
+		try {
+			const fixturePath = join(dir, 'proxy-fixture.mjs');
+			const specUrl = new URL('../spec/index.js', import.meta.url).href;
+			const serverPath = join(import.meta.dirname, 'test-proxy-server.js');
+			await writeFile(
+				fixturePath,
+				`import { spec } from ${JSON.stringify(specUrl)};
+export default spec('managed proxy fixture', async s => {
+	await s.proxy('/managed', {
+		target: 'http://127.0.0.1:43123',
+		command: ${JSON.stringify(process.execPath)},
+		args: [${JSON.stringify(serverPath)}],
+	});
+	await new Promise(resolve => setTimeout(resolve, 200));
+	s.test('starts service', async a => {
+		const response = await fetch('http://127.0.0.1:43123/hello?value=1');
+		a.equal(await response.text(), 'GET /hello?value=1 ');
+	});
+});`,
+			);
+			const report = await run({
+				node: true,
+				mjs: true,
+				entryFile: fixturePath,
+				ignoreCoverage: true,
+				updateBaselines: false,
+				reportPath: join(dir, 'proxy-report.json'),
+				sources: new Map(),
+				log: console.log.bind(console),
+			});
+			a.equal(report.success, true, JSON.stringify(report));
+			await assertPortAvailable(43123);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	s.test('managed proxy process failures include output', async a => {
 		a.setTimeout(60000);
 		const report = await run({

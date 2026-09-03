@@ -13,7 +13,7 @@ function git(args: string[], cwd?: string) {
 		proc.stderr.on('data', (data: Buffer) => (output += data.toString()));
 		proc.on('error', reject);
 		proc.on('close', code => {
-			if (code !== 0) reject(output);
+			if (code !== 0) reject(new Error(output));
 			else resolve(output);
 		});
 	});

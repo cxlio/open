@@ -549,7 +549,7 @@ export function sh(cmd: string, options: SpawnOptions = {}) {
 		);
 		proc.on('error', reject);
 		proc.on('close', code => {
-			if (code !== 0) reject(output);
+			if (code !== 0) reject(new Error(output));
 			else resolve(output);
 		});
 	});

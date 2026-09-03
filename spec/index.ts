@@ -686,7 +686,7 @@ export abstract class TestApiBase<T extends TestApiBase<T>> {
 				listener.addEventListener(eventName, handler);
 				trigger(element);
 			} catch (e) {
-				error(e);
+				error(e instanceof Error ? e : new Error(String(e)));
 			}
 		});
 	};

@@ -291,7 +291,7 @@ export function loadImage(src: string) {
 		const img = new Image();
 		img.src = src;
 		img.addEventListener('load', () => resolve(img));
-		img.addEventListener('error', () => reject(img));
+		img.addEventListener('error', () => reject(new Error('Failed to load image')));
 	});
 }
 

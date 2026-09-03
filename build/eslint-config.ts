@@ -284,6 +284,8 @@ export const tsConfig: Linter.Config = {
 		'@typescript-eslint/no-non-null-assertion': 'error',
 		'@typescript-eslint/no-unnecessary-type-arguments': 'error',
 		'@typescript-eslint/no-floating-promises': 'error',
+		'prefer-promise-reject-errors': 'off',
+		'@typescript-eslint/prefer-promise-reject-errors': 'error',
 		complexity: ['error', { max: 22, variant: 'modified' }],
 		'@typescript-eslint/no-misused-promises': [
 			'error',

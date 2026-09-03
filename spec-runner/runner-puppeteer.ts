@@ -714,9 +714,9 @@ function screenshot(page: Page, domId: string, html: string) {
 				.then(
 					buffer => {
 						if (ArrayBuffer.isView(buffer)) resolve(buffer);
-						else reject(`Invalid value returned by screenshot()`);
+						else reject(new Error('Invalid value returned by screenshot()'));
 					},
-					e => reject(e),
+					e => reject(e instanceof Error ? e : new Error(String(e))),
 				);
 		});
 	});

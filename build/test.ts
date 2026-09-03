@@ -45,7 +45,7 @@ import { checkBranchClean, checkBranchUpToDate } from './git.js';
 import { requiredRootCompilerOptions } from './audit.js';
 import { bundleDeclarations } from './tsc.js';
 import { file } from './file.js';
-import { specConfig } from './eslint-config.js';
+import eslintConfig, { specConfig } from './eslint-config.js';
 import { rx } from './index.js';
 import { cachedBuild } from './cache.js';
 import * as ts from 'typescript';
@@ -59,7 +59,7 @@ async function errorMessage(fn: () => Promise<unknown>) {
 	throw new Error('Expected operation to fail');
 }
 
-async function lintSpecFixture(source: string) {
+async function lintFixture(source: string, baseConfig = specConfig) {
 	const dir = await mkdtemp(join(tmpdir(), 'cxl-build-eslint-'));
 	try {
 		const project = join(dir, 'tsconfig.json');
@@ -81,10 +81,12 @@ ${source}`,
 		);
 
 		const eslint = new ESLint({
-			baseConfig: specConfig,
+			baseConfig,
 			cwd: dir,
 			overrideConfig: {
-				languageOptions: { parserOptions: { project } },
+				languageOptions: {
+					parserOptions: { project, projectService: false },
+				},
 			},
 			overrideConfigFile: true,
 		});
@@ -154,8 +156,23 @@ function auditCommand(packageDir: string) {
 
 export default spec('build', s => {
 	s.test('eslint config', it => {
+		it.should('require Error promise rejection reasons', async a => {
+			const messages = await lintFixture(
+				`export const invalid = new Promise<void>((_, reject) => reject('failure'));
+export const valid = new Promise<void>((_, reject) => reject(new Error('failure')));`,
+				eslintConfig,
+			);
+			const rejectionMessages = messages.filter(
+				message =>
+					message.ruleId ===
+					'@typescript-eslint/prefer-promise-reject-errors',
+			);
+			a.equal(rejectionMessages.length, 1);
+			a.equal(rejectionMessages[0]?.line, 2);
+		});
+
 		it.should('ban direct returns from spec tests', async a => {
-			const messages = await lintSpecFixture(`export default spec('fixture', s => {
+			const messages = await lintFixture(`export default spec('fixture', s => {
 	s.test('direct return', a => {
 		if (!a) return;
 	});
@@ -176,7 +193,7 @@ export default spec('build', s => {
 		});
 
 		it.should('ban real timers from spec tests', async a => {
-			const messages = await lintSpecFixture(`export default spec('fixture', s => {
+			const messages = await lintFixture(`export default spec('fixture', s => {
 	s.test('real timers', () => {
 		setTimeout(() => undefined, 1);
 		function nested() {

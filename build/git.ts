@@ -1,4 +1,23 @@
 import { sh } from '../program/index.js';
+import { spawn } from 'child_process';
+
+function git(args: string[], cwd?: string) {
+	return new Promise<string>((resolve, reject) => {
+		const proc = spawn('/usr/bin/git', args, {
+			cwd,
+			shell: false,
+			stdio: ['inherit', 'pipe', 'pipe'],
+		});
+		let output = '';
+		proc.stdout.on('data', (data: Buffer) => (output += data.toString()));
+		proc.stderr.on('data', (data: Buffer) => (output += data.toString()));
+		proc.on('error', reject);
+		proc.on('close', code => {
+			if (code !== 0) reject(output);
+			else resolve(output);
+		});
+	});
+}
 
 export async function getBranch(cwd: string): Promise<string> {
 	return (await sh('git rev-parse --abbrev-ref HEAD', { cwd })).trim();
@@ -21,8 +40,8 @@ export async function checkBranchClean(_branch: string, cwd?: string) {
 export async function checkBranchUpToDate(branch: string, cwd?: string) {
 	try {
 		const [local, remote] = await Promise.all([
-			sh(`git rev-parse ${branch}`, { cwd }),
-			sh(`git ls-remote --exit-code origin refs/heads/${branch}`, { cwd }),
+			git(['rev-parse', branch], cwd),
+			git(['ls-remote', '--exit-code', 'origin', `refs/heads/${branch}`], cwd),
 		]);
 		if (local.trim() !== remote.trim().split(/\s+/)[0]) throw new Error();
 	} catch (e) {

@@ -1122,6 +1122,21 @@ void result;
 						await checkBranchClean('main', dir);
 						await checkBranchUpToDate('main', dir);
 
+						synchronized.test(
+							'treats branch names as git arguments',
+							async a => {
+								const branch = 'main;touch${IFS}injected';
+								execFileSync('git', ['branch', branch], { cwd: dir });
+								execFileSync('git', ['push', 'origin', branch], {
+									cwd: dir,
+								});
+
+								await checkBranchUpToDate(branch, dir);
+
+								a.ok(!(await readdir(dir)).includes('injected'));
+							},
+						);
+
 						synchronized.test('rejects dirty repositories', async a => {
 							await writeFile(join(dir, 'file.txt'), 'dirty');
 							a.equal(

@@ -1,9 +1,11 @@
 import { spec } from '../spec/index.js';
 import {
 	formatHelp,
+	getErrorCode,
 	parseArgv,
 	parseArgvHelp,
 	parseParameters,
+	sh,
 } from './index.js';
 
 export default spec('program', s => {
@@ -193,6 +195,19 @@ export default spec('program', s => {
 		const next = parseArgvHelp(parameters, ['--grep', 'smoke']);
 		a.equal(next.handled, false);
 		a.equal(next.args.grep, 'smoke');
+	});
+
+	s.test('sh rejects spawn errors', async a => {
+		let error: unknown;
+		try {
+			await sh('true', { cwd: '/definitely/missing/cxl-sh-regression' });
+		} catch (e) {
+			error = e;
+		}
+		a.equal(error instanceof Error, true);
+		if (error instanceof Error) {
+			a.equal(getErrorCode(error), 'ENOENT');
+		}
 	});
 
 	/*s.test('parseParametersArray', a => {

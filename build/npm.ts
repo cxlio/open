@@ -17,6 +17,7 @@ export type License =
 	| 'SEE LICENSE IN LICENSE.md';
 
 export type Dependencies = Record<string, string>;
+export type PackagePlatform = 'neutral' | 'browser' | 'node' | 'worker';
 
 export interface Package {
 	name: string;
@@ -41,6 +42,7 @@ export interface Package {
 	scripts?: Partial<Record<string, string>>;
 	exports?: Record<string, string>;
 	build?: {
+		platform?: PackagePlatform;
 		coverage?: {
 			blocks?: number;
 			functions?: number;

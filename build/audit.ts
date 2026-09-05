@@ -14,7 +14,7 @@ import { buildOutputOptions } from './builder.js';
 import { getPackageBuildOptions } from './npm.js';
 import { getProjectOutputFiles } from './tsc.js';
 
-import type { Package } from './npm.js';
+import type { Package, PackagePlatform } from './npm.js';
 
 interface LintData {
 	projectPath: string;
@@ -56,16 +56,36 @@ const TsconfigJson = 'tsconfig.json';
 const TsconfigTestJson = 'tsconfig.test.json';
 const LocalTsconfigJson = './tsconfig.json';
 const RootTsconfigJson = '../tsconfig.json';
-const rootTsconfigFiles = new Set([
-	RootTsconfigJson,
-	'../tsconfig.base.json',
-	'../tsconfig.server.json',
-	'../tsconfig.worker.json',
-]);
+const EcmaScriptTarget = 'es2025';
+const EcmaScriptLib = 'ES2025';
+const platformLibraries: Partial<Record<PackagePlatform, string[]>> = {
+	browser: ['dom', EcmaScriptTarget, 'dom.iterable'],
+	worker: [EcmaScriptTarget, 'webworker', 'webworker.asynciterable'],
+};
+
+function compilerTypes(compilerOptions?: Tsconfig['compilerOptions']) {
+	return Array.isArray(compilerOptions?.types)
+		? compilerOptions.types.filter(
+				(value): value is string => typeof value === 'string',
+			)
+		: [];
+}
+
+function platformLib(
+	platform: PackagePlatform,
+	compilerOptions?: Tsconfig['compilerOptions'],
+) {
+	const types = compilerTypes(compilerOptions);
+	return platform === 'worker' && types.some(type => type.includes('cloudflare'))
+		? undefined
+		: platformLibraries[platform];
+}
 export const requiredRootCompilerOptions = {
 	incremental: true,
 	strict: true,
+	target: EcmaScriptTarget,
 	module: 'nodenext',
+	lib: [EcmaScriptLib],
 	moduleResolution: 'nodenext',
 	verbatimModuleSyntax: true,
 	isolatedModules: true,
@@ -84,6 +104,7 @@ export const requiredRootCompilerOptions = {
 	types: [],
 } as const;
 const packageCompilerOptionOverrides = new Set([
+	'lib',
 	'types',
 	'skipLibCheck',
 	'sourceMap',
@@ -128,36 +149,102 @@ async function fixDependencies({ projectPath, rootPkg }: LintData) {
 	if (oldPackage !== newPackage) await fs.writeFile(pkgPath, newPackage);
 }
 
-async function fixTsconfig({ projectPath, name }: LintData) {
-	const tsconfigPath = path.join(projectPath, TsconfigJson);
-	let tsconfig = await readJson<Tsconfig | false>(
-		tsconfigPath,
-		false,
-	);
-	const oldTsconfig = tsconfig
-		? JSON.stringify(tsconfig, null, '\t')
-		: undefined;
-
-	if (!tsconfig) {
-		tsconfig = {
-			extends: RootTsconfigJson,
-			compilerOptions: {
-				outDir: `../dist/${name}`,
-			},
-			files: [],
-			references: [],
-		};
+function isPackagePlatform(
+	value: PackagePlatform | undefined,
+): value is PackagePlatform {
+	switch (value) {
+		case 'neutral':
+		case 'browser':
+		case 'node':
+		case 'worker':
+			return true;
+		default:
+			return false;
 	}
-	if (!rootTsconfigFiles.has(tsconfig.extends ?? ''))
-		tsconfig.extends = RootTsconfigJson;
-	tsconfig.compilerOptions ??= {};
-	tsconfig.compilerOptions.outDir = `../dist/${name}`;
-	for (const option of inheritedPackageCompilerOptions)
-		delete tsconfig.compilerOptions[option];
+}
 
-	const newTsconfig = JSON.stringify(tsconfig, null, '\t');
-	if (oldTsconfig !== newTsconfig)
-		await fs.writeFile(tsconfigPath, newTsconfig);
+function configuredPlatform(name: string, fallback: PackagePlatform) {
+	if (name === 'tsconfig.server.json') return 'node';
+	if (name === 'tsconfig.worker.json') return 'worker';
+	return fallback;
+}
+
+async function inferPackagePlatform(pkg: Package, projectPath: string) {
+	if (pkg.browser) return 'browser';
+	if (pkg.bin) return 'node';
+	if (isPackagePlatform(pkg.build?.platform)) return pkg.build.platform;
+	const tsconfig = await readJson<Tsconfig | null>(
+		path.join(projectPath, TsconfigJson),
+		null,
+	);
+	const types = compilerTypes(tsconfig?.compilerOptions);
+	const lib = tsconfig?.compilerOptions?.lib;
+	if (
+		types.some(type => type.includes('cloudflare')) ||
+		(await exists(path.join(projectPath, 'wrangler.json')))
+	)
+		return 'worker';
+	if (types.includes('node')) return 'node';
+	if (Array.isArray(lib) && lib.includes('dom')) return 'browser';
+	return 'neutral';
+}
+
+async function getTsconfigTargets({ projectPath, pkg, rootPkg }: LintData) {
+	const platform = await inferPackagePlatform(pkg, projectPath);
+	const targets = new Map<string, PackagePlatform>([[TsconfigJson, platform]]);
+	for (const name of rootPkg.build?.tsconfigs ?? []) {
+		if (await exists(path.join(projectPath, name)))
+			targets.set(name, configuredPlatform(name, platform));
+	}
+	for (const name of pkg.build?.tsconfigs ?? [])
+		targets.set(name, configuredPlatform(name, platform));
+	return targets;
+}
+
+function fixPlatformOptions(
+	compilerOptions: NonNullable<Tsconfig['compilerOptions']>,
+	platform: PackagePlatform,
+) {
+	const lib = platformLib(platform, compilerOptions);
+	if (lib) compilerOptions.lib = lib;
+	else delete compilerOptions.lib;
+
+	const types = compilerTypes(compilerOptions);
+	const nodeIndex = types.indexOf('node');
+	if (platform === 'node' && nodeIndex === -1) types.push('node');
+	if (platform !== 'node' && nodeIndex !== -1) types.splice(nodeIndex, 1);
+	if (types.length) compilerOptions.types = types;
+	else delete compilerOptions.types;
+}
+
+async function fixTsconfig(data: LintData) {
+	const { projectPath, name } = data;
+	for (const [filename, platform] of await getTsconfigTargets(data)) {
+		const tsconfigPath = path.join(projectPath, filename);
+		let tsconfig = await readJson<Tsconfig | false>(tsconfigPath, false);
+		const oldTsconfig = tsconfig
+			? JSON.stringify(tsconfig, null, '\t')
+			: undefined;
+
+		if (!tsconfig) {
+			tsconfig = {
+				extends: RootTsconfigJson,
+				compilerOptions: { outDir: `../dist/${name}` },
+				files: [],
+				references: [],
+			};
+		}
+		tsconfig.extends = RootTsconfigJson;
+		tsconfig.compilerOptions ??= {};
+		tsconfig.compilerOptions.outDir = `../dist/${name}`;
+		fixPlatformOptions(tsconfig.compilerOptions, platform);
+		for (const option of inheritedPackageCompilerOptions)
+			delete tsconfig.compilerOptions[option];
+
+		const newTsconfig = JSON.stringify(tsconfig, null, '\t');
+		if (oldTsconfig !== newTsconfig)
+			await fs.writeFile(tsconfigPath, newTsconfig);
+	}
 }
 
 async function fixTest({ projectPath, name }: LintData) {
@@ -374,6 +461,8 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 		pkg.bugs = rootPkg.bugs || BugsUrl;
 	if (!pkg.browser && pkg.devDependencies) delete pkg.devDependencies;
 	if (pkg.browser) pkg.browser = browser;
+	pkg.build ??= {};
+	pkg.build.platform = await inferPackagePlatform(pkg, projectPath);
 	if (!pkg.repository && rootPkg.repository) {
 		if (typeof rootPkg.repository === 'string')
 			rootPkg.repository = { type: 'git', url: rootPkg.repository };
@@ -458,6 +547,18 @@ function lintPackage({ pkg, name, rootPkg }: LintData) {
 			'"repository" must be an object',
 		),
 		rule(pkg.type === 'module', 'Package "type" must be "module".'),
+		rule(
+			isPackagePlatform(pkg.build?.platform),
+			'Package "build.platform" must be neutral, browser, node, or worker.',
+		),
+		rule(
+			!pkg.browser || pkg.build?.platform === 'browser',
+			'Package with "browser" must use build.platform "browser".',
+		),
+		rule(
+			!pkg.bin || pkg.build?.platform === 'node',
+			'Package with "bin" must use build.platform "node".',
+		),
 	);
 
 	return Promise.resolve({
@@ -543,32 +644,47 @@ async function lintDependencies({ name, rootPkg, pkg, projectPath }: LintData) {
 	};
 }
 
-async function lintTsconfig({ projectPath, name }: LintData) {
-	const tsconfig = await readJson<Tsconfig | null>(
-		path.join(projectPath, TsconfigJson),
-		null,
-	);
-	const rules = [
-		rule(!!tsconfig, 'tsconfig.json should be present'),
-		rule(
-			rootTsconfigFiles.has(tsconfig?.extends ?? ''),
-			'tsconfig.json should extend a root tsconfig',
-		),
-		rule(
-			!!tsconfig?.compilerOptions,
-			'tsconfig.json should have compilerOptions',
-		),
-		rule(
-			tsconfig?.compilerOptions?.outDir === `../dist/${name}`,
-			'tsconfig.json should have a valid outDir compiler option',
-		),
-		...inheritedPackageCompilerOptions.map(option =>
+async function lintTsconfig(data: LintData) {
+	const { projectPath, name } = data;
+	const rules: Rule[] = [];
+	for (const [filename, platform] of await getTsconfigTargets(data)) {
+		const tsconfig = await readJson<Tsconfig | null>(
+			path.join(projectPath, filename),
+			null,
+		);
+		const compilerOptions = tsconfig?.compilerOptions;
+		const expectedLib = platformLib(platform, compilerOptions);
+		const types = compilerTypes(compilerOptions);
+		rules.push(
+			rule(!!tsconfig, `${filename} should be present`),
 			rule(
-				!Object.hasOwn(tsconfig?.compilerOptions ?? {}, option),
-				`tsconfig.json should inherit compilerOptions.${option}`,
+				tsconfig?.extends === RootTsconfigJson,
+				`${filename} should extend ${RootTsconfigJson}`,
 			),
-		),
-	];
+			rule(
+				!!compilerOptions,
+				`${filename} should have compilerOptions`,
+			),
+			rule(
+				compilerOptions?.outDir === `../dist/${name}`,
+				`${filename} should have a valid outDir compiler option`,
+			),
+			rule(
+				JSON.stringify(compilerOptions?.lib) === JSON.stringify(expectedLib),
+				`${filename} should have valid ${platform} libraries`,
+			),
+			rule(
+				platform === 'node' ? types.includes('node') : !types.includes('node'),
+				`${filename} should have valid ${platform} types`,
+			),
+			...inheritedPackageCompilerOptions.map(option =>
+				rule(
+					!Object.hasOwn(compilerOptions ?? {}, option),
+					`${filename} should inherit compilerOptions.${option}`,
+				),
+			),
+		);
+	}
 	//const references = tsconfig?.references;
 	//const depProp = pkg.browser ? 'devDependencies' : 'dependencies';
 

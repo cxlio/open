@@ -2,9 +2,9 @@
 	"compilerOptions": {
 		"incremental": true,
 		"strict": true,
-		"target": "es2023",
+		"target": "es2025",
 		"module": "nodenext",
-		"lib": ["ES2023"],
+		"lib": ["ES2025"],
 		"sourceMap": false,
 		"libReplacement": false,
 		"moduleResolution": "nodenext",

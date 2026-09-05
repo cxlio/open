@@ -2,7 +2,7 @@
 	"extends": "../tsconfig.json",
 	"compilerOptions": {
 		"outDir": "../dist/spec-runner",
-		"lib": ["dom", "es2023"]
+		"lib": ["dom", "es2025", "dom.iterable"]
 	},
 	"files": [
 		"test-benchmark-fixture.ts",

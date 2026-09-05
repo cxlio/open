@@ -34,6 +34,8 @@ import {
 import {
 	getPackageDeclarationEntryPoints,
 	getPackageEntryPoints,
+	getPackagePlatform,
+	getPackageTestPlatform,
 } from './package.js';
 import {
 	enforceCoverageGate,
@@ -132,6 +134,7 @@ async function createAuditFixture(
 				publish: 'npm run build publish',
 				test: 'npm run build -- test',
 			},
+			build: { platform: 'neutral' },
 		}),
 	);
 	await writeFile(
@@ -344,10 +347,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 		it.should('require the root tsconfig not to extend another config', async a => {
 			const { dir, packageDir } = await createAuditFixture({
 				extends: './other.json',
-				compilerOptions: {
-					target: 'es2022',
-					...requiredRootCompilerOptions,
-				},
+				compilerOptions: requiredRootCompilerOptions,
 				files: [],
 			});
 			try {
@@ -357,7 +357,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 					await readFile(join(dir, 'tsconfig.json'), 'utf8'),
 				) as { extends?: string; compilerOptions?: { target?: string } };
 				a.equal(rootTsconfig.extends, undefined);
-				a.equal(rootTsconfig.compilerOptions?.target, 'es2022');
+				a.equal(rootTsconfig.compilerOptions?.target, 'es2025');
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}
@@ -379,7 +379,6 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 					await readFile(join(dir, 'tsconfig.json'), 'utf8'),
 				) as { compilerOptions?: Record<string, unknown> };
 				a.equalValues(rootTsconfig.compilerOptions, {
-					target: 'es2022',
 					...requiredRootCompilerOptions,
 				});
 			} finally {
@@ -420,8 +419,6 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				a.equal(tsconfig.extends, '../tsconfig.json');
 				a.equalValues(tsconfig.compilerOptions, {
 					outDir: '../dist/pkg',
-					types: ['node'],
-					lib: ['dom'],
 					skipLibCheck: false,
 					sourceMap: true,
 					libReplacement: true,
@@ -432,9 +429,13 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 			}
 		});
 
-		it.should('preserve package environment inheritance', async a => {
+		it.should('normalize package environment inheritance', async a => {
 			const { dir, packageDir } = await createAuditFixture();
 			try {
+				const packagePath = join(packageDir, 'package.json');
+				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
+				pkg.build = { platform: 'node' };
+				await writeFile(packagePath, JSON.stringify(pkg));
 				await writeFile(
 					join(packageDir, 'tsconfig.json'),
 					JSON.stringify({
@@ -447,11 +448,151 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				const tsconfig = JSON.parse(
 					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
 				) as { extends?: string; compilerOptions?: Record<string, unknown> };
-				a.equal(tsconfig.extends, '../tsconfig.server.json');
+				a.equal(tsconfig.extends, '../tsconfig.json');
 				a.equalValues(tsconfig.compilerOptions, {
 					outDir: '../dist/pkg',
 					types: ['node'],
 				});
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('require a valid package build platform', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				const packagePath = join(packageDir, 'package.json');
+				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
+				pkg.build = { platform: 'invalid' } as unknown as Package['build'];
+				await writeFile(packagePath, JSON.stringify(pkg));
+				const [command, args] = auditCommand(packageDir);
+				execFileSync(command, args);
+				const fixed = JSON.parse(
+					await readFile(packagePath, 'utf8'),
+				) as Package;
+				a.equal(fixed.build?.platform, 'neutral');
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('enforce browser tsconfig properties', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				const packagePath = join(packageDir, 'package.json');
+				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
+				pkg.browser = './index.bundle.js';
+				pkg.build = { platform: 'browser' };
+				await writeFile(packagePath, JSON.stringify(pkg));
+				const [command, args] = auditCommand(packageDir);
+				execFileSync(command, args);
+				const tsconfig = JSON.parse(
+					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
+				) as { compilerOptions?: Record<string, unknown> };
+				a.equalValues(tsconfig.compilerOptions?.lib, [
+					'dom',
+					'es2025',
+					'dom.iterable',
+				]);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('enforce node tsconfig properties', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				const packagePath = join(packageDir, 'package.json');
+				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
+				pkg.bin = './index.js';
+				pkg.build = { platform: 'node' };
+				await writeFile(packagePath, JSON.stringify(pkg));
+				const [command, args] = auditCommand(packageDir);
+				execFileSync(command, args);
+				const tsconfig = JSON.parse(
+					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
+				) as { compilerOptions?: Record<string, unknown> };
+				a.equalValues(tsconfig.compilerOptions?.types, ['node']);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('create a missing package tsconfig', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				await rm(join(packageDir, 'tsconfig.json'));
+				const [command, args] = auditCommand(packageDir);
+				execFileSync(command, args);
+				const tsconfig = JSON.parse(
+					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
+				) as {
+					extends?: string;
+					compilerOptions?: Record<string, unknown>;
+				};
+				a.equal(tsconfig.extends, '../tsconfig.json');
+				a.equal(tsconfig.compilerOptions?.outDir, '../dist/pkg');
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('create and enforce configured worker tsconfig', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				const packagePath = join(packageDir, 'package.json');
+				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
+				pkg.build = {
+					platform: 'browser',
+					tsconfigs: ['tsconfig.worker.json'],
+				};
+				pkg.browser = './index.bundle.js';
+				await writeFile(packagePath, JSON.stringify(pkg));
+				const [command, args] = auditCommand(packageDir);
+				execFileSync(command, args);
+				const tsconfig = JSON.parse(
+					await readFile(join(packageDir, 'tsconfig.worker.json'), 'utf8'),
+				) as {
+					extends?: string;
+					compilerOptions?: Record<string, unknown>;
+				};
+				a.equal(tsconfig.extends, '../tsconfig.json');
+				a.equalValues(tsconfig.compilerOptions?.lib, [
+					'es2025',
+					'webworker',
+					'webworker.asynciterable',
+				]);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('preserve Cloudflare worker types without webworker libs', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				const packagePath = join(packageDir, 'package.json');
+				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
+				pkg.build = { platform: 'worker' };
+				await writeFile(packagePath, JSON.stringify(pkg));
+				await writeFile(
+					join(packageDir, 'tsconfig.json'),
+					JSON.stringify({
+						extends: '../tsconfig.json',
+						compilerOptions: {
+							outDir: '../dist/pkg',
+							types: ['@cloudflare/workers-types'],
+						},
+					}),
+				);
+				const [command, args] = auditCommand(packageDir);
+				execFileSync(command, args);
+				const tsconfig = JSON.parse(
+					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
+				) as { compilerOptions?: Record<string, unknown> };
+				a.equalValues(tsconfig.compilerOptions?.types, [
+					'@cloudflare/workers-types',
+				]);
+				a.equal(tsconfig.compilerOptions?.lib, undefined);
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}
@@ -1012,6 +1153,40 @@ void result;
 
 		it.should('leave coverage undefined when unconfigured', a => {
 			a.equal(getPackageBuildOptions(pkg, pkg).coverage, undefined);
+		});
+
+		it.should('use the configured package platform', a => {
+			a.equal(
+				getPackagePlatform({
+					...pkg,
+					build: { platform: 'neutral' },
+				}),
+				'neutral',
+			);
+			a.equal(
+				getPackagePlatform({
+					...pkg,
+					build: { platform: 'worker' },
+				}),
+				'browser',
+			);
+		});
+
+		it.should('use the configured platform for the test runtime', a => {
+			a.equal(
+				getPackageTestPlatform({
+					...pkg,
+					build: { platform: 'browser' },
+				}),
+				'browser',
+			);
+			a.equal(
+				getPackageTestPlatform({
+					...pkg,
+					build: { platform: 'neutral' },
+				}),
+				'node',
+			);
 		});
 
 		it.should('derive declarations only for public package entries', a => {

@@ -34,5 +34,8 @@
 		"type": "git",
 		"url": "git+https://github.com/cxlio/open.git",
 		"directory": "build"
+	},
+	"build": {
+		"platform": "node"
 	}
 }

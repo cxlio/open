@@ -1,8 +1,15 @@
 {
 	"extends": "../tsconfig.json",
 	"compilerOptions": {
-		"outDir": "../dist/glob"
+		"outDir": "../dist/glob",
+		"lib": [
+			"dom",
+			"es2025",
+			"dom.iterable"
+		]
 	},
-	"files": ["index.ts"],
-	"references": [ ]
+	"files": [
+		"index.ts"
+	],
+	"references": []
 }

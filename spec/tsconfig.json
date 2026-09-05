@@ -2,7 +2,7 @@
 	"extends": "../tsconfig.json",
 	"compilerOptions": {
 		"outDir": "../dist/spec",
-		"lib": ["dom", "es2023", "dom.iterable"]
+		"lib": ["dom", "es2025", "dom.iterable"]
 	},
 	"files": ["index.ts", "a11y.ts"],
 	"references": [{ "path": "../rx" }]

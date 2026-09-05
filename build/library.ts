@@ -18,6 +18,7 @@ import {
 	getPackageEntryPoints,
 	getPackageExternal,
 	getPackagePlatform,
+	getPackageTestPlatform,
 	pkg,
 	readme,
 } from './package.js';
@@ -78,6 +79,7 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 
 	const isBrowser = !!pkgJson.browser;
 	const platform = getPackagePlatform(pkgJson);
+	const testPlatform = getPackageTestPlatform(pkgJson);
 	// "main" is used mainly by CDNs, bundlers will prefer to use the "exports" config.
 	const pkgMain = isBrowser
 		? (pkgJson.browser ?? pkgJson.exports?.['.'] ?? './index.bundle.js')
@@ -214,7 +216,7 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 				runTests({
 					appId,
 					outputDir,
-					node: !isBrowser,
+					node: testPlatform === 'node',
 					grep,
 				}),
 			],

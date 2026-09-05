@@ -66,7 +66,13 @@ export function getPackageName(specifier: string) {
 }
 
 export function getPackagePlatform(pkgJson: Package): esbuildApi.Platform {
-	return pkgJson.browser ? 'browser' : 'node';
+	const platform = pkgJson.build?.platform;
+	if (platform === 'worker') return 'browser';
+	return platform ?? (pkgJson.browser ? 'browser' : 'node');
+}
+
+export function getPackageTestPlatform(pkgJson: Package) {
+	return getPackagePlatform(pkgJson) === 'browser' ? 'browser' : 'node';
 }
 
 export function getPackageBundleEntryPoints(

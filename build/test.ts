@@ -152,8 +152,11 @@ async function createAuditFixture(
 	return { dir, packageDir };
 }
 
-function auditCommand(packageDir: string) {
-	const script = `process.chdir(${JSON.stringify(packageDir)}); await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'audit.js')).href)}).then(module => module.audit())`;
+function auditCommand(
+	packageDir: string,
+	operation: 'audit' | 'auditDependencies' = 'audit',
+) {
+	const script = `process.chdir(${JSON.stringify(packageDir)}); await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'audit.js')).href)}).then(module => module.${operation}())`;
 	return [process.execPath, ['--input-type=module', '--eval', script]] as const;
 }
 
@@ -339,6 +342,33 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 					await readFile(join(packageDir, 'package.json'), 'utf8'),
 				) as Package;
 				a.equal(Object.keys(pkg.scripts ?? {}).join(','), 'build,test');
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('separate dependency audit from pre-build audit', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				const packagePath = join(packageDir, 'package.json');
+				const pkg = JSON.parse(
+					await readFile(packagePath, 'utf8'),
+				) as Package;
+				pkg.peerDependencies = { external: '*' };
+				await writeFile(packagePath, JSON.stringify(pkg));
+
+				const [command, args] = auditCommand(packageDir);
+				execFileSync(command, args);
+
+				const outputDir = join(dir, 'dist', 'pkg');
+				await mkdir(outputDir, { recursive: true });
+				await writeFile(join(outputDir, 'index.js'), "import 'external';");
+				const [dependencyCommand, dependencyArgs] = auditCommand(
+					packageDir,
+					'auditDependencies',
+				);
+				execFileSync(dependencyCommand, dependencyArgs);
+				a.ok(true);
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}

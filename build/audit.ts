@@ -794,16 +794,15 @@ async function lintImports({ name }: LintData) {
 	};
 }
 
-const linters: Linter[] = [
+const auditLinters: Linter[] = [
 	lintPackage,
 	lintTest,
-	lintDependencies,
 	lintTsconfig,
 	lintRootTsconfig,
 	lintImports,
 ];
 
-async function verifyProject(rootPkg: Package) {
+async function verifyProject(rootPkg: Package, linters: Linter[]) {
 	const projectPath = baseDir;
 	const stat = await fs.stat(projectPath);
 	const name = path.basename(projectPath);
@@ -824,7 +823,7 @@ async function verifyProject(rootPkg: Package) {
 	return results;
 }
 
-export async function audit() {
+async function runAudit(linters: Linter[]) {
 	const { verbose } = buildOutputOptions();
 
 	function error(project: string, msg: string) {
@@ -841,7 +840,7 @@ export async function audit() {
 
 	async function validate() {
 		const rootPkg = await readJson<Package>('../package.json');
-		const results = await verifyProject(rootPkg);
+		const results = await verifyProject(rootPkg, linters);
 
 		let hasErrors = false;
 		const fixes = [];
@@ -891,4 +890,12 @@ export async function audit() {
 				console.log(`${fix.id}: fixed: ${rule.message}`);
 		}
 	}
+}
+
+export function audit() {
+	return runAudit(auditLinters);
+}
+
+export function auditDependencies() {
+	return runAudit([lintDependencies]);
 }

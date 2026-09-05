@@ -33,7 +33,7 @@ import {
 } from './tsc.js';
 import { buildDocs } from './docs.js';
 import { generateTestFile, runBenchmarks, runTests } from './spec.js';
-import { audit } from './audit.js';
+import { audit, auditDependencies } from './audit.js';
 import { readJson } from '../program/index.js';
 
 import { publishNpm, type Package } from './npm.js';
@@ -306,6 +306,7 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 			tasks: [
 				readme(),
 				eslintTsconfig(tsconfigFile),
+				fromAsync(auditDependencies).ignoreElements(),
 				...(auditedBeforeBuild ? [] : [fromAsync(audit).ignoreElements()]),
 			],
 		},

@@ -11,7 +11,10 @@
 		"test-drag-fixture.ts",
 		"test-keyboard-fixture.ts",
 		"test-proxy-fixture.ts",
-		"test-proxy-failure-fixture.ts"
+		"test-proxy-failure-fixture.ts",
+		"test-shared-worker-fixture.ts",
+		"test-shared-worker.ts",
+		"test-shared-worker-dependency.ts"
 	],
 	"references": [{ "path": "../spec" }]
 }

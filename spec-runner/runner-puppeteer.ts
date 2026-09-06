@@ -1,4 +1,12 @@
-import { Browser, Page, HTTPRequest, CDPSession } from 'puppeteer';
+import { TargetType } from 'puppeteer';
+import type {
+	Browser,
+	Page,
+	HTTPRequest,
+	CDPSession,
+	Target,
+	Protocol,
+} from 'puppeteer';
 import * as puppeteer from 'puppeteer';
 import { spawn, type ChildProcess } from 'child_process';
 import { readFile, writeFile, mkdir, mkdtemp, rm } from 'fs/promises';
@@ -479,11 +487,20 @@ async function createPage(
 	}
 }
 
-function virtualFileServer(
-	page: Page,
-	app: SpecRunner,
-	proxies: ProxyManager,
-) {
+interface VirtualRequest {
+	url: string;
+	method: string;
+	headers: Record<string, string>;
+	body?: string;
+}
+
+interface VirtualResponse {
+	status: number;
+	headers?: Record<string, string>;
+	body?: Buffer | string;
+}
+
+function virtualFileServer(app: SpecRunner, proxies: ProxyManager) {
 	const cwd = app.vfsRoot ? resolve(app.vfsRoot) : process.cwd();
 
 	if (app.verbose && app.vfsRoot)
@@ -503,7 +520,7 @@ function virtualFileServer(
 	}
 
 	async function proxyRequest(
-		req: HTTPRequest,
+		req: VirtualRequest,
 		url: URL,
 		route: string,
 		target: string,
@@ -518,78 +535,174 @@ function virtualFileServer(
 			: targetUrl.pathname;
 		targetUrl.search = url.search;
 
-		const headers = { ...req.headers() };
+		const headers = { ...req.headers };
 		delete headers.host;
 		delete headers.origin;
 		delete headers['content-length'];
 
 		const response = await fetch(targetUrl, {
-			method: req.method(),
+			method: req.method,
 			headers,
 			body:
-				req.method() === 'GET' || req.method() === 'HEAD'
+				req.method === 'GET' || req.method === 'HEAD'
 					? undefined
-					: await req.fetchPostData(),
+					: req.body,
 			redirect: 'manual',
 		});
 
-		await req.respond({
+		return {
 			status: response.status,
 			headers: Object.fromEntries(response.headers.entries()),
 			body: Buffer.from(await response.arrayBuffer()),
-		});
+		};
 	}
 
+	return async (req: VirtualRequest): Promise<VirtualResponse | undefined> => {
+		const url = new URL(req.url);
+		if (url.hostname !== 'cxl-tester') return;
+
+		const proxy = proxies.find(url.pathname);
+		if (proxy) return proxyRequest(req, url, proxy[0], proxy[1]);
+
+		if (req.method !== 'GET') return;
+
+		if (url.pathname === '/' || url.pathname === '/favicon.ico')
+			return { status: 200, body: '' };
+
+		const pathname = findRequestPath(url.pathname);
+		if (pathname !== url.pathname)
+			return {
+				status: 301,
+				headers: { location: '/' + pathname },
+			};
+
+		const body = await readFile(join(cwd, pathname));
+		const ext = extname(pathname).toLowerCase();
+		if (ext === '.js' && !app.sources.has(url.href))
+			app.sources.set(url.href, {
+				path: pathname,
+				source: body.toString('utf8'),
+			});
+
+		return {
+			status: 200,
+			headers: {
+				'content-type': contentTypes[ext] ?? 'application/octet-stream',
+			},
+			body,
+		};
+	};
+}
+
+function interceptPage(
+	page: Page,
+	app: SpecRunner,
+	server: ReturnType<typeof virtualFileServer>,
+) {
 	async function onRequest(req: HTTPRequest) {
 		try {
-			const url = new URL(req.url());
-			if (url.hostname === 'cxl-tester') {
-				const proxy = proxies.find(url.pathname);
-				if (proxy)
-					return proxyRequest(req, url, proxy[0], proxy[1]);
-
-				if (req.method() !== 'GET') return req.continue();
-
-				if (url.pathname === '/' || url.pathname === '/favicon.ico')
-					return req.respond({ status: 200, body: '' });
-
-				const pathname = findRequestPath(url.pathname);
-				if (pathname !== url.pathname)
-					return req.respond({
-						status: 301,
-						headers: {
-							location: '/' + pathname,
-						},
-					});
-
-				const body = await readFile(join(cwd, pathname));
-				const ext = extname(pathname).toLowerCase();
-				if (ext === '.js' && !app.sources.has(url.href))
-					app.sources.set(url.href, {
-						path: pathname,
-						source: body.toString('utf8'),
-					});
-
-				await req.respond({
-					status: 200,
-					contentType: contentTypes[ext] ?? 'application/octet-stream',
-					body,
-				});
-			} else {
-				await req.continue();
-			}
-		} catch (e) {
-			app.log(`Error handling request ${req.method()} ${req.url()}`);
-			console.error(e);
-			await req.respond({
-				status: 500,
+			const method = req.method();
+			const response = await server({
+				url: req.url(),
+				method,
+				headers: req.headers(),
+				body:
+					method === 'GET' || method === 'HEAD'
+						? undefined
+						: await req.fetchPostData(),
 			});
+			if (response) await req.respond(response);
+			else await req.continue();
+		} catch (error) {
+			app.log(`Error handling request ${req.method()} ${req.url()}`);
+			console.error(error);
+			await req.respond({ status: 500 });
 		}
 	}
 
 	page.on('request', req => {
 		onRequest(req).catch(e => console.error(e));
 	});
+}
+
+function interceptSharedWorkers(
+	browser: Browser,
+	app: SpecRunner,
+	server: ReturnType<typeof virtualFileServer>,
+) {
+	const pending = new Set<Promise<void>>();
+
+	async function onRequest(
+		session: CDPSession,
+		event: Protocol.Fetch.RequestPausedEvent,
+	) {
+		try {
+			const response = await server({
+				url: event.request.url,
+				method: event.request.method,
+				headers: event.request.headers,
+				body:
+					event.request.method !== 'GET' &&
+					event.request.method !== 'HEAD' &&
+					event.request.postDataEntries
+					? Buffer.concat(
+							event.request.postDataEntries.map(entry =>
+								Buffer.from(entry.bytes ?? '', 'base64'),
+							),
+						).toString()
+					: undefined,
+			});
+			if (!response)
+				return session.send('Fetch.continueRequest', {
+					requestId: event.requestId,
+				});
+			await session.send('Fetch.fulfillRequest', {
+				requestId: event.requestId,
+				responseCode: response.status,
+				responseHeaders: Object.entries(response.headers ?? {}).map(
+					([name, value]) => ({ name, value }),
+				),
+				body:
+					response.body === undefined
+						? undefined
+						: Buffer.from(response.body).toString('base64'),
+			});
+		} catch (error) {
+			app.log(
+				`Error handling request ${event.request.method} ${event.request.url}`,
+			);
+			console.error(error);
+			await session.send('Fetch.fulfillRequest', {
+				requestId: event.requestId,
+				responseCode: 500,
+			});
+		}
+	}
+
+	async function attach(target: Target) {
+		const session = await target.createCDPSession();
+		session.on('Fetch.requestPaused', event => {
+			onRequest(session, event).catch(error => console.error(error));
+		});
+		await session.send('Fetch.enable', {
+			patterns: [{ urlPattern: 'https://cxl-tester/*' }],
+		});
+		await session.send('Runtime.runIfWaitingForDebugger');
+	}
+
+	function onTarget(target: Target) {
+		if (target.type() !== TargetType.SHARED_WORKER) return;
+		const promise = attach(target)
+			.catch(error => console.error(error))
+			.finally(() => pending.delete(promise));
+		pending.add(promise);
+	}
+
+	browser.on('targetcreated', onTarget);
+	return async () => {
+		browser.off('targetcreated', onTarget);
+		await Promise.all(pending);
+	};
 }
 
 function goto(_app: SpecRunner, page: Page, url: string) {
@@ -604,21 +717,28 @@ async function mjsRunner(
 ) {
 	await page.setRequestInterception(true);
 
-	virtualFileServer(page, app, proxies);
+	const server = virtualFileServer(app, proxies);
+	interceptPage(page, app, server);
+	const stopWorkerInterception = interceptSharedWorkers(
+		page.browser(),
+		app,
+		server,
+	);
 
-	await goto(app, page, 'https://cxl-tester');
+	try {
+		await goto(app, page, 'https://cxl-tester');
 
-	await page.setContent(`<base href="https://cxl-tester/${entry}">`);
+		await page.setContent(`<base href="https://cxl-tester/${entry}">`);
 
-	if (app.importmap) {
-		await page.addScriptTag({
-			type: 'importmap',
-			content: app.importmap,
-		});
-	}
+		if (app.importmap) {
+			await page.addScriptTag({
+				type: 'importmap',
+				content: app.importmap,
+			});
+		}
 
-	return page.evaluate(
-		async ({
+		return await page.evaluate(
+			async ({
 			entry,
 			grepSource,
 			grepFlags,
@@ -645,7 +765,10 @@ async function mjsRunner(
 			grepSource: app.grep?.source,
 			grepFlags: app.grep?.flags,
 		},
-	);
+		);
+	} finally {
+		await stopWorkerInterception();
+	}
 }
 
 async function generateCoverage(

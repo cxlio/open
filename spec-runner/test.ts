@@ -116,6 +116,16 @@ const environment = {
 };
 
 export default spec('tester', s => {
+	s.test('shared worker dynamic import', async a => {
+		const stdout = await runCli([
+			'./test-shared-worker-fixture.js',
+			'--ignoreCoverage',
+			'--vfsRoot',
+			'..',
+		]);
+		a.ok(stdout.includes('tests: passed (2)'), stdout);
+	});
+
 	s.test('browser console output', async a => {
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
 		try {

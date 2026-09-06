@@ -100,29 +100,99 @@ export function generateEsmTestFile(
 }
 
 function generateImportMap(
-	rootPkg: Package & { importmap?: Record<string, string> },
+	rootPkg: Package,
 	pkgJson: Package,
+	importMapRoot: string,
 ) {
 	const map = getDependencies(rootPkg, pkgJson);
 	for (const key in map) {
-		map[`${key}/`] = `/${key}/`;
+		map[`${key}/`] = formatImportMapPrefix(
+			importMapRoot,
+			resolve('../node_modules', key),
+			true,
+		);
 	}
 
+	Object.assign(map, generateTsconfigImportMap(importMapRoot, true));
 	if (rootPkg.importmap) Object.assign(map, rootPkg.importmap);
 	return JSON.stringify({ imports: map });
 }
 
+function formatImportMapPrefix(
+	importMapRoot: string,
+	target: string,
+	rooted: boolean,
+) {
+	const path = relative(importMapRoot, target).replace(/\\/g, '/');
+	if (rooted) {
+		if (path === '..' || path.startsWith('../')) return '';
+		return `/${path}/`;
+	}
+	return `${path.startsWith('.') ? path : `./${path}`}/`;
+}
+
+function getPathsBasePath(options: object) {
+	if ('baseUrl' in options && typeof options.baseUrl === 'string')
+		return options.baseUrl;
+	if ('pathsBasePath' in options && typeof options.pathsBasePath === 'string')
+		return options.pathsBasePath;
+}
+
+function generateTsconfigImportMap(importMapRoot: string, rooted: boolean) {
+	const map: Record<string, string> = {};
+	if (!existsSync('tsconfig.json')) return map;
+	const { options } = parseTsConfig('tsconfig.json');
+	const basePath = getPathsBasePath(options) ?? process.cwd();
+	const paths = options.paths;
+	for (const [key, targets] of Object.entries(paths ?? {})) {
+		if (key.indexOf('*') !== key.length - 1 || !key.endsWith('/*'))
+			continue;
+		if (targets.length !== 1) continue;
+		const target = targets[0]?.replace(/\\/g, '/');
+		if (
+			!target?.endsWith('/*') ||
+			target.indexOf('*') !== target.length - 1
+		)
+			continue;
+		const targetDir = resolve(basePath, target.slice(0, -1));
+		const targetParts = targetDir.replace(/\\/g, '/').split('/');
+		const nodeModulesIndex = targetParts.lastIndexOf('node_modules');
+		const modulePath = targetParts.slice(nodeModulesIndex + 1);
+		if (
+			nodeModulesIndex === -1 ||
+			modulePath.length === 0 ||
+			modulePath[0] === '@types'
+		)
+			continue;
+		const prefix = formatImportMapPrefix(importMapRoot, targetDir, rooted);
+		if (prefix) map[key.slice(0, -1)] = prefix;
+	}
+	return map;
+}
+
 function generateTestImportMap(
-	rootPkg: Package & { importmap?: Record<string, string> },
+	rootPkg: Package,
 	pkgJson: Package,
+	outputDir: string,
 ) {
 	const map = getDependencies(rootPkg, pkgJson);
+	const nodeModulesDir = resolve('../node_modules');
 
 	for (const key in map) {
-		map[`${key}/`] = `../../node_modules${map[key]}/`;
-		map[key] = `../../node_modules${map[key]}/index.js`;
+		const prefix = formatImportMapPrefix(
+			outputDir,
+			resolve(nodeModulesDir, key),
+			false,
+		);
+		map[`${key}/`] = prefix;
+		map[key] = `${prefix}index.js`;
 	}
-	map['@cxl/spec'] = '../../node_modules/@cxl/spec/index.js';
+	map['@cxl/spec'] = `${formatImportMapPrefix(
+		outputDir,
+		resolve(nodeModulesDir, '@cxl/spec'),
+		false,
+	)}index.js`;
+	Object.assign(map, generateTsconfigImportMap(outputDir, false));
 	if (rootPkg.importmap) Object.assign(map, rootPkg.importmap);
 
 	return JSON.stringify({ imports: map });
@@ -141,13 +211,20 @@ export function generateTestFile({
 	testFile?: string;
 	outFile?: string;
 }) {
+	const outputDir = existsSync('tsconfig.json')
+		? parseTsConfig('tsconfig.json').options.outDir
+		: undefined;
 	return of({
 		path: outFile,
 		source: generateEsmTestFile(
 			appId,
 			pkgJson.name,
 			testFile,
-			generateTestImportMap(rootPkg, pkgJson),
+			generateTestImportMap(
+				rootPkg,
+				pkgJson,
+				resolve(outputDir ?? `../dist/${appId}`),
+			),
 		),
 	});
 }
@@ -208,6 +285,9 @@ export function runTests({
 		const pkgJson = await readJson<Package>('package.json');
 		const rootPkg = await readJson<Package>('../package.json');
 		const ignoreTestCoverage = ignoreCoverage || !!grep;
+		const importmap = node
+			? undefined
+			: generateImportMap(rootPkg, pkgJson, resolve(outputDir, '../../'));
 		const { verbose } = buildOutputOptions();
 		const expectedCoverageFiles = ignoreTestCoverage
 			? undefined
@@ -228,9 +308,7 @@ export function runTests({
 				baselinePath: `../../${appId}/spec`,
 				reportPath,
 				documentPath,
-				importmap: node
-					? undefined
-					: generateImportMap(rootPkg, pkgJson),
+				importmap,
 				sources: new Map(),
 				log: console.log.bind(console),
 			});
@@ -264,6 +342,11 @@ export function runBenchmarks({
 		const cwd = process.cwd();
 		const pkgJson = await readJson<Package>('package.json');
 		const rootPkg = await readJson<Package>('../package.json');
+		const importmap = generateImportMap(
+			rootPkg,
+			pkgJson,
+			resolve(outputDir, '../../'),
+		);
 		const { verbose } = buildOutputOptions();
 		try {
 			process.chdir(outputDir);
@@ -277,7 +360,7 @@ export function runBenchmarks({
 				updateBaselines: false,
 				baselinePath: `../../${appId}/spec`,
 				reportPath: 'benchmark-report.json',
-				importmap: generateImportMap(rootPkg, pkgJson),
+				importmap,
 				sources: new Map(),
 				log: console.log.bind(console),
 			});

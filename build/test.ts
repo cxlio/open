@@ -5,6 +5,7 @@ import {
 	readFile,
 	readdir,
 	rm,
+	symlink,
 	writeFile,
 } from 'fs/promises';
 import { tmpdir } from 'os';
@@ -1427,6 +1428,77 @@ void result;
 					.includes("new URL('./test-screenshot.js'"),
 			);
 		});
+
+		it.should('infer runtime aliases from resolved tsconfig paths', async (
+			a: TestApi,
+		) => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-importmap-'));
+			const packageDir = join(dir, 'package');
+			try {
+				await mkdir(packageDir);
+				await writeFile(
+					join(dir, 'tsconfig.base.json'),
+					JSON.stringify({
+						compilerOptions: {
+							paths: {
+								'runtime/*': [
+									'vendor/node_modules/@cxl/runtime/*',
+								],
+								'ui/*': ['node_modules/@cxl/ui/*'],
+								'ambiguous/*': [
+									'node_modules/first/*',
+									'node_modules/second/*',
+								],
+								'types/*': ['node_modules/@types/types/*'],
+								'declaration/*': ['node_modules/types/*.d.ts'],
+								'source/*': ['./source/*'],
+								exact: ['node_modules/exact/index.js'],
+							},
+						},
+					}),
+				);
+				await writeFile(
+					join(packageDir, 'tsconfig.json'),
+					JSON.stringify({ extends: '../tsconfig.base.json' }),
+				);
+				const rootPkg = {
+					...pkg,
+					importmap: { 'ui/': '/explicit/ui/' },
+				};
+				const options = { appId: 'fixture', pkgJson: pkg, rootPkg };
+				const moduleUrl = pathToFileURL(
+					join(import.meta.dirname, 'spec.js'),
+				).href;
+				const script = `const output = await import(${JSON.stringify(moduleUrl)}).then(module => module.generateTestFile(${JSON.stringify(options)}));
+if (!output) throw new Error('Missing generated test file');
+process.stdout.write(output.source);`;
+				const source = execFileSync(
+					process.execPath,
+					['--input-type=module', '--eval', script],
+					{ cwd: packageDir, encoding: 'utf8' },
+				);
+				const match = source.match(
+					/<script type="importmap">(.*?)<\/script>/s,
+				);
+				const json = match?.[1];
+				a.assert(json);
+				const { imports } = JSON.parse(json) as {
+					imports: Record<string, string>;
+				};
+				a.equal(
+					imports['runtime/'],
+					'../../vendor/node_modules/@cxl/runtime/',
+				);
+				a.equal(imports['ui/'], '/explicit/ui/');
+				a.ok(!('ambiguous/' in imports));
+				a.ok(!('types/' in imports));
+				a.ok(!('declaration/' in imports));
+				a.ok(!('source/' in imports));
+				a.ok(!('exact' in imports));
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
 	});
 
 	s.test('benchmark target', async a => {
@@ -1435,6 +1507,84 @@ void result;
 			outputDir: '../dist/missing-benchmark',
 		});
 		a.ok(true);
+	});
+
+	s.test('browser test alias module identity', async a => {
+		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-browser-alias-'));
+		const packageDir = join(rootDir, 'package');
+		const outputDir = join(packageDir, 'dist');
+		const runtimeDir = join(rootDir, 'node_modules', 'runtime');
+		const scopeDir = join(rootDir, 'node_modules', '@cxl');
+		try {
+			await mkdir(outputDir, { recursive: true });
+			await mkdir(runtimeDir, { recursive: true });
+			await mkdir(scopeDir);
+			await symlink(
+				join(import.meta.dirname, '../spec'),
+				join(scopeDir, 'spec'),
+				'dir',
+			);
+			await writeFile(
+				join(rootDir, 'package.json'),
+				JSON.stringify({
+					name: 'root',
+					devDependencies: { runtime: '1.0.0' },
+				}),
+			);
+			await writeFile(
+				join(packageDir, 'package.json'),
+				'{"name":"fixture","type":"module"}',
+			);
+			await writeFile(
+				join(packageDir, 'tsconfig.json'),
+				JSON.stringify({
+					compilerOptions: {
+						paths: {
+							'alias/*': ['../node_modules/runtime/*'],
+						},
+					},
+				}),
+			);
+			await writeFile(
+				join(runtimeDir, 'package.json'),
+				'{"name":"runtime","type":"module"}',
+			);
+			await writeFile(join(runtimeDir, 'state.js'), 'export default {};');
+			await writeFile(
+				join(runtimeDir, 'indirect.js'),
+				"import state from './state.js'; export default state;",
+			);
+			await writeFile(
+				join(outputDir, 'test.js'),
+				`import { spec } from '../../node_modules/@cxl/spec/index.js';
+import direct from 'alias/state.js';
+import indirect from 'alias/indirect.js';
+import packageState from 'runtime/state.js';
+export default spec('fixture', s => s.test('shares module identity', a => {
+	a.equal(direct, indirect);
+	a.equal(direct, packageState);
+}));
+`,
+			);
+			const options = {
+				appId: 'fixture',
+				outputDir,
+				node: false,
+				ignoreCoverage: true,
+			};
+			const script = `await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runTests(${JSON.stringify(options)}))`;
+			await new Promise<void>((resolve, reject) => {
+				execFile(
+					process.execPath,
+					['--input-type=module', '--eval', script],
+					{ cwd: packageDir },
+					error => (error ? reject(error) : resolve()),
+				);
+			});
+			a.ok(true);
+		} finally {
+			await rm(rootDir, { recursive: true, force: true });
+		}
 	});
 
 	s.test('test target report', async a => {

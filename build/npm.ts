@@ -37,6 +37,7 @@ export interface Package {
 	devDependencies?: Dependencies;
 	peerDependencies?: Dependencies;
 	bundledDependencies?: Dependencies;
+	importmap?: Record<string, string>;
 	sideEffects?: boolean;
 	type?: string;
 	scripts?: Partial<Record<string, string>>;

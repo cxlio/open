@@ -11,6 +11,9 @@
 		}
 	},
 	"coaxial": {
+		"worktree": {
+			"setup": "ln -s ../../node_modules node_modules"
+		},
 		"tasks": {
 			"publish": {
 				"additionalInstructions": "To Publish: git push, repo must be in sync with origin. Build package then npm run build publish --prefix <pkg>"

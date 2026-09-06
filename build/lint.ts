@@ -92,11 +92,14 @@ function eslintConfig(
 				ignorePatterns: [...(tsconfigFile.exclude ?? []), '*.js'],
 				errorOnUnmatchedPattern: false,
 				cwd,
-				...(configName === 'specConfig' && project
+				...(project
 					? {
 							overrideConfig: {
 								languageOptions: {
-									parserOptions: { project },
+									parserOptions: {
+										project,
+										projectService: false,
+									},
 								},
 							},
 						}

@@ -36,10 +36,20 @@ import { generateTestFile, runBenchmarks, runTests } from './spec.js';
 import { audit, auditDependencies } from './audit.js';
 import { readJson } from '../program/index.js';
 
-import { publishNpm, type Package } from './npm.js';
+import {
+	getPackageBuildOptions,
+	publishNpm,
+	type Package,
+} from './npm.js';
 import { cachedBuild } from './cache.js';
 
 const PackageCacheVersion = 1;
+
+export function getLintTsconfigs(rootPkg: Package, pkg: Package) {
+	return (getPackageBuildOptions(rootPkg, pkg).tsconfigs ?? []).filter(
+		path => pkg.build?.tsconfigs || existsSync(path),
+	);
+}
 
 async function packageFiles(dir: string): Promise<string[]> {
 	if (!existsSync(dir)) return [];
@@ -76,6 +86,11 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 	const pkgDir = join(outputDir, 'package');
 	const pkgJson = await readJson<Package>('package.json');
 	const rootPkg = await readJson<Package>('../package.json');
+	const configuredTsconfigs = getLintTsconfigs(rootPkg, pkgJson);
+	const lintTasks = () => [
+		eslintTsconfig(tsconfigFile),
+		...configuredTsconfigs.map(path => eslintTsconfig(path)),
+	];
 
 	const isBrowser = !!pkgJson.browser;
 	const platform = getPackagePlatform(pkgJson);
@@ -298,14 +313,14 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 		{
 			target: 'lint',
 			outputDir: '.',
-			tasks: [eslintTsconfig(tsconfigFile)],
+			tasks: lintTasks(),
 		},
 		{
 			target: 'package',
 			outputDir: '.',
 			tasks: [
 				readme(),
-				eslintTsconfig(tsconfigFile),
+				...lintTasks(),
 				fromAsync(auditDependencies).ignoreElements(),
 				...(auditedBeforeBuild ? [] : [fromAsync(audit).ignoreElements()]),
 			],

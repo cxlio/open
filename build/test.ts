@@ -49,6 +49,8 @@ import { requiredRootCompilerOptions } from './audit.js';
 import { bundleDeclarations } from './tsc.js';
 import { file } from './file.js';
 import eslintConfig, { specConfig } from './eslint-config.js';
+import { eslintTsconfig } from './lint.js';
+import { getLintTsconfigs } from './library.js';
 import { rx } from './index.js';
 import { cachedBuild } from './cache.js';
 import * as ts from 'typescript';
@@ -163,6 +165,54 @@ function auditCommand(
 
 export default spec('build', s => {
 	s.test('eslint config', it => {
+		it.should('lint configured runtime tsconfigs', async a => {
+			a.setTimeout(30000);
+			const rootPkg = {
+				name: '@test/root',
+				version: '1.0.0',
+				private: true,
+				bugs: '',
+				repository: '',
+			} satisfies Package;
+			const pkg = {
+				...rootPkg,
+				name: '@test/pkg',
+				build: {
+					tsconfigs: [
+						'tsconfig.worker.json',
+						'tsconfig.server.json',
+					],
+				},
+			} satisfies Package;
+
+			a.equalValues(getLintTsconfigs(rootPkg, pkg), pkg.build.tsconfigs);
+
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-eslint-project-'));
+			try {
+				const compilerOptions = {
+					module: 'nodenext',
+					moduleResolution: 'nodenext',
+					strict: true,
+				};
+				for (const target of ['worker', 'server']) {
+					const tsconfig = join(dir, `tsconfig.${target}.json`);
+					await writeFile(
+						tsconfig,
+						JSON.stringify({ compilerOptions, files: [`${target}.ts`] }),
+					);
+					await writeFile(join(dir, `${target}.ts`), 'Promise.resolve();');
+					a.equal(
+						await errorMessage(async () => {
+							await eslintTsconfig(tsconfig);
+						}),
+						'eslint errors found.',
+					);
+				}
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
 		it.should('require Error promise rejection reasons', async a => {
 			const messages = await lintFixture(
 				`export const invalid = new Promise<void>((_, reject) => reject('failure'));

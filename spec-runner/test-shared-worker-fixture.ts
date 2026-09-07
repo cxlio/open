@@ -2,7 +2,7 @@ import { spec } from '../spec/index.js';
 
 export default spec('shared worker fixture', s => {
 	s.test('dynamic import', async a => {
-		const worker = new SharedWorker('./test-shared-worker.js', {
+		const worker = new SharedWorker('./shared-worker.js', {
 			type: 'module',
 		});
 		const value = await new Promise<unknown>((resolve, reject) => {

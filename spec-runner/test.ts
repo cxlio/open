@@ -117,13 +117,43 @@ const environment = {
 
 export default spec('tester', s => {
 	s.test('shared worker dynamic import', async a => {
-		const stdout = await runCli([
-			'./test-shared-worker-fixture.js',
-			'--ignoreCoverage',
-			'--vfsRoot',
-			'..',
-		]);
-		a.ok(stdout.includes('tests: passed (2)'), stdout);
+		const files = ['shared-worker.js', 'shared-worker-dependency.js'];
+		const expectedCoverageFiles = await Promise.all(
+			files.map(async file => ({
+				url: `/spec-runner/${file}`,
+				functions: [
+					{
+						functionName: '',
+						isBlockCoverage: true,
+						ranges: [
+							{
+								startOffset: 0,
+								endOffset: (
+									await readFile(file, 'utf8')
+								).length,
+								count: 0,
+							},
+						],
+					},
+				],
+			})),
+		);
+		const report = await browserRunner({
+			entryFile: './test-shared-worker-fixture.js',
+			expectedCoverageFiles,
+			ignoreCoverage: false,
+			mjs: true,
+			node: false,
+			updateBaselines: false,
+			reportPath: 'test-report.json',
+			vfsRoot: '..',
+			sources: new Map(),
+			log: () => {},
+		});
+		a.ok(report.success);
+		a.equal(report.summary.coverage?.fileTotal, 2);
+		for (const coverage of report.coverage ?? [])
+			a.ok(coverage.blockCovered > 0, coverage.url);
 	});
 
 	s.test('browser console output', async a => {

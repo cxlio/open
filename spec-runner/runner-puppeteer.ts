@@ -281,8 +281,7 @@ export class ProxyManager {
 	}
 }
 
-async function startCoverage(page: Page) {
-	const session = await page.createCDPSession();
+async function startCoverage(session: CDPSession) {
 	await session.send('Profiler.enable');
 	await session.send('Profiler.startPreciseCoverage', {
 		callCount: true,
@@ -444,9 +443,9 @@ async function createPage(
 	try {
 		const pageError: Result[] = [];
 		page = await openPage(browser);
-		const coverageSession = app.ignoreCoverage
+		const coverageSessions: CDPSession[] | undefined = app.ignoreCoverage
 			? undefined
-			: await startCoverage(page);
+			: [await startCoverage(await page.createCDPSession())];
 		const entryFile = app.vfsRoot
 			? `./${relative(app.vfsRoot, app.entryFile)}`
 			: app.entryFile;
@@ -473,12 +472,18 @@ async function createPage(
 		// Prevent unexpected focus behavior
 		await page.bringToFront();
 
-		const suite = await mjsRunner(page, app, entryFile, proxies);
+		const suite = await mjsRunner(
+			page,
+			app,
+			entryFile,
+			proxies,
+			coverageSessions,
+		);
 		if (pageError.length) suite.results.push(...pageError);
 
 		const coverage = app.ignoreCoverage
 			? undefined
-			: await generateCoverage(coverageSession, app);
+			: await generateCoverage(coverageSessions, app);
 		return { suite, coverage };
 	} finally {
 		await proxies.close();
@@ -627,6 +632,7 @@ function interceptSharedWorkers(
 	browser: Browser,
 	app: SpecRunner,
 	server: ReturnType<typeof virtualFileServer>,
+	coverageSessions: CDPSession[] | undefined,
 ) {
 	const pending = new Set<Promise<void>>();
 
@@ -685,6 +691,9 @@ function interceptSharedWorkers(
 		await session.send('Fetch.enable', {
 			patterns: [{ urlPattern: 'https://cxl-tester/*' }],
 		});
+		if (coverageSessions) {
+			coverageSessions.push(await startCoverage(session));
+		}
 		await session.send('Runtime.runIfWaitingForDebugger');
 	}
 
@@ -712,6 +721,7 @@ async function mjsRunner(
 	app: SpecRunner,
 	entry: string,
 	proxies: ProxyManager,
+	coverageSessions: CDPSession[] | undefined,
 ) {
 	await page.setRequestInterception(true);
 
@@ -721,6 +731,7 @@ async function mjsRunner(
 		page.browser(),
 		app,
 		server,
+		coverageSessions,
 	);
 
 	try {
@@ -770,16 +781,20 @@ async function mjsRunner(
 }
 
 async function generateCoverage(
-	session: CDPSession | undefined,
+	sessions: readonly CDPSession[] | undefined,
 	app: SpecRunner,
 ): Promise<TestCoverage[]> {
-	if (!session) return [];
-	const coverage =
-		await session.send('Profiler.takePreciseCoverage');
-	await session.send('Profiler.stopPreciseCoverage');
-	await session.send('Profiler.disable');
+	if (!sessions) return [];
+	const coverage = await Promise.all(
+		sessions.map(async session => {
+			const result = await session.send('Profiler.takePreciseCoverage');
+			await session.send('Profiler.stopPreciseCoverage');
+			await session.send('Profiler.disable');
+			return result.result;
+		}),
+	);
 
-	return coverage.result.flatMap(entry => {
+	return coverage.flat().flatMap(entry => {
 		const sourceFile = app.sources.get(entry.url);
 		return sourceFile
 			? {

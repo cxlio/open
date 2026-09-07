@@ -2,7 +2,7 @@ interface SharedWorkerConnectEvent extends Event {
 	readonly ports: MessagePort[];
 }
 
-const dependency = import('./test-shared-worker-dependency.js');
+const dependency = import('./shared-worker-dependency.js');
 const scope = globalThis as typeof globalThis & {
 	onconnect: ((event: SharedWorkerConnectEvent) => void) | null;
 };

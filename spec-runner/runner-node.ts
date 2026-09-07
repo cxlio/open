@@ -12,6 +12,10 @@ import type { SpecRunner } from './index.js';
 import { generateReport } from './report.js';
 import { writeSpecificationDocument } from './specification-file.js';
 import { ProxyManager } from './runner-puppeteer.js';
+import {
+	getNodeBenchmarkEnvironment,
+	processBenchmarks,
+} from './benchmark.js';
 
 type RunnerBridge = (command: RunnerCommand) => Promise<Result> | Result;
 
@@ -102,6 +106,16 @@ export default async function runNode(app: SpecRunner) {
 		if (app.documentPath) app.onGeneratedFile?.(app.documentPath);
 	}
 
+	async function processSuite(suite: JsonResult) {
+		return processBenchmarks(
+			suite,
+			getNodeBenchmarkEnvironment(),
+			app.baselinePath,
+			!!app.updateBaselines,
+			app.onGeneratedFile,
+		);
+	}
+
 	const entryFile = app.entryFile;
 	const session = new inspector.Session();
 	const suitePath = resolve(entryFile);
@@ -120,8 +134,11 @@ export default async function runNode(app: SpecRunner) {
 
 	if (app.ignoreCoverage) {
 		const suite = await runSuite();
+		const benchmark = await processSuite(suite);
 		await writeDocument(suite);
-		return generateReport(suite);
+		const report = await generateReport(suite);
+		report.benchmark = benchmark;
+		return report;
 	} else {
 		const { result, coverage } = await recordCoverage(
 			session,
@@ -132,10 +149,13 @@ export default async function runNode(app: SpecRunner) {
 			console.log('Press any key to continue');
 			await new Promise(res => process.stdin.once('data', res));
 		}
+		const benchmark = await processSuite(result);
 		await writeDocument(result);
-		return generateReport(result, coverage, {
+		const report = await generateReport(result, coverage, {
 			entryFile: app.entryFile,
 			expectedCoverageFiles: app.expectedCoverageFiles,
 		});
+		report.benchmark = benchmark;
+		return report;
 	}
 }

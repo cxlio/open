@@ -1607,8 +1607,45 @@ process.stdout.write(output.source);`;
 		await runBenchmarks({
 			appId: 'missing-benchmark',
 			outputDir: '../dist/missing-benchmark',
+			node: true,
 		});
-		a.ok(true);
+
+		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-benchmark-'));
+		const packageDir = join(rootDir, 'package');
+		const outputDir = join(packageDir, 'dist');
+		try {
+			await mkdir(outputDir, { recursive: true });
+			await writeFile(join(rootDir, 'package.json'), '{"name":"root"}');
+			await writeFile(
+				join(packageDir, 'package.json'),
+				'{"name":"fixture","type":"module"}',
+			);
+			await writeFile(
+				join(outputDir, 'test-benchmark.js'),
+				`import { readdir } from 'fs/promises';
+import { spec } from ${JSON.stringify(pathToFileURL(join(import.meta.dirname, '../spec/index.js')).href)};
+export default spec('fixture', s => s.test('filesystem discovery', a =>
+	a.benchmark(() => readdir(import.meta.dirname), { warmup: 0, sampleTime: 1, samples: 2 })
+));
+`,
+			);
+			const options = { appId: 'fixture', outputDir, node: true };
+			const script = `await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runBenchmarks(${JSON.stringify(options)}))`;
+			await new Promise<void>((resolve, reject) => {
+				execFile(
+					process.execPath,
+					['--input-type=module', '--eval', script],
+					{ cwd: packageDir },
+					error => (error ? reject(error) : resolve()),
+				);
+			});
+			const report = JSON.parse(
+				await readFile(join(outputDir, 'benchmark-report.json'), 'utf8'),
+			) as { benchmark?: { fingerprint: { browser: string } } };
+			a.ok(report.benchmark?.fingerprint.browser.startsWith('Node/'));
+		} finally {
+			await rm(rootDir, { recursive: true, force: true });
+		}
 	});
 
 	s.test('browser test alias module identity', async a => {

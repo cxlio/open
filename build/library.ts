@@ -237,7 +237,13 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 		{
 			target: 'benchmark',
 			outputDir,
-			tasks: [runBenchmarks({ appId, outputDir })],
+			tasks: [
+				runBenchmarks({
+					appId,
+					outputDir,
+					node: testPlatform === 'node',
+				}),
+			],
 		},
 		...(hasScreenshotTests
 			? [

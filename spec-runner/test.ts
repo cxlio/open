@@ -708,6 +708,29 @@ export default spec('managed proxy fixture', async s => {
 		}
 	});
 
+	s.test('node benchmark execution', async a => {
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-benchmark-node-'));
+		try {
+			const report = await run({
+				node: true,
+				mjs: true,
+				entryFile: './test-benchmark-node-fixture.js',
+				ignoreCoverage: true,
+				updateBaselines: false,
+				baselinePath: dir,
+				reportPath: 'benchmark-report.json',
+				sources: new Map(),
+				log: console.log.bind(console),
+			});
+			a.equal(report.success, true);
+			a.equal(Object.keys(report.benchmark?.benchmarks ?? {}).length, 1);
+			a.ok(report.benchmark?.fingerprint.browser.startsWith('Node/'));
+			a.ok((await readFile(join(dir, 'benchmark.json'), 'utf8')).length > 0);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	s.test('browser drag execution', async a => {
 		a.setTimeout(60000);
 		const report = await run({

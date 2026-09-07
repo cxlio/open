@@ -11,9 +11,10 @@ import * as puppeteer from 'puppeteer';
 import { spawn, type ChildProcess } from 'child_process';
 import { readFile, writeFile, mkdir, mkdtemp, rm } from 'fs/promises';
 import { basename, resolve, relative, join, extname } from 'path';
-import { cpus, tmpdir } from 'os';
+import { tmpdir } from 'os';
 import { resolveImport } from './resolve.js';
 import {
+	createBenchmarkEnvironment,
 	hasBenchmarks,
 	processBenchmarks,
 } from './benchmark.js';
@@ -337,14 +338,11 @@ async function getBenchmarkEnvironment(
 	const session = await browser.target().createCDPSession();
 	try {
 		const { gpu } = await session.send('SystemInfo.getInfo');
-		return {
-			browser: await browser.version(),
-			platform: process.platform,
-			architecture: process.arch,
-			cpu: cpus()[0]?.model ?? '',
-			gpu: gpu.devices[0]?.deviceString ?? '',
+		return createBenchmarkEnvironment(
+			await browser.version(),
+			gpu.devices[0]?.deviceString ?? '',
 			profile,
-		};
+		);
 	} finally {
 		await session.detach();
 	}

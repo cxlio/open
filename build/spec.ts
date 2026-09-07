@@ -296,9 +296,11 @@ export function runTests({
 export function runBenchmarks({
 	appId,
 	outputDir,
+	node,
 }: {
 	appId: string;
 	outputDir: string;
+	node: boolean;
 }) {
 	return fromAsync(async () => {
 		if (!existsSync(resolve(outputDir, 'test-benchmark.js'))) return;
@@ -309,16 +311,14 @@ export function runBenchmarks({
 		const cwd = process.cwd();
 		const pkgJson = await readJson<Package>('package.json');
 		const rootPkg = await readJson<Package>('../package.json');
-		const importmap = generateImportMap(
-			rootPkg,
-			pkgJson,
-			resolve(outputDir, '../../'),
-		);
+		const importmap = node
+			? undefined
+			: generateImportMap(rootPkg, pkgJson, resolve(outputDir, '../../'));
 		const { verbose } = buildOutputOptions();
 		try {
 			process.chdir(outputDir);
 			const report = await runSpec({
-				node: false,
+				node,
 				verbose,
 				mjs: true,
 				vfsRoot: '../../',

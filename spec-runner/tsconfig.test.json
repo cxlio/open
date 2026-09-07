@@ -1,6 +1,10 @@
 {
 	"extends": "./tsconfig.json",
-	"files": ["test.ts", "test-proxy-server.ts"],
+	"files": [
+		"test.ts",
+		"test-benchmark-node-fixture.ts",
+		"test-proxy-server.ts"
+	],
 	"references": [
 		{
 			"path": "."

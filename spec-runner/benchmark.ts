@@ -1,5 +1,6 @@
 import { createHash } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
+import { cpus } from 'os';
 import { join } from 'path';
 import { getErrorCode, readJson } from '../program/index.js';
 
@@ -48,6 +49,29 @@ export interface BenchmarkReport {
 	environment: string;
 	fingerprint: BenchmarkEnvironment;
 	benchmarks: Record<string, BenchmarkResult>;
+}
+
+export function createBenchmarkEnvironment(
+	browser: string,
+	gpu: string,
+	profile: string,
+): BenchmarkEnvironment {
+	return {
+		browser,
+		platform: process.platform,
+		architecture: process.arch,
+		cpu: cpus()[0]?.model ?? '',
+		gpu,
+		profile,
+	};
+}
+
+export function getNodeBenchmarkEnvironment(): BenchmarkEnvironment {
+	return createBenchmarkEnvironment(
+		`Node/${process.version}`,
+		'',
+		process.execArgv.join(' '),
+	);
 }
 
 interface CollectedBenchmark {

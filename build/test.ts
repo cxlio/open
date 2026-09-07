@@ -156,12 +156,19 @@ async function createAuditFixture(
 	return { dir, packageDir };
 }
 
-function auditCommand(
+function runAudit(
 	packageDir: string,
 	operation: 'audit' | 'auditDependencies' = 'audit',
 ) {
 	const script = `process.chdir(${JSON.stringify(packageDir)}); await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'audit.js')).href)}).then(module => module.${operation}())`;
-	return [process.execPath, ['--input-type=module', '--eval', script]] as const;
+	return new Promise<string>((resolve, reject) => {
+		execFile(
+			process.execPath,
+			['--input-type=module', '--eval', script],
+			{ encoding: 'utf8' },
+			(error, stdout) => (error ? reject(error) : resolve(stdout)),
+		);
+	});
 }
 
 export default spec('build', s => {
@@ -375,12 +382,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 		it.should('report applied fixes in quiet mode', async a => {
 			const { dir, packageDir } = await createAuditFixture();
 			try {
-				const [command, args] = auditCommand(packageDir);
-				const output = execFileSync(
-					command,
-					args,
-					{ encoding: 'utf8' },
-				);
+				const output = await runAudit(packageDir);
 
 				a.equal(
 					output.trim(),
@@ -409,17 +411,12 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				pkg.peerDependencies = { external: '*' };
 				await writeFile(packagePath, JSON.stringify(pkg));
 
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 
 				const outputDir = join(dir, 'dist', 'pkg');
 				await mkdir(outputDir, { recursive: true });
 				await writeFile(join(outputDir, 'index.js'), "import 'external';");
-				const [dependencyCommand, dependencyArgs] = auditCommand(
-					packageDir,
-					'auditDependencies',
-				);
-				execFileSync(dependencyCommand, dependencyArgs);
+				await runAudit(packageDir, 'auditDependencies');
 				a.ok(true);
 			} finally {
 				await rm(dir, { recursive: true, force: true });
@@ -433,8 +430,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				files: [],
 			});
 			try {
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 				const rootTsconfig = JSON.parse(
 					await readFile(join(dir, 'tsconfig.json'), 'utf8'),
 				) as { extends?: string; compilerOptions?: { target?: string } };
@@ -455,8 +451,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				},
 			});
 			try {
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 				const rootTsconfig = JSON.parse(
 					await readFile(join(dir, 'tsconfig.json'), 'utf8'),
 				) as { compilerOptions?: Record<string, unknown> };
@@ -489,8 +484,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 						files: ['index.ts'],
 					}),
 				);
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 				const tsconfig = JSON.parse(
 					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
 				) as {
@@ -525,8 +519,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 						compilerOptions: { outDir: './wrong', types: ['node'] },
 					}),
 				);
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 				const tsconfig = JSON.parse(
 					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
 				) as { extends?: string; compilerOptions?: Record<string, unknown> };
@@ -547,8 +540,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
 				pkg.build = { platform: 'invalid' } as unknown as Package['build'];
 				await writeFile(packagePath, JSON.stringify(pkg));
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 				const fixed = JSON.parse(
 					await readFile(packagePath, 'utf8'),
 				) as Package;
@@ -566,8 +558,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				pkg.browser = './index.bundle.js';
 				pkg.build = { platform: 'browser' };
 				await writeFile(packagePath, JSON.stringify(pkg));
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 				const tsconfig = JSON.parse(
 					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
 				) as { compilerOptions?: Record<string, unknown> };
@@ -589,8 +580,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				pkg.bin = './index.js';
 				pkg.build = { platform: 'node' };
 				await writeFile(packagePath, JSON.stringify(pkg));
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 				const tsconfig = JSON.parse(
 					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
 				) as { compilerOptions?: Record<string, unknown> };
@@ -604,8 +594,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 			const { dir, packageDir } = await createAuditFixture();
 			try {
 				await rm(join(packageDir, 'tsconfig.json'));
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 				const tsconfig = JSON.parse(
 					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
 				) as {
@@ -630,8 +619,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				};
 				pkg.browser = './index.bundle.js';
 				await writeFile(packagePath, JSON.stringify(pkg));
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 				const tsconfig = JSON.parse(
 					await readFile(join(packageDir, 'tsconfig.worker.json'), 'utf8'),
 				) as {
@@ -666,8 +654,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 						},
 					}),
 				);
-				const [command, args] = auditCommand(packageDir);
-				execFileSync(command, args);
+				await runAudit(packageDir);
 				const tsconfig = JSON.parse(
 					await readFile(join(packageDir, 'tsconfig.json'), 'utf8'),
 				) as { compilerOptions?: Record<string, unknown> };

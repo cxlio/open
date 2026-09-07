@@ -43,8 +43,6 @@ import {
 } from './npm.js';
 import { cachedBuild } from './cache.js';
 
-const PackageCacheVersion = 1;
-
 export function getLintTsconfigs(rootPkg: Package, pkg: Package) {
 	return getPackageTsconfigs(rootPkg, pkg);
 }
@@ -129,7 +127,6 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 				manifest: join(cacheDir, 'declarations.json'),
 				inputs: [...declarationFiles, ...tsconfigInputs],
 				key: JSON.stringify({
-					version: PackageCacheVersion,
 					typescript: tscVersion,
 					entryPoints: declarationEntryPoints,
 					external,
@@ -158,7 +155,6 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 				manifest: join(cacheDir, 'javascript.json'),
 				inputs: [...javascriptFiles, ...tsconfigInputs],
 				key: JSON.stringify({
-					version: PackageCacheVersion,
 					esbuild: esbuildVersion,
 					entryPoints,
 					bundleEntryPoint: needsBundle ? bundleEntryPoint : undefined,
@@ -192,13 +188,16 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 						}),
 					);
 				const results = await Promise.all(builds);
+				const inputs = new Set<string>();
 				const outputs: string[] = [];
 				for (const result of results) {
 					if (!result.metafile) throw new Error('Missing esbuild metafile');
+					for (const input of Object.keys(result.metafile.inputs))
+						inputs.add(input);
 					for (const output of Object.keys(result.metafile.outputs))
 						outputs.push(resolve(output));
 				}
-				return outputs;
+				return { inputs: [...inputs], outputs };
 			},
 		),
 	).ignoreElements();

@@ -9,7 +9,7 @@ import {
 	writeFile,
 } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { pathToFileURL } from 'url';
 import { execFile, execFileSync } from 'child_process';
 import { build as esbuild } from 'esbuild-wasm';
@@ -771,6 +771,56 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 	});
 
 	s.test('build cache', it => {
+		it.should('invalidate outputs when discovered inputs change', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-cache-'));
+			try {
+				const input = join(dir, 'input.js');
+				const dependency = join(dir, 'dependency.js');
+				const outputDir = join(dir, 'package');
+				const output = join(outputDir, 'index.js');
+				const options = {
+					manifest: join(dir, 'cache.json'),
+					inputs: [input],
+					key: JSON.stringify({ recipe: 1 }),
+					outputDir,
+				};
+				let builds = 0;
+				const run = () =>
+					cachedBuild(options, async () => {
+						builds++;
+						await mkdir(outputDir, { recursive: true });
+						const result = await esbuild({
+							absWorkingDir: dir,
+							bundle: true,
+							entryPoints: ['input.js'],
+							format: 'esm',
+							metafile: true,
+							outfile: 'package/index.js',
+						});
+						if (!result.metafile) throw new Error('Missing esbuild metafile');
+						return {
+							outputs: Object.keys(result.metafile.outputs).map(path =>
+								resolve(dir, path),
+							),
+							inputs: Object.keys(result.metafile.inputs).map(path =>
+								resolve(dir, path),
+							),
+						};
+					});
+
+				await writeFile(input, "export { value } from './dependency.js';");
+				await writeFile(dependency, "export const value = 'first';");
+				a.ok(await run());
+				a.ok(!(await run()));
+				await writeFile(dependency, "export const value = 'second';");
+				a.ok(await run());
+				a.ok((await readFile(output, 'utf8')).includes('second'));
+				a.equal(builds, 2);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
 		it.should('reuse outputs until inputs change or outputs disappear', async a => {
 			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-cache-'));
 			try {
@@ -796,6 +846,12 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				a.ok(await run());
 				a.ok(!(await run()));
 				a.equal(builds, 1);
+				const manifest = await readFile(options.manifest, 'utf8');
+				await writeFile(
+					options.manifest,
+					manifest.replace('\n\t"inputs": [],', ''),
+				);
+				a.ok(await run());
 
 				await writeFile(input, 'second');
 				a.ok(await run());
@@ -803,7 +859,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				a.ok(await run());
 				options.key = JSON.stringify({ recipe: 2 });
 				a.ok(await run());
-				a.equal(builds, 4);
+				a.equal(builds, 5);
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}

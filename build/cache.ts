@@ -5,6 +5,7 @@ import { getErrorCode, readJson } from '../program/index.js';
 
 interface CacheManifest {
 	fingerprint: string;
+	inputs: string[];
 	outputs: string[];
 }
 
@@ -13,6 +14,17 @@ export interface BuildCacheOptions {
 	inputs: readonly string[];
 	key: string;
 	outputDir: string;
+}
+
+export interface BuildCacheResult {
+	inputs: readonly string[];
+	outputs: readonly string[];
+}
+
+function isBuildCacheResult(
+	result: readonly string[] | BuildCacheResult,
+): result is BuildCacheResult {
+	return !Array.isArray(result);
 }
 
 function updateHash(hash: Hash, value: string | Buffer) {
@@ -45,6 +57,8 @@ async function readManifest(path: string) {
 		if (
 			value !== null &&
 			typeof value.fingerprint === 'string' &&
+			Array.isArray(value.inputs) &&
+			value.inputs.every(input => typeof input === 'string') &&
 			Array.isArray(value.outputs) &&
 			value.outputs.every(output => typeof output === 'string')
 		)
@@ -91,6 +105,7 @@ async function removeOutputs(outputDir: string, outputs: readonly string[]) {
 async function writeManifest(
 	path: string,
 	fingerprint: string,
+	inputs: readonly string[],
 	outputDir: string,
 	outputs: readonly string[],
 ) {
@@ -103,18 +118,21 @@ async function writeManifest(
 	const temp = `${path}.${process.pid}.tmp`;
 	await fs.writeFile(
 		temp,
-		JSON.stringify({ fingerprint, outputs: normalized }, null, '\t'),
+		JSON.stringify({ fingerprint, inputs, outputs: normalized }, null, '\t'),
 	);
 	await fs.rename(temp, path);
 }
 
 export async function cachedBuild(
 	options: BuildCacheOptions,
-	build: () => Promise<readonly string[]>,
+	build: () => Promise<readonly string[] | BuildCacheResult>,
 ) {
 	const outputDir = resolve(options.outputDir);
-	const currentFingerprint = await fingerprint(options.inputs, options.key);
 	const previous = await readManifest(options.manifest);
+	const currentFingerprint = await fingerprint(
+		[...options.inputs, ...(previous?.inputs ?? [])],
+		options.key,
+	);
 	if (
 		previous?.fingerprint === currentFingerprint &&
 		(await outputsExist(outputDir, previous.outputs))
@@ -122,7 +140,9 @@ export async function cachedBuild(
 		return false;
 
 	if (previous) await removeOutputs(outputDir, previous.outputs);
-	const outputs = await build();
+	const result = await build();
+	const inputs = isBuildCacheResult(result) ? result.inputs : [];
+	const outputs = isBuildCacheResult(result) ? result.outputs : result;
 	const relativeOutputs = outputs.map(output =>
 		relative(outputDir, resolve(output)),
 	);
@@ -135,7 +155,8 @@ export async function cachedBuild(
 		);
 	await writeManifest(
 		options.manifest,
-		currentFingerprint,
+		await fingerprint([...options.inputs, ...inputs], options.key),
+		inputs,
 		outputDir,
 		outputs,
 	);

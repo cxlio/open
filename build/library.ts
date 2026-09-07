@@ -37,7 +37,7 @@ import { audit, auditDependencies } from './audit.js';
 import { readJson } from '../program/index.js';
 
 import {
-	getPackageBuildOptions,
+	getPackageTsconfigs,
 	publishNpm,
 	type Package,
 } from './npm.js';
@@ -46,9 +46,7 @@ import { cachedBuild } from './cache.js';
 const PackageCacheVersion = 1;
 
 export function getLintTsconfigs(rootPkg: Package, pkg: Package) {
-	return (getPackageBuildOptions(rootPkg, pkg).tsconfigs ?? []).filter(
-		path => pkg.build?.tsconfigs || existsSync(path),
-	);
+	return getPackageTsconfigs(rootPkg, pkg);
 }
 
 async function packageFiles(dir: string): Promise<string[]> {

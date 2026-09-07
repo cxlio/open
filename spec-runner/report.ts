@@ -196,18 +196,29 @@ async function generateCoverageReport(
 	options?: ReportOptions,
 ) {
 	const filtered = new Map<string, TestCoverage>();
+	const expected = options?.expectedCoverageFiles;
+	const expectedPaths = expected
+		? new Map(expected.map(file => [normalizePath(file.url), file]))
+		: undefined;
 	const ignoreRegex = /\/node_modules\//;
 	for (const script of coverage) {
 		const url = script.url;
-		if (!ignoreRegex.test(url) && !isTestCoverageFile(url, options)) {
-			filtered.set(normalizePath(url), {
+		const path = expectedPaths
+			? resolveCoveragePath(url, expectedPaths.keys())
+			: normalizePath(url);
+		if (
+			(!expectedPaths || expectedPaths.has(path)) &&
+			!ignoreRegex.test(url) &&
+			!isTestCoverageFile(url, options)
+		) {
+			filtered.set(path, {
 				url: url,
 				functions: script.functions,
 			});
 		}
 	}
 
-	for (const file of options?.expectedCoverageFiles ?? []) {
+	for (const file of expected ?? []) {
 		const path = resolveCoveragePath(file.url, filtered.keys());
 		if (
 			!isTestCoverageFile(file.url, options) &&

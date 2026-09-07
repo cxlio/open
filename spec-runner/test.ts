@@ -615,6 +615,34 @@ export default spec('managed proxy fixture', async s => {
 			a.equal(report.coverage?.[0]?.url, 'index.js');
 			a.equal(report.summary.coverage?.blockCoveragePct, 62.5);
 		});
+
+		it.should('exclude files outside expected coverage', async a => {
+			const report = await generateReport(
+				suite,
+				[
+					...coverage,
+					{
+						url: 'shared.js',
+						functions: [
+							{
+								functionName: '',
+								isBlockCoverage: true,
+								ranges: [
+									{ startOffset: 0, endOffset: 100, count: 1 },
+								],
+							},
+						],
+					},
+				],
+				{
+					entryFile: './test.js',
+					expectedCoverageFiles: [{ url: 'index.js', functions: [] }],
+				},
+			);
+
+			a.equal(report.coverage?.length, 1);
+			a.equal(report.coverage?.[0]?.url, 'index.js');
+		});
 	});
 
 	s.test('benchmark baselines', async a => {

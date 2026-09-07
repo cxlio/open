@@ -8,6 +8,7 @@ import {
 	getMainBranch,
 } from './git.js';
 import { resolve } from 'path';
+import { existsSync } from 'fs';
 
 export type License =
 	| 'GPL-3.0'
@@ -76,6 +77,12 @@ export function getPackageBuildOptions(rootPkg: Package, pkg: Package) {
 	}
 
 	return build;
+}
+
+export function getPackageTsconfigs(rootPkg: Package, pkg: Package) {
+	return (getPackageBuildOptions(rootPkg, pkg).tsconfigs ?? []).filter(
+		path => pkg.build?.tsconfigs || existsSync(path),
+	);
 }
 
 export async function readPackage(path: string) {

@@ -43,6 +43,7 @@ import {
 	generateTestFile,
 	runBenchmarks,
 } from './spec.js';
+import { getExpectedCoverageFiles } from './coverage.js';
 import type { Package } from './npm.js';
 import { checkBranchClean, checkBranchUpToDate } from './git.js';
 import { requiredRootCompilerOptions } from './audit.js';
@@ -899,6 +900,57 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 		});
 	});
 
+	s.test('coverage files', async a => {
+		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-coverage-'));
+		const packageDir = join(rootDir, 'package');
+		const outputDir = join(rootDir, 'dist', 'package');
+		const previousCwd = process.cwd();
+		try {
+			await mkdir(packageDir);
+			await mkdir(outputDir, { recursive: true });
+			await writeFile(
+				join(packageDir, 'tsconfig.json'),
+				JSON.stringify({
+					compilerOptions: { outDir: outputDir },
+					files: ['index.ts', 'duplicate.ts'],
+					references: [{ path: '../shared' }],
+				}),
+			);
+			await writeFile(
+				join(packageDir, 'tsconfig.worker.json'),
+				JSON.stringify({
+					compilerOptions: { outDir: outputDir },
+					files: ['worker.ts', 'duplicate.ts'],
+				}),
+			);
+			for (const name of ['index', 'worker', 'duplicate']) {
+				await writeFile(join(packageDir, `${name}.ts`), 'export {};');
+				await writeFile(join(outputDir, `${name}.js`), 'export {};');
+			}
+			process.chdir(packageDir);
+			const pkg = {
+				name: '@test/package',
+				version: '1.0.0',
+				private: true,
+				bugs: '',
+				repository: '',
+				build: { tsconfigs: ['tsconfig.worker.json'] },
+			} satisfies Package;
+			const files = getExpectedCoverageFiles(outputDir, pkg, pkg);
+			a.equalValues(
+				files.map(file => file.url),
+				[
+					'/dist/package/duplicate.js',
+					'/dist/package/index.js',
+					'/dist/package/worker.js',
+				],
+			);
+		} finally {
+			process.chdir(previousCwd);
+			await rm(rootDir, { recursive: true, force: true });
+		}
+	});
+
 	s.test('declaration bundle', it => {
 		it.should('expose generated files as the public Task type', async a => {
 			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-consumer-'));
@@ -1679,6 +1731,72 @@ export default spec('fixture', s => s.test('passes', a => a.ok(true)));
 			);
 			a.ok(document.includes('Specification: fixture'));
 			a.ok(document.includes('<c-page><c-layout'));
+		} finally {
+			await rm(rootDir, { recursive: true, force: true });
+		}
+	});
+
+	s.test('coverage target report', async a => {
+		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-coverage-target-'));
+		const packageDir = join(rootDir, 'package');
+		const outputDir = join(rootDir, 'dist', 'package');
+		try {
+			await mkdir(packageDir);
+			await mkdir(outputDir, { recursive: true });
+			await writeFile(join(rootDir, 'package.json'), '{"name":"root"}');
+			await writeFile(
+				join(packageDir, 'package.json'),
+				JSON.stringify({
+					name: 'fixture',
+					type: 'module',
+					build: { tsconfigs: ['tsconfig.worker.json'] },
+				}),
+			);
+			for (const [name, files] of [
+				['tsconfig.json', ['index.ts']],
+				['tsconfig.worker.json', ['worker.ts']],
+			] as const) {
+				await writeFile(
+					join(packageDir, name),
+					JSON.stringify({
+						compilerOptions: { outDir: outputDir },
+						files,
+					}),
+				);
+			}
+			await writeFile(join(packageDir, 'index.ts'), 'export const value = true;');
+			await writeFile(join(packageDir, 'worker.ts'), 'export const value = true;');
+			await writeFile(join(outputDir, 'index.js'), 'export const value = true;');
+			await writeFile(join(outputDir, 'worker.js'), 'export const value = true;');
+			await writeFile(join(outputDir, 'shared.js'), 'export const value = true;');
+			await writeFile(
+				join(outputDir, 'test.js'),
+				`import { spec } from ${JSON.stringify(pathToFileURL(join(import.meta.dirname, '../spec/index.js')).href)};
+import { value as index } from './index.js';
+import { value as shared } from './shared.js';
+export default spec('fixture', s => s.test('passes', a => {
+	a.ok(index);
+	a.ok(shared);
+}));
+`,
+			);
+			const options = { appId: 'fixture', outputDir, node: true };
+			const script = `await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runTests(${JSON.stringify(options)}))`;
+			await new Promise<void>((resolve, reject) => {
+				execFile(
+					process.execPath,
+					['--input-type=module', '--eval', script],
+					{ cwd: packageDir },
+					error => (error ? reject(error) : resolve()),
+				);
+			});
+			const report = JSON.parse(
+				await readFile(join(outputDir, 'test-report.json'), 'utf8'),
+			) as { coverage: { url: string }[] };
+			a.equalValues(
+				report.coverage.map(file => file.url.split('/').at(-1)).sort(),
+				['index.js', 'worker.js'],
+			);
 		} finally {
 			await rm(rootDir, { recursive: true, force: true });
 		}

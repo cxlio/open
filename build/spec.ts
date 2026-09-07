@@ -1,19 +1,16 @@
 import { existsSync, readFileSync } from 'fs';
 import { writeFile } from 'fs/promises';
-import { extname, join, relative, resolve } from 'path';
-import * as ts from 'typescript';
+import { join, relative, resolve } from 'path';
 import { getPackageBuildOptions } from './npm.js';
 import { fromAsync, of } from '../rx/index.js';
 import { readJson } from '../program/index.js';
 import { buildOutputOptions } from './builder.js';
 import { getDependencies } from './package.js';
 import { parseTsConfig } from './tsc.js';
-import type {
-	CoverageSummary,
-	TestCoverage,
-} from '../spec-runner/report.js';
+import type { CoverageSummary } from '../spec-runner/report.js';
 import { parseGrep } from '../spec-runner/grep.js';
 import type { Package } from './npm.js';
+import { getExpectedCoverageFiles } from './coverage.js';
 
 let browserRunner: string | undefined;
 
@@ -229,37 +226,6 @@ export function generateTestFile({
 	});
 }
 
-function jsCoverageFile(path: string) {
-	return extname(path) === '.js';
-}
-
-function getExpectedCoverageFiles(outputDir: string): TestCoverage[] {
-	const parsed = parseTsConfig('tsconfig.json');
-	const root = resolve(outputDir, '../../');
-	const files = new Map<string, TestCoverage>();
-
-	for (const fileName of parsed.fileNames) {
-		for (const outFile of ts.getOutputFileNames(parsed, fileName, false)) {
-			if (jsCoverageFile(outFile)) {
-				const url = `/${relative(root, outFile).replace(/\\/g, '/')}`;
-				const len = readFileSync(outFile, 'utf8').length;
-				files.set(url, {
-					url,
-					functions: [
-						{
-							functionName: '',
-							isBlockCoverage: true,
-							ranges: [{ startOffset: 0, endOffset: len, count: 0 }],
-						},
-					],
-				});
-			}
-		}
-	}
-
-	return [...files.values()].sort((a, b) => a.url.localeCompare(b.url));
-}
-
 export function runTests({
 	appId,
 	outputDir,
@@ -289,9 +255,10 @@ export function runTests({
 			? undefined
 			: generateImportMap(rootPkg, pkgJson, resolve(outputDir, '../../'));
 		const { verbose } = buildOutputOptions();
+		const build = getPackageBuildOptions(rootPkg, pkgJson);
 		const expectedCoverageFiles = ignoreTestCoverage
 			? undefined
-			: getExpectedCoverageFiles(outputDir);
+			: getExpectedCoverageFiles(outputDir, rootPkg, pkgJson);
 		const reportPath = 'test-report.json';
 		const documentPath = 'test-report.html';
 		try {
@@ -318,7 +285,7 @@ export function runTests({
 			if (!ignoreTestCoverage)
 				enforceCoverageGate(
 					report.summary.coverage,
-					getPackageBuildOptions(rootPkg, pkgJson).coverage,
+					build.coverage,
 				);
 		} finally {
 			process.chdir(cwd);

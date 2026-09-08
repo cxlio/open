@@ -173,6 +173,30 @@ function runAudit(
 
 export default spec('build', s => {
 	s.test('eslint config', it => {
+		it.should('apply recommended rules to test files', async a => {
+			const messages = await lintFixture(`export default spec('fixture', s => {
+	s.test('empty block', () => {
+		if (true) {}
+	});
+});`);
+			const emptyBlocks = messages.filter(
+				message => message.ruleId === 'no-empty',
+			);
+			a.equal(emptyBlocks.length, 1);
+		});
+
+		it.should('exclude build-only rules from test files', async a => {
+			const messages = await lintFixture(`export default spec('fixture', s => {
+	s.test('test-only patterns', a => {
+		Promise.resolve();
+		const unused = 1;
+		const value = {} as object;
+		a.ok(value);
+	});
+});`);
+			a.equal(messages.length, 0);
+		});
+
 		it.should('lint configured runtime tsconfigs', async a => {
 			a.setTimeout(30000);
 			const rootPkg = {

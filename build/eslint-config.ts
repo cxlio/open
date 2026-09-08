@@ -334,11 +334,14 @@ export const tsConfig: Linter.Config = {
 };
 
 export const specConfig = defineConfig([
-	ts.configs.base,
+	js.configs.recommended,
+	ts.configs.recommended,
 	{
 		files: ['**/*.ts', '**/*.tsx'],
 		plugins: { local: localPlugin },
 		rules: {
+			'@typescript-eslint/no-this-alias': 'off',
+			'@typescript-eslint/no-unused-vars': 'off',
 			'local/no-real-timers-in-spec': 'error',
 			'local/no-return-in-spec': 'error',
 			'local/no-throw-in-spec': 'error',

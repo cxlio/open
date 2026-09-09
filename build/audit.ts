@@ -196,8 +196,6 @@ async function getTsconfigTargets({ projectPath, pkg, rootPkg }: LintData) {
 		if (await exists(path.join(projectPath, name)))
 			targets.set(name, configuredPlatform(name, platform));
 	}
-	for (const name of pkg.build?.tsconfigs ?? [])
-		targets.set(name, configuredPlatform(name, platform));
 	return targets;
 }
 
@@ -462,6 +460,7 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 	if (!pkg.browser && pkg.devDependencies) delete pkg.devDependencies;
 	if (pkg.browser) pkg.browser = browser;
 	pkg.build ??= {};
+	delete pkg.build.tsconfigs;
 	pkg.build.platform = await inferPackagePlatform(pkg, projectPath);
 	if (!pkg.repository && rootPkg.repository) {
 		if (typeof rootPkg.repository === 'string')
@@ -550,6 +549,10 @@ function lintPackage({ pkg, name, rootPkg }: LintData) {
 		rule(
 			isPackagePlatform(pkg.build?.platform),
 			'Package "build.platform" must be neutral, browser, node, or worker.',
+		),
+		rule(
+			pkg.build?.tsconfigs === undefined,
+			'Package should not override "build.tsconfigs".',
 		),
 		rule(
 			!pkg.browser || pkg.build?.platform === 'browser',

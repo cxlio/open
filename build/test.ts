@@ -574,6 +574,27 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 			}
 		});
 
+		it.should('remove package tsconfig overrides', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				const packagePath = join(packageDir, 'package.json');
+				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
+				pkg.build = {
+					platform: 'neutral',
+					tsconfigs: ['tsconfig.worker.json'],
+				};
+				await writeFile(packagePath, JSON.stringify(pkg));
+				await runAudit(packageDir);
+				const fixed = JSON.parse(
+					await readFile(packagePath, 'utf8'),
+				) as Package;
+				a.equalValues(fixed.build, { platform: 'neutral' });
+				a.ok(!(await readdir(packageDir)).includes('tsconfig.worker.json'));
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
 		it.should('enforce browser tsconfig properties', async a => {
 			const { dir, packageDir } = await createAuditFixture();
 			try {
@@ -632,15 +653,19 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 			}
 		});
 
-		it.should('create and enforce configured worker tsconfig', async a => {
+		it.should('enforce root-configured worker tsconfig', async a => {
 			const { dir, packageDir } = await createAuditFixture();
 			try {
+				const rootPackagePath = join(dir, 'package.json');
+				const rootPkg = JSON.parse(
+					await readFile(rootPackagePath, 'utf8'),
+				) as Package;
+				rootPkg.build = { tsconfigs: ['tsconfig.worker.json'] };
+				await writeFile(rootPackagePath, JSON.stringify(rootPkg));
+				await writeFile(join(packageDir, 'tsconfig.worker.json'), '{}');
 				const packagePath = join(packageDir, 'package.json');
 				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
-				pkg.build = {
-					platform: 'browser',
-					tsconfigs: ['tsconfig.worker.json'],
-				};
+				pkg.build = { platform: 'browser' };
 				pkg.browser = './index.bundle.js';
 				await writeFile(packagePath, JSON.stringify(pkg));
 				await runAudit(packageDir);

@@ -1015,25 +1015,68 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 					files: ['worker.ts', 'duplicate.ts'],
 				}),
 			);
-			for (const name of ['index', 'worker', 'duplicate']) {
+			await writeFile(
+				join(packageDir, 'tsconfig.server.json'),
+				JSON.stringify({
+					compilerOptions: { outDir: outputDir },
+					files: ['server.ts'],
+					references: [{ path: './tsconfig.auth.json' }],
+				}),
+			);
+			await writeFile(
+				join(packageDir, 'tsconfig.auth.json'),
+				JSON.stringify({
+					compilerOptions: { outDir: outputDir },
+					files: ['auth.ts'],
+				}),
+			);
+			await writeFile(
+				join(packageDir, 'tsconfig.test.json'),
+				JSON.stringify({
+					compilerOptions: { outDir: outputDir },
+					files: ['test.ts'],
+					references: [
+						{ path: '.' },
+						{ path: './tsconfig.worker.json' },
+						{ path: './tsconfig.server.json' },
+						{ path: '../shared' },
+					],
+				}),
+			);
+			for (const name of [
+				'index',
+				'worker',
+				'server',
+				'auth',
+				'duplicate',
+				'test',
+			]) {
 				await writeFile(join(packageDir, `${name}.ts`), 'export {};');
 				await writeFile(join(outputDir, `${name}.js`), 'export {};');
 			}
 			process.chdir(packageDir);
-			const pkg = {
+			const rootPkg = {
 				name: '@test/package',
 				version: '1.0.0',
 				private: true,
 				bugs: '',
 				repository: '',
-				build: { tsconfigs: ['tsconfig.worker.json'] },
+				build: {
+					tsconfigs: [
+						'tsconfig.worker.json',
+						'tsconfig.missing.json',
+					],
+				},
 			} satisfies Package;
-			const files = getExpectedCoverageFiles(outputDir, pkg, pkg);
+			const pkg = { ...rootPkg, build: undefined };
+			const files = getExpectedCoverageFiles(outputDir, rootPkg, pkg);
 			a.equalValues(
 				files.map(file => file.url),
 				[
+					'/dist/package/auth.js',
 					'/dist/package/duplicate.js',
 					'/dist/package/index.js',
+					'/dist/package/server.js',
 					'/dist/package/worker.js',
 				],
 			);

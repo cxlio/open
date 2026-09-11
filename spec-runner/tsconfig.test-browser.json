@@ -12,6 +12,9 @@
 		"test-keyboard-fixture.ts",
 		"test-proxy-fixture.ts",
 		"test-proxy-failure-fixture.ts",
+		"service-worker.ts",
+		"service-worker-dependency.ts",
+		"test-service-worker-fixture.ts",
 		"shared-worker.ts",
 		"shared-worker-dependency.ts",
 		"test-shared-worker-fixture.ts"

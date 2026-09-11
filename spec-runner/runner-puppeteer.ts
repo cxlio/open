@@ -353,6 +353,7 @@ async function createPage(
 	concurrency: number,
 ) {
 	const proxies = new ProxyManager(message => app.log(message));
+	const coverageCleanup: (() => Promise<void>)[] = [];
 	let page: Page;
 	const element = (selector: string) =>
 		page.$(selector).then(element => {
@@ -478,6 +479,7 @@ async function createPage(
 			entryFile,
 			proxies,
 			coverageSessions,
+			coverageCleanup,
 		);
 		if (pageError.length) suite.results.push(...pageError);
 
@@ -486,6 +488,7 @@ async function createPage(
 			: await generateCoverage(coverageSessions, app);
 		return { suite, coverage };
 	} finally {
+		await Promise.all(coverageCleanup.map(cleanup => cleanup()));
 		await proxies.close();
 	}
 }
@@ -628,11 +631,12 @@ function interceptPage(
 	});
 }
 
-function interceptSharedWorkers(
+async function interceptWorkers(
 	browser: Browser,
 	app: SpecRunner,
 	server: ReturnType<typeof virtualFileServer>,
 	coverageSessions: CDPSession[] | undefined,
+	coverageCleanup: (() => Promise<void>)[],
 ) {
 	const pending = new Set<Promise<void>>();
 
@@ -685,6 +689,10 @@ function interceptSharedWorkers(
 
 	async function attach(target: Target) {
 		const session = await target.createCDPSession();
+		await configure(session);
+	}
+
+	async function configure(session: CDPSession) {
 		session.on('Fetch.requestPaused', event => {
 			onRequest(session, event).catch(error => console.error(error));
 		});
@@ -706,6 +714,31 @@ function interceptSharedWorkers(
 	}
 
 	browser.on('targetcreated', onTarget);
+	if (coverageSessions) {
+		const browserSession = await browser.target().createCDPSession();
+		function onAttached(session: CDPSession) {
+			const promise = configure(session)
+				.catch(error => console.error(error))
+				.finally(() => pending.delete(promise));
+			pending.add(promise);
+		}
+		browserSession.on('sessionattached', onAttached);
+		browserSession.on('Fetch.requestPaused', event => {
+			onRequest(browserSession, event).catch(error => console.error(error));
+		});
+		await browserSession.send('Fetch.enable', {
+			patterns: [{ urlPattern: 'https://cxl-tester/*' }],
+		});
+		await browserSession.send('Target.setAutoAttach', {
+			autoAttach: true,
+			waitForDebuggerOnStart: true,
+			flatten: true,
+			filter: [{ type: TargetType.SERVICE_WORKER }],
+		});
+		coverageCleanup.push(async () => {
+			await browserSession.detach();
+		});
+	}
 	return async () => {
 		browser.off('targetcreated', onTarget);
 		await Promise.all(pending);
@@ -722,16 +755,18 @@ async function mjsRunner(
 	entry: string,
 	proxies: ProxyManager,
 	coverageSessions: CDPSession[] | undefined,
+	coverageCleanup: (() => Promise<void>)[],
 ) {
 	await page.setRequestInterception(true);
 
 	const server = virtualFileServer(app, proxies);
 	interceptPage(page, app, server);
-	const stopWorkerInterception = interceptSharedWorkers(
+	const stopWorkerInterception = await interceptWorkers(
 		page.browser(),
 		app,
 		server,
 		coverageSessions,
+		coverageCleanup,
 	);
 
 	try {

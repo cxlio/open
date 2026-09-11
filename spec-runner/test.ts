@@ -115,29 +115,52 @@ const environment = {
 	profile: 'default',
 };
 
+function expectedCoverage(files: string[]) {
+	return Promise.all(
+		files.map(async file => ({
+			url: `/spec-runner/${file}`,
+			functions: [
+				{
+					functionName: '',
+					isBlockCoverage: true,
+					ranges: [
+						{
+							startOffset: 0,
+							endOffset: (await readFile(file, 'utf8')).length,
+							count: 0,
+						},
+					],
+				},
+			],
+		})),
+	);
+}
+
 export default spec('tester', s => {
+	s.test('service worker module import', async a => {
+		const files = ['service-worker.js', 'service-worker-dependency.js'];
+		const expectedCoverageFiles = await expectedCoverage(files);
+		const report = await browserRunner({
+			entryFile: './test-service-worker-fixture.js',
+			expectedCoverageFiles,
+			ignoreCoverage: false,
+			mjs: true,
+			node: false,
+			updateBaselines: false,
+			reportPath: 'test-report.json',
+			vfsRoot: '..',
+			sources: new Map(),
+			log: () => {},
+		});
+		a.ok(report.success);
+		a.equal(report.summary.coverage?.fileTotal, 2);
+		for (const coverage of report.coverage ?? [])
+			a.ok(coverage.blockCovered > 0, coverage.url);
+	});
+
 	s.test('shared worker dynamic import', async a => {
 		const files = ['shared-worker.js', 'shared-worker-dependency.js'];
-		const expectedCoverageFiles = await Promise.all(
-			files.map(async file => ({
-				url: `/spec-runner/${file}`,
-				functions: [
-					{
-						functionName: '',
-						isBlockCoverage: true,
-						ranges: [
-							{
-								startOffset: 0,
-								endOffset: (
-									await readFile(file, 'utf8')
-								).length,
-								count: 0,
-							},
-						],
-					},
-				],
-			})),
-		);
+		const expectedCoverageFiles = await expectedCoverage(files);
 		const report = await browserRunner({
 			entryFile: './test-shared-worker-fixture.js',
 			expectedCoverageFiles,

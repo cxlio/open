@@ -480,7 +480,6 @@ export default spec('failure fixture', s => {
 	});
 
 	s.test('managed proxy browser execution', async a => {
-		a.setTimeout(60000);
 		const report = await run({
 			node: false,
 			mjs: true,
@@ -536,7 +535,6 @@ export default spec('managed proxy fixture', async s => {
 	});
 
 	s.test('managed proxy process failures include output', async a => {
-		a.setTimeout(60000);
 		const report = await run({
 			node: false,
 			mjs: true,
@@ -555,7 +553,6 @@ export default spec('managed proxy fixture', async s => {
 	});
 
 	s.test('browser binary static-file execution', async a => {
-		a.setTimeout(60000);
 		const report = await run({
 			node: false,
 			mjs: true,
@@ -739,7 +736,6 @@ export default spec('managed proxy fixture', async s => {
 	});
 
 	s.test('browser benchmark execution', async a => {
-		a.setTimeout(60000);
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-benchmark-browser-'));
 		try {
 			const report = await run({
@@ -785,7 +781,6 @@ export default spec('managed proxy fixture', async s => {
 	});
 
 	s.test('browser drag execution', async a => {
-		a.setTimeout(60000);
 		const report = await run({
 			node: false,
 			mjs: true,
@@ -801,7 +796,6 @@ export default spec('managed proxy fixture', async s => {
 	});
 
 	s.test('browser keyboard execution', async a => {
-		a.setTimeout(60000);
 		const report = await run({
 			node: false,
 			mjs: true,

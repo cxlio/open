@@ -65,7 +65,11 @@ async function errorMessage(fn: () => Promise<unknown>) {
 	throw new Error('Expected operation to fail');
 }
 
-async function lintFixture(source: string, baseConfig = specConfig) {
+async function lintFixture(
+	source: string,
+	baseConfig = specConfig,
+	fileName = 'test.ts',
+) {
 	const dir = await mkdtemp(join(tmpdir(), 'cxl-build-eslint-'));
 	try {
 		const project = join(dir, 'tsconfig.json');
@@ -77,11 +81,11 @@ async function lintFixture(source: string, baseConfig = specConfig) {
 					moduleResolution: 'NodeNext',
 					strict: true,
 				},
-				files: ['test.ts'],
+				files: [fileName],
 			}),
 		);
 		await writeFile(
-			join(dir, 'test.ts'),
+			join(dir, fileName),
 			`import { spec } from ${JSON.stringify(join(import.meta.dirname, '../spec/index.js'))};
 ${source}`,
 		);
@@ -96,7 +100,7 @@ ${source}`,
 			},
 			overrideConfigFile: true,
 		});
-		const [result] = await eslint.lintFiles(['test.ts']);
+		const [result] = await eslint.lintFiles([fileName]);
 		return result?.messages ?? [];
 	} finally {
 		await rm(dir, { recursive: true, force: true });
@@ -185,20 +189,27 @@ export default spec('build', s => {
 			a.equal(emptyBlocks.length, 1);
 		});
 
-		it.should('exclude build-only rules from test files', async a => {
-			const messages = await lintFixture(`export default spec('fixture', s => {
+		it.should(
+			'exclude build-only rules and allow screenshot test timeouts',
+			async a => {
+				const messages = await lintFixture(
+					`export default spec('fixture', s => {
 	s.test('test-only patterns', a => {
 		Promise.resolve();
 		const unused = 1;
 		const value = {} as object;
 		a.ok(value);
+		a.setTimeout(1000);
 	});
-});`);
-			a.equal(messages.length, 0);
-		});
+});`,
+					specConfig,
+					'test-screenshot.ts',
+				);
+				a.equal(messages.length, 0);
+			},
+		);
 
 		it.should('lint configured runtime tsconfigs', async a => {
-			a.setTimeout(30000);
 			const rootPkg = {
 				name: '@test/root',
 				version: '1.0.0',
@@ -281,7 +292,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 			a.equal(messages[0]?.ruleId, 'local/no-return-in-spec');
 		});
 
-		it.should('ban real timers from spec tests', async a => {
+		it.should('ban real timers and custom test timeouts', async a => {
 			const messages = await lintFixture(`export default spec('fixture', s => {
 	s.test('real timers', () => {
 		setTimeout(() => undefined, 1);
@@ -301,6 +312,8 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 		a.mockRequestAnimationFrame();
 		requestAnimationFrame(() => undefined);
 		a.setTimeout(1000);
+		const unrelated = { setTimeout() {} };
+		unrelated.setTimeout();
 	});
 	s.test('wrong virtual timer', a => {
 		a.mockSetTimeout();
@@ -315,6 +328,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 					'local/no-real-timers-in-spec',
 					'local/no-real-timers-in-spec',
 					'local/no-real-timers-in-spec',
+					'local/no-test-timeout-in-spec',
 					'local/no-real-timers-in-spec',
 				],
 			);

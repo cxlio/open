@@ -33,7 +33,14 @@ function enclosingFunction(ancestors: readonly AncestorNode[]) {
 
 function isSpecTestFunction(type: typescript.Type | undefined) {
 	const symbol = type?.aliasSymbol;
-	if (symbol?.getName() !== 'TestFn') return false;
+	return isSpecSymbol(symbol, 'TestFn');
+}
+
+function isSpecSymbol(
+	symbol: typescript.Symbol | undefined,
+	name: string,
+) {
+	if (symbol?.getName() !== name) return false;
 	return symbol.declarations?.some(declaration => {
 		const file = declaration.getSourceFile().fileName.replace(/\\/g, '/');
 		return (
@@ -217,6 +224,42 @@ const noRealTimersInSpec: Rule.RuleModule = {
 	},
 };
 
+const noTestTimeoutInSpec: Rule.RuleModule = {
+	meta: {
+		type: 'problem',
+		docs: {
+			description: 'Disallow custom test timeouts.',
+		},
+		schema: [],
+		messages: {
+			noTestTimeout:
+				'Do not extend test timeouts. Make the test faster or remove unnecessary work.',
+		},
+	},
+	create(context) {
+		const services: ParserServices = context.sourceCode.parserServices;
+		const checker = services.program.getTypeChecker();
+		return {
+			CallExpression(node: Rule.Node) {
+				const tsNode = services.esTreeNodeToTSNodeMap.get(node);
+				if (
+					!tsNode ||
+					!typescript.isCallExpression(tsNode) ||
+					!typescript.isPropertyAccessExpression(tsNode.expression) ||
+					tsNode.expression.name.text !== 'setTimeout'
+				)
+					return;
+				const receiver = checker.getTypeAtLocation(
+					tsNode.expression.expression,
+				);
+				if (!isSpecSymbol(receiver.getProperty('setTimeout'), 'setTimeout'))
+					return;
+				context.report({ node, messageId: 'noTestTimeout' });
+			},
+		};
+	},
+};
+
 const preferTypeDiscrimination: Rule.RuleModule = {
 	meta: {
 		type: 'suggestion',
@@ -242,6 +285,7 @@ const preferTypeDiscrimination: Rule.RuleModule = {
 const localPlugin = {
 	rules: {
 		'no-real-timers-in-spec': noRealTimersInSpec,
+		'no-test-timeout-in-spec': noTestTimeoutInSpec,
 		'no-return-in-spec': noReturnInSpec,
 		'no-throw-in-spec': noThrowInSpec,
 		'prefer-type-discrimination': preferTypeDiscrimination,
@@ -343,8 +387,15 @@ export const specConfig = defineConfig([
 			'@typescript-eslint/no-this-alias': 'off',
 			'@typescript-eslint/no-unused-vars': 'off',
 			'local/no-real-timers-in-spec': 'error',
+			'local/no-test-timeout-in-spec': 'error',
 			'local/no-return-in-spec': 'error',
 			'local/no-throw-in-spec': 'error',
+		},
+	},
+	{
+		files: ['**/test-screenshot.ts'],
+		rules: {
+			'local/no-test-timeout-in-spec': 'off',
 		},
 	},
 ]);

@@ -21,7 +21,6 @@ interface LintData {
 	name: string;
 	pkg: Package;
 	rootPkg: Package;
-	baseDir: string;
 }
 
 interface Rule {
@@ -50,6 +49,7 @@ interface Tsconfig {
 
 type Fixer = (data: LintData) => Promise<void>;
 type Linter = (data: LintData) => Promise<LinterResult>;
+type AuditLog = (message: string) => void;
 
 const BugsUrl = 'https://github.com/cxlio/cxl/issues';
 const TsconfigJson = 'tsconfig.json';
@@ -318,11 +318,12 @@ async function collectUsedPackages(pkg: Package, projectPath: string) {
 	const external = getPackageExternal(pkg);
 
 	if (!outputDir || !external.length) return used;
+	const resolvedOutputDir = path.resolve(projectPath, outputDir);
 
 	const result = await esbuild.build({
 		bundle: true,
 		entryPoints: getPackageEntryPoints(
-			outputDir,
+			resolvedOutputDir,
 			pkg,
 			getProjectOutputFiles(path.join(projectPath, 'tsconfig.json'))
 				.javascriptFiles,
@@ -331,7 +332,7 @@ async function collectUsedPackages(pkg: Package, projectPath: string) {
 		format: 'esm',
 		logLevel: 'silent',
 		metafile: true,
-		outdir: path.join(outputDir, 'package'),
+		outdir: path.join(resolvedOutputDir, 'package'),
 		platform: getPackagePlatform(pkg),
 		write: false,
 	});
@@ -805,8 +806,11 @@ const auditLinters: Linter[] = [
 	lintImports,
 ];
 
-async function verifyProject(rootPkg: Package, linters: Linter[]) {
-	const projectPath = baseDir;
+async function verifyProject(
+	rootPkg: Package,
+	linters: Linter[],
+	projectPath: string,
+) {
 	const stat = await fs.stat(projectPath);
 	const name = path.basename(projectPath);
 
@@ -818,7 +822,7 @@ async function verifyProject(rootPkg: Package, linters: Linter[]) {
 	);
 	if (!pkg) return [];
 
-	const data: LintData = { projectPath, name, pkg, rootPkg, baseDir };
+	const data: LintData = { projectPath, name, pkg, rootPkg };
 	const results = (await Promise.all(linters.map(lint => lint(data)))).flat();
 
 	results.forEach(r => (r.data = data));
@@ -826,7 +830,11 @@ async function verifyProject(rootPkg: Package, linters: Linter[]) {
 	return results;
 }
 
-async function runAudit(linters: Linter[]) {
+async function runAudit(
+	linters: Linter[],
+	projectPath = baseDir,
+	log: AuditLog = console.log,
+) {
 	const { verbose } = buildOutputOptions();
 
 	function error(project: string, msg: string) {
@@ -842,8 +850,10 @@ async function runAudit(linters: Linter[]) {
 	}
 
 	async function validate() {
-		const rootPkg = await readJson<Package>('../package.json');
-		const results = await verifyProject(rootPkg, linters);
+		const rootPkg = await readJson<Package>(
+			path.join(projectPath, '../package.json'),
+		);
+		const results = await verifyProject(rootPkg, linters, projectPath);
 
 		let hasErrors = false;
 		const fixes = [];
@@ -887,18 +897,21 @@ async function runAudit(linters: Linter[]) {
 	}
 
 	if (!verbose && appliedFixes.length) {
-		console.log(`audit fixed: ${appliedFixes.map(fix => fix.id).join(',')}`);
+		log(`audit fixed: ${appliedFixes.map(fix => fix.id).join(',')}`);
 		for (const fix of appliedFixes) {
 			for (const rule of fix.rules)
-				console.log(`${fix.id}: fixed: ${rule.message}`);
+				log(`${fix.id}: fixed: ${rule.message}`);
 		}
 	}
 }
 
-export function audit() {
-	return runAudit(auditLinters);
+export function audit(projectPath?: string, log?: AuditLog) {
+	return runAudit(auditLinters, projectPath, log);
 }
 
-export function auditDependencies() {
-	return runAudit([lintDependencies]);
+export function auditDependencies(
+	projectPath?: string,
+	log?: AuditLog,
+) {
+	return runAudit([lintDependencies], projectPath, log);
 }

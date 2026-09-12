@@ -292,6 +292,19 @@ const localPlugin = {
 	},
 };
 
+const sharedRules = {
+	'@typescript-eslint/member-ordering': 'error',
+	'no-extend-native': 'error',
+	'@typescript-eslint/no-useless-constructor': 'error',
+	'@typescript-eslint/no-redundant-type-constituents': 'error',
+	'@typescript-eslint/no-non-null-assertion': 'error',
+	'@typescript-eslint/no-unnecessary-type-arguments': 'error',
+	'@typescript-eslint/switch-exhaustiveness-check': [
+		'error',
+		{ considerDefaultExhaustiveForUnions: true },
+	],
+} satisfies NonNullable<Linter.Config['rules']>;
+
 export const tsConfig: Linter.Config = {
 	files: ['**/*.ts', '**/*.tsx'],
 	plugins: {
@@ -306,17 +319,15 @@ export const tsConfig: Linter.Config = {
 		},
 	},
 	rules: {
-		'@typescript-eslint/member-ordering': 'error',
+		...sharedRules,
 		'local/prefer-type-discrimination': 'warn',
 
 		'no-mixed-spaces-and-tabs': 'off',
 		'no-prototype-builtins': 'error',
 		'no-dupe-class-members': 'error',
-		'no-extend-native': 'error',
 		'sort-imports': 'off',
 		eqeqeq: 'error',
 		'@typescript-eslint/no-var-requires': 'off',
-		'@typescript-eslint/no-useless-constructor': 'error',
 		'@typescript-eslint/no-explicit-any': 2,
 		'@typescript-eslint/no-unused-vars': 'off',
 		'@typescript-eslint/explicit-function-return-type': 'off',
@@ -324,9 +335,6 @@ export const tsConfig: Linter.Config = {
 		'@typescript-eslint/no-use-before-define': 'off',
 		'@typescript-eslint/no-empty-interface': 'off',
 		'@typescript-eslint/no-unnecessary-type-assertion': 'error',
-		'@typescript-eslint/no-redundant-type-constituents': 'error',
-		'@typescript-eslint/no-non-null-assertion': 'error',
-		'@typescript-eslint/no-unnecessary-type-arguments': 'error',
 		'@typescript-eslint/no-floating-promises': 'error',
 		'prefer-promise-reject-errors': 'off',
 		'@typescript-eslint/prefer-promise-reject-errors': 'error',
@@ -345,11 +353,6 @@ export const tsConfig: Linter.Config = {
 			'error',
 			{ allowConstantLoopConditions: true },
 		],
-		'@typescript-eslint/switch-exhaustiveness-check': [
-			'error',
-			{ considerDefaultExhaustiveForUnions: true },
-		],
-
 		'@typescript-eslint/prefer-optional-chain': 'error',
 
 		'@typescript-eslint/no-unsafe-call': 'error',
@@ -384,6 +387,7 @@ export const specConfig = defineConfig([
 		files: ['**/*.ts', '**/*.tsx'],
 		plugins: { local: localPlugin },
 		rules: {
+			...sharedRules,
 			'@typescript-eslint/no-this-alias': 'off',
 			'@typescript-eslint/no-unused-vars': 'off',
 			'local/no-real-timers-in-spec': 'error',

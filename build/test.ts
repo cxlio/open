@@ -46,7 +46,11 @@ import {
 import { getExpectedCoverageFiles } from './coverage.js';
 import type { Package } from './npm.js';
 import { checkBranchClean, checkBranchUpToDate } from './git.js';
-import { requiredRootCompilerOptions } from './audit.js';
+import {
+	audit,
+	auditDependencies,
+	requiredRootCompilerOptions,
+} from './audit.js';
 import { bundleDeclarations } from './tsc.js';
 import { file } from './file.js';
 import eslintConfig, { specConfig } from './eslint-config.js';
@@ -160,19 +164,16 @@ async function createAuditFixture(
 	return { dir, packageDir };
 }
 
-function runAudit(
+async function runAudit(
 	packageDir: string,
 	operation: 'audit' | 'auditDependencies' = 'audit',
 ) {
-	const script = `process.chdir(${JSON.stringify(packageDir)}); await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'audit.js')).href)}).then(module => module.${operation}())`;
-	return new Promise<string>((resolve, reject) => {
-		execFile(
-			process.execPath,
-			['--input-type=module', '--eval', script],
-			{ encoding: 'utf8' },
-			(error, stdout) => (error ? reject(error) : resolve(stdout)),
-		);
-	});
+	const output: string[] = [];
+	const log = (message: string) => output.push(message);
+	await (operation === 'audit'
+		? audit(packageDir, log)
+		: auditDependencies(packageDir, log));
+	return output.join('\n');
 }
 
 export default spec('build', s => {
@@ -187,6 +188,50 @@ export default spec('build', s => {
 				message => message.ruleId === 'no-empty',
 			);
 			a.equal(emptyBlocks.length, 1);
+		});
+
+		it.should('apply shared source rules to test files', async a => {
+			const messages = await lintFixture(`type State = 'ready' | 'done' | never;
+class Base {}
+class Example extends Base {
+	value = 1;
+	static shared = 1;
+	constructor() {
+		super();
+	}
+}
+Array.prototype.extra = () => undefined;
+const present: string | undefined = 'value';
+present!;
+function identity<T = string>(value: T) {
+	return value;
+}
+identity<string>('value');
+function check(state: State) {
+	switch (state) {
+		case 'ready':
+			return;
+	}
+}
+void Example;
+void check;
+`);
+			const expected = [
+				'@typescript-eslint/member-ordering',
+				'no-extend-native',
+				'@typescript-eslint/no-useless-constructor',
+				'@typescript-eslint/no-redundant-type-constituents',
+				'@typescript-eslint/no-non-null-assertion',
+				'@typescript-eslint/no-unnecessary-type-arguments',
+				'@typescript-eslint/switch-exhaustiveness-check',
+			].sort();
+			a.equalValues(
+				messages
+					.map(message => message.ruleId ?? '')
+					.filter(ruleId => expected.includes(ruleId))
+					.sort(),
+				expected,
+			);
 		});
 
 		it.should(

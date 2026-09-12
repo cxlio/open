@@ -83,6 +83,7 @@ interface ProxyRegistration {
 
 const proxyOutputLimit = 64 * 1024;
 const proxyShutdownTimeout = 1000;
+const coverageStartupTimeout = 2000;
 
 function appendProxyOutput(output: string, data: Buffer) {
 	return `${output}${data.toString()}`.slice(-proxyOutputLimit);
@@ -282,14 +283,16 @@ export class ProxyManager {
 }
 
 export async function startCoverage(session: CDPSession) {
-	await session.send('Profiler.enable', undefined, { timeout: 0 });
 	try {
+		await session.send('Profiler.enable', undefined, {
+			timeout: coverageStartupTimeout,
+		});
 		await session.send('Profiler.startPreciseCoverage', {
 			callCount: true,
 			detailed: true,
-		}, { timeout: 0 });
+		}, { timeout: coverageStartupTimeout });
 	} catch (error) {
-		await session.send('Profiler.disable').catch(() => undefined);
+		void session.send('Profiler.disable').catch(() => undefined);
 		throw error;
 	}
 	return session;
@@ -716,7 +719,7 @@ async function interceptWorkers(
 				coverageSessions.push(await startCoverage(session));
 			}
 		} catch (error) {
-			await session
+			void session
 				.send('Runtime.runIfWaitingForDebugger')
 				.catch(() => undefined);
 			throw error;

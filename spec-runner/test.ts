@@ -406,7 +406,7 @@ export default spec('failure fixture', s => {
 	});
 
 	s.test('browser-runner', it => {
-		it.should('wait for delayed coverage startup', async a => {
+		it.should('time out delayed coverage startup', async a => {
 			let browser: puppeteer.Browser | undefined;
 			try {
 				browser = await puppeteer.launch({
@@ -416,17 +416,24 @@ export default spec('failure fixture', s => {
 				});
 				const page = await browser.newPage();
 				const session = await page.createCDPSession();
-				const blocking = session.send(
+				void session.send(
 					'Runtime.evaluate',
 					{
 						expression:
-							'for (let i = 0; i < 100_000_000; i++) Math.random()',
+							'for (let i = 0; i < 750_000_000; i++) Math.random()',
 					},
 					{ timeout: 0 },
-				).catch(error => error);
-				await startCoverage(session);
-				a.ok(await blocking);
-				await collectCoverage(session);
+				).catch(() => undefined);
+				let error: unknown;
+				try {
+					await startCoverage(session);
+				} catch (cause) {
+					error = cause;
+				}
+				a.ok(
+					error instanceof Error &&
+						error.message.includes('Profiler.enable timed out'),
+				);
 			} finally {
 				await browser?.close();
 			}
@@ -456,7 +463,7 @@ export default spec('failure fixture', s => {
 				error = cause;
 			}
 			a.equal(error, failure);
-			a.equal(timeout, 0);
+			a.equal(timeout, 2000);
 			a.equalValues(calls, [
 				'Profiler.enable',
 				'Profiler.startPreciseCoverage',

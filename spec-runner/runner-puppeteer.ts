@@ -281,12 +281,17 @@ export class ProxyManager {
 	}
 }
 
-async function startCoverage(session: CDPSession) {
-	await session.send('Profiler.enable');
-	await session.send('Profiler.startPreciseCoverage', {
-		callCount: true,
-		detailed: true,
-	});
+export async function startCoverage(session: CDPSession) {
+	await session.send('Profiler.enable', undefined, { timeout: 0 });
+	try {
+		await session.send('Profiler.startPreciseCoverage', {
+			callCount: true,
+			detailed: true,
+		}, { timeout: 0 });
+	} catch (error) {
+		await session.send('Profiler.disable').catch(() => undefined);
+		throw error;
+	}
 	return session;
 }
 
@@ -639,6 +644,13 @@ async function interceptWorkers(
 	coverageCleanup: (() => Promise<void>)[],
 ) {
 	const pending = new Set<Promise<void>>();
+	function track(promise: Promise<void>) {
+		pending.add(promise);
+		void promise.then(
+			() => pending.delete(promise),
+			() => undefined,
+		);
+	}
 
 	async function onRequest(
 		session: CDPSession,
@@ -693,34 +705,35 @@ async function interceptWorkers(
 	}
 
 	async function configure(session: CDPSession) {
-		session.on('Fetch.requestPaused', event => {
-			onRequest(session, event).catch(error => console.error(error));
-		});
-		await session.send('Fetch.enable', {
-			patterns: [{ urlPattern: 'https://cxl-tester/*' }],
-		});
-		if (coverageSessions) {
-			coverageSessions.push(await startCoverage(session));
+		try {
+			session.on('Fetch.requestPaused', event => {
+				onRequest(session, event).catch(error => console.error(error));
+			});
+			await session.send('Fetch.enable', {
+				patterns: [{ urlPattern: 'https://cxl-tester/*' }],
+			});
+			if (coverageSessions) {
+				coverageSessions.push(await startCoverage(session));
+			}
+		} catch (error) {
+			await session
+				.send('Runtime.runIfWaitingForDebugger')
+				.catch(() => undefined);
+			throw error;
 		}
 		await session.send('Runtime.runIfWaitingForDebugger');
 	}
 
 	function onTarget(target: Target) {
 		if (target.type() !== TargetType.SHARED_WORKER) return;
-		const promise = attach(target)
-			.catch(error => console.error(error))
-			.finally(() => pending.delete(promise));
-		pending.add(promise);
+		track(attach(target));
 	}
 
 	browser.on('targetcreated', onTarget);
 	if (coverageSessions) {
 		const browserSession = await browser.target().createCDPSession();
 		function onAttached(session: CDPSession) {
-			const promise = configure(session)
-				.catch(error => console.error(error))
-				.finally(() => pending.delete(promise));
-			pending.add(promise);
+			track(configure(session));
 		}
 		browserSession.on('sessionattached', onAttached);
 		browserSession.on('Fetch.requestPaused', event => {
@@ -821,12 +834,7 @@ async function generateCoverage(
 ): Promise<TestCoverage[]> {
 	if (!sessions) return [];
 	const coverage = await Promise.all(
-		sessions.map(async session => {
-			const result = await session.send('Profiler.takePreciseCoverage');
-			await session.send('Profiler.stopPreciseCoverage');
-			await session.send('Profiler.disable');
-			return result.result;
-		}),
+		sessions.map(session => collectCoverage(session)),
 	);
 
 	return coverage.flat().flatMap(entry => {
@@ -838,6 +846,26 @@ async function generateCoverage(
 				}
 			: [];
 	});
+}
+
+async function stopCoverage(session: CDPSession) {
+	try {
+		await session.send('Profiler.stopPreciseCoverage');
+	} finally {
+		await session.send('Profiler.disable');
+	}
+}
+
+export async function collectCoverage(session: CDPSession) {
+	let result: Protocol.Profiler.TakePreciseCoverageResponse;
+	try {
+		result = await session.send('Profiler.takePreciseCoverage');
+	} catch (error) {
+		await stopCoverage(session).catch(() => undefined);
+		throw error;
+	}
+	await stopCoverage(session);
+	return result.result;
 }
 
 let screenshotQueue = Promise.resolve();

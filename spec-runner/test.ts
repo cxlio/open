@@ -1,6 +1,12 @@
 import { spec } from '../spec/index.js';
 import type { BenchmarkData, JsonResult } from '../spec/index.js';
-import browserRunner, { ProxyManager } from './runner-puppeteer.js';
+import browserRunner, {
+	collectCoverage,
+	ProxyManager,
+	startCoverage,
+} from './runner-puppeteer.js';
+import type { CDPSession } from 'puppeteer';
+import * as puppeteer from 'puppeteer';
 import { type Coverage, generateReport } from './report.js';
 import { processBenchmarks } from './benchmark.js';
 import { run } from './runner.js';
@@ -399,8 +405,89 @@ export default spec('failure fixture', s => {
 		a.ok(document.includes('Payments &lt;script&gt;'));
 	});
 
-	s.test('browser-runner', a => {
-		a.ok(browserRunner);
+	s.test('browser-runner', it => {
+		it.should('wait for delayed coverage startup', async a => {
+			let browser: puppeteer.Browser | undefined;
+			try {
+				browser = await puppeteer.launch({
+					headless: 'shell',
+					args: ['--no-sandbox'],
+					protocolTimeout: 250,
+				});
+				const page = await browser.newPage();
+				const session = await page.createCDPSession();
+				const blocking = session.send(
+					'Runtime.evaluate',
+					{
+						expression:
+							'for (let i = 0; i < 100_000_000; i++) Math.random()',
+					},
+					{ timeout: 0 },
+				).catch(error => error);
+				await startCoverage(session);
+				a.ok(await blocking);
+				await collectCoverage(session);
+			} finally {
+				await browser?.close();
+			}
+		});
+
+		it.should('handle coverage startup failure', async a => {
+			const calls: string[] = [];
+			const failure = new Error('startup failed');
+			let timeout: number | undefined;
+			const session = {
+				send(
+					method: string,
+					_params?: unknown,
+					options?: { timeout: number },
+				) {
+					calls.push(method);
+					timeout = options?.timeout ?? timeout;
+					return method === 'Profiler.startPreciseCoverage'
+						? Promise.reject(failure)
+						: Promise.resolve({});
+				},
+			} as unknown as CDPSession;
+			let error: unknown;
+			try {
+				await startCoverage(session);
+			} catch (cause) {
+				error = cause;
+			}
+			a.equal(error, failure);
+			a.equal(timeout, 0);
+			a.equalValues(calls, [
+				'Profiler.enable',
+				'Profiler.startPreciseCoverage',
+				'Profiler.disable',
+			]);
+		});
+
+		it.should('clean up when coverage collection fails', async a => {
+			const calls: string[] = [];
+			const failure = new Error('collection failed');
+			const session = {
+				send(method: string) {
+					calls.push(method);
+					return method === 'Profiler.takePreciseCoverage'
+						? Promise.reject(failure)
+						: Promise.resolve({});
+				},
+			} as unknown as CDPSession;
+			let error: unknown;
+			try {
+				await collectCoverage(session);
+			} catch (cause) {
+				error = cause;
+			}
+			a.equal(error, failure);
+			a.equalValues(calls, [
+				'Profiler.takePreciseCoverage',
+				'Profiler.stopPreciseCoverage',
+				'Profiler.disable',
+			]);
+		});
 	});
 
 	s.test('proxy manager', it => {

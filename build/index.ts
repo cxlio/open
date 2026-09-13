@@ -24,12 +24,7 @@ export type {
 export * from "./git.js";
 export * from "./lint.js";
 export * from "./spec.js";
-export {
-	type Summary,
-	type SummaryJson,
-	type Kind,
-	type Flags,
-} from "@cxl/3doc";
+export { type Summary, type SummaryJson, Kind, Flags } from "@cxl/3doc";
 export { tsconfig } from "./tsc.js";
 export type { TsconfigJson } from "./tsc.js";
 export { buildDocs } from "./docs.js";

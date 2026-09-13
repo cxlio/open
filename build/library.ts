@@ -1,15 +1,16 @@
-import { basename, dirname, join, resolve } from 'path';
-import { existsSync } from 'fs';
-import { mkdir, readdir, rm, writeFile } from 'fs/promises';
+import { basename, dirname, join, resolve } from "path";
+import { existsSync } from "fs";
+import { mkdir, readdir, rm, writeFile } from "fs/promises";
 
-import { EMPTY, concat, fromAsync } from '../rx/index.js';
+import { EMPTY, concat, fromAsync } from "../rx/index.js";
 
+import { buildDts, renderJson, findExamples } from "@cxl/3doc";
 import {
 	build,
 	buildOutputOptions,
 	buildTargets,
 	type BuildConfiguration,
-} from './builder.js';
+} from "./builder.js";
 import {
 	buildEsbuild,
 	esbuildVersion,
@@ -21,27 +22,23 @@ import {
 	getPackageTestPlatform,
 	pkg,
 	readme,
-} from './package.js';
-import { file } from './file.js';
-import { eslintTestTsconfig, eslintTsconfig } from './lint.js';
+} from "./package.js";
+import { file } from "./file.js";
+import { eslintTestTsconfig, eslintTsconfig } from "./lint.js";
 import {
 	bundleDeclarations,
 	getProjectOutputFiles,
 	tscVersion,
 	tsconfig,
 	type TsconfigJson,
-} from './tsc.js';
-import { buildDocs } from './docs.js';
-import { generateTestFile, runBenchmarks, runTests } from './spec.js';
-import { audit, auditDependencies } from './audit.js';
-import { readJson } from '../program/index.js';
+} from "./tsc.js";
+import { buildDocs } from "./docs.js";
+import { generateTestFile, runBenchmarks, runTests } from "./spec.js";
+import { audit, auditDependencies } from "./audit.js";
+import { readJson } from "../program/index.js";
 
-import {
-	getPackageTsconfigs,
-	publishNpm,
-	type Package,
-} from './npm.js';
-import { cachedBuild } from './cache.js';
+import { getPackageTsconfigs, publishNpm, type Package } from "./npm.js";
+import { cachedBuild } from "./cache.js";
 
 export function getLintTsconfigs(rootPkg: Package, pkg: Package) {
 	return getPackageTsconfigs(rootPkg, pkg);
@@ -51,7 +48,7 @@ async function packageFiles(dir: string): Promise<string[]> {
 	if (!existsSync(dir)) return [];
 	const entries = await readdir(dir, { withFileTypes: true });
 	const files = await Promise.all(
-		entries.map(entry => {
+		entries.map((entry) => {
 			const path = join(dir, entry.name);
 			return entry.isDirectory() ? packageFiles(path) : [path];
 		}),
@@ -62,30 +59,31 @@ async function packageFiles(dir: string): Promise<string[]> {
 async function removePackageFiles(dir: string, pattern: RegExp) {
 	const files = await packageFiles(dir);
 	await Promise.all(
-		files.filter(file => pattern.test(file)).map(file => rm(file)),
+		files.filter((file) => pattern.test(file)).map((file) => rm(file)),
 	);
 }
 
 export async function buildLibrary(...extra: BuildConfiguration[]) {
 	const selectedTargets = buildTargets();
 	const auditedBeforeBuild =
-		selectedTargets.includes('audit') || selectedTargets.includes('package');
+		selectedTargets.includes("audit") ||
+		selectedTargets.includes("package");
 	if (auditedBeforeBuild) await audit();
 
 	const cwd = process.cwd();
 	const { grep } = buildOutputOptions();
-	const tsconfigFile = await readJson<TsconfigJson>(cwd + '/tsconfig.json');
+	const tsconfigFile = await readJson<TsconfigJson>(cwd + "/tsconfig.json");
 	const outputDir = tsconfigFile.compilerOptions?.outDir;
-	if (!outputDir) throw new Error('Invalid tsconfig file');
+	if (!outputDir) throw new Error("Invalid tsconfig file");
 
 	const appId = basename(outputDir);
-	const pkgDir = join(outputDir, 'package');
-	const pkgJson = await readJson<Package>('package.json');
-	const rootPkg = await readJson<Package>('../package.json');
+	const pkgDir = join(outputDir, "package");
+	const pkgJson = await readJson<Package>("package.json");
+	const rootPkg = await readJson<Package>("../package.json");
 	const configuredTsconfigs = getLintTsconfigs(rootPkg, pkgJson);
 	const lintTasks = () => [
 		eslintTsconfig(tsconfigFile),
-		...configuredTsconfigs.map(path => eslintTsconfig(path)),
+		...configuredTsconfigs.map((path) => eslintTsconfig(path)),
 	];
 
 	const isBrowser = !!pkgJson.browser;
@@ -93,17 +91,17 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 	const testPlatform = getPackageTestPlatform(pkgJson);
 	// "main" is used mainly by CDNs, bundlers will prefer to use the "exports" config.
 	const pkgMain = isBrowser
-		? (pkgJson.browser ?? pkgJson.exports?.['.'] ?? './index.bundle.js')
-		: './index.js';
+		? (pkgJson.browser ?? pkgJson.exports?.["."] ?? "./index.bundle.js")
+		: "./index.js";
 
 	// If pkgJson browser points to './index.bundle.js' a bundle file will be created.
 	const needsBundle =
-		pkgJson.browser === './index.bundle.js' &&
+		pkgJson.browser === "./index.bundle.js" &&
 		pkgJson.exports &&
-		pkgJson.exports['.'] !== pkgJson.browser;
+		pkgJson.exports["."] !== pkgJson.browser;
 
 	const external = getPackageExternal(pkgJson);
-	const hasScreenshotTests = existsSync('./test-screenshot.ts');
+	const hasScreenshotTests = existsSync("./test-screenshot.ts");
 	const { declarationFiles, javascriptFiles } = getProjectOutputFiles();
 	const bundleEntryPoint = getPackageBundleEntryPoints(outputDir, pkgJson);
 	const entryPoints = getPackageEntryPoints(
@@ -116,15 +114,12 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 		pkgJson,
 		declarationFiles,
 	);
-	const cacheDir = join(outputDir, '.package-cache');
-	const tsconfigInputs = [
-		'tsconfig.json',
-		'../tsconfig.json',
-	];
+	const cacheDir = join(outputDir, ".package-cache");
+	const tsconfigInputs = ["tsconfig.json", "../tsconfig.json"];
 	const declarationBuild = fromAsync(() =>
 		cachedBuild(
 			{
-				manifest: join(cacheDir, 'declarations.json'),
+				manifest: join(cacheDir, "declarations.json"),
 				inputs: [...declarationFiles, ...tsconfigInputs],
 				key: JSON.stringify({
 					typescript: tscVersion,
@@ -136,7 +131,7 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 			async () => {
 				await removePackageFiles(pkgDir, /\.d\.(?:ts|mts|cts)$/);
 				return Promise.all(
-					declarationEntryPoints.map(async entry => {
+					declarationEntryPoints.map(async (entry) => {
 						const output = resolve(pkgDir, entry.out);
 						await mkdir(dirname(output), { recursive: true });
 						await writeFile(
@@ -152,12 +147,14 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 	const javascriptBuild = fromAsync(() =>
 		cachedBuild(
 			{
-				manifest: join(cacheDir, 'javascript.json'),
+				manifest: join(cacheDir, "javascript.json"),
 				inputs: [...javascriptFiles, ...tsconfigInputs],
 				key: JSON.stringify({
 					esbuild: esbuildVersion,
 					entryPoints,
-					bundleEntryPoint: needsBundle ? bundleEntryPoint : undefined,
+					bundleEntryPoint: needsBundle
+						? bundleEntryPoint
+						: undefined,
 					external,
 					platform,
 				}),
@@ -191,7 +188,8 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 				const inputs = new Set<string>();
 				const outputs: string[] = [];
 				for (const result of results) {
-					if (!result.metafile) throw new Error('Missing esbuild metafile');
+					if (!result.metafile)
+						throw new Error("Missing esbuild metafile");
 					for (const input of Object.keys(result.metafile.inputs))
 						inputs.add(input);
 					for (const output of Object.keys(result.metafile.outputs))
@@ -206,63 +204,59 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 		{
 			outputDir,
 			tasks: [
-				file('test-screenshot.html', 'test-screenshot.html').catchError(
+				file("test-screenshot.html", "test-screenshot.html").catchError(
 					() => EMPTY,
 				),
-				file('test.html', 'test.html').catchError(() =>
+				file("test.html", "test.html").catchError(() =>
 					generateTestFile({
 						appId,
 						pkgJson,
 						rootPkg,
 					}),
 				),
-				tsconfig('tsconfig.test.json'),
+				tsconfig("tsconfig.test.json"),
 				eslintTestTsconfig(),
-				pkg('index.js'),
+				pkg("index.js"),
 			],
 		},
 		{
-			target: 'test',
+			target: "test",
 			outputDir,
 			tasks: [
 				runTests({
 					appId,
 					outputDir,
-					node: testPlatform === 'node',
+					node: testPlatform === "node",
 					grep,
 				}),
 			],
 		},
 		{
-			target: 'benchmark',
+			target: "benchmark",
 			outputDir,
 			tasks: [
 				runBenchmarks({
 					appId,
 					outputDir,
-					node: testPlatform === 'node',
+					node: testPlatform === "node",
 				}),
 			],
 		},
 		...(hasScreenshotTests
 			? [
 					{
-						target: 'test',
+						target: "test",
 						outputDir,
 						tasks: [
 							generateTestFile({
 								appId,
 								pkgJson,
 								rootPkg,
-								testFile: './test-screenshot.js',
-								outFile: 'test-screenshot.html',
+								testFile: "./test-screenshot.js",
+								outFile: "test-screenshot.html",
 							}),
 							concat(
 								fromAsync(async () => {
-									const { buildDts } =
-										await import('@cxl/3doc/render.js');
-									const { renderJson, findExamples } =
-										await import('@cxl/3doc/render-summary.js');
 									const summary = renderJson(
 										await buildDts(
 											{
@@ -273,11 +267,11 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 											pkgJson,
 										),
 									);
-									const examples = summary.index.flatMap(n =>
-										findExamples(n),
+									const examples = summary.index.flatMap(
+										(n) => findExamples(n),
 									);
 									return {
-										path: 'test-screenshot.json',
+										path: "test-screenshot.json",
 										source: Buffer.from(
 											JSON.stringify({
 												index: summary.index,
@@ -289,7 +283,7 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 								runTests({
 									appId,
 									outputDir,
-									entryFile: './test-screenshot.js',
+									entryFile: "./test-screenshot.js",
 									ignoreCoverage: true,
 									grep,
 								}),
@@ -299,13 +293,15 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 				]
 			: []),
 		{
-			target: 'audit',
+			target: "audit",
 			outputDir,
-			tasks: auditedBeforeBuild ? [] : [fromAsync(audit).ignoreElements()],
+			tasks: auditedBeforeBuild
+				? []
+				: [fromAsync(audit).ignoreElements()],
 		},
 
 		{
-			target: 'docs',
+			target: "docs",
 			outputDir: `../docs/${pkgJson.name}`,
 			tasks: [
 				buildDocs({
@@ -314,37 +310,39 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 			],
 		},
 		{
-			target: 'lint',
-			outputDir: '.',
+			target: "lint",
+			outputDir: ".",
 			tasks: lintTasks(),
 		},
 		{
-			target: 'package',
-			outputDir: '.',
+			target: "package",
+			outputDir: ".",
 			tasks: [
 				readme(),
 				...lintTasks(),
 				fromAsync(auditDependencies).ignoreElements(),
-				...(auditedBeforeBuild ? [] : [fromAsync(audit).ignoreElements()]),
+				...(auditedBeforeBuild
+					? []
+					: [fromAsync(audit).ignoreElements()]),
 			],
 		},
 		{
-			target: 'package',
+			target: "package",
 			outputDir: pkgDir,
 			tasks: [
-				file('README.md', 'README.md'),
-				file('LICENSE.md', 'LICENSE.md').catchError(() => EMPTY),
+				file("README.md", "README.md"),
+				file("LICENSE.md", "LICENSE.md").catchError(() => EMPTY),
 				pkg(pkgMain),
 				declarationBuild,
 				javascriptBuild,
 			],
 		},
 		{
-			target: 'publish',
+			target: "publish",
 			outputDir,
 			tasks: [
 				fromAsync(async () => {
-					await publishNpm('.', pkgDir);
+					await publishNpm(".", pkgDir);
 				}).ignoreElements(),
 			],
 		},

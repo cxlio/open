@@ -1,14 +1,11 @@
-import { observable } from '../rx/index.js';
+import { observable } from "../rx/index.js";
 
-import type { Output } from './builder.js';
+import type { Output } from "./builder.js";
 
-import {
-	buildDocs as build3doc,
-	type BuildDocsOptions,
-} from '@cxl/3doc/render.js';
+import { buildDocs as build3doc, type BuildDocsOptions } from "@cxl/3doc";
 
 export function buildDocs(options: BuildDocsOptions) {
-	return observable<Output>(subs => {
+	return observable<Output>((subs) => {
 		build3doc(
 			{
 				clean: true,
@@ -18,7 +15,7 @@ export function buildDocs(options: BuildDocsOptions) {
 				cxlExtensions: true,
 				...options,
 			},
-			file => {
+			(file) => {
 				subs.next({
 					path: file.name,
 					source: Buffer.from(file.content),
@@ -27,7 +24,7 @@ export function buildDocs(options: BuildDocsOptions) {
 			},
 		).then(
 			() => subs.complete(),
-			e => subs.error(e),
+			(e) => subs.error(e),
 		);
 	});
 }

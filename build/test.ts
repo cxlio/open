@@ -254,13 +254,20 @@ void check;
 			},
 		);
 
-		it.should('lint configured runtime tsconfigs', async a => {
+		it.should('lint configured tsconfigs', async a => {
 			const rootPkg = {
 				name: '@test/root',
 				version: '1.0.0',
 				private: true,
 				bugs: '',
 				repository: '',
+				build: {
+					lintTsconfigs: [
+						'tsconfig.server.json',
+						'tsconfig.lint.json',
+						'tsconfig.missing.json',
+					],
+				},
 			} satisfies Package;
 			const pkg = {
 				...rootPkg,
@@ -273,8 +280,6 @@ void check;
 				},
 			} satisfies Package;
 
-			a.equalValues(getLintTsconfigs(rootPkg, pkg), pkg.build.tsconfigs);
-
 			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-eslint-project-'));
 			try {
 				const compilerOptions = {
@@ -282,7 +287,7 @@ void check;
 					moduleResolution: 'nodenext',
 					strict: true,
 				};
-				for (const target of ['worker', 'server']) {
+				for (const target of ['worker', 'server', 'lint']) {
 					const tsconfig = join(dir, `tsconfig.${target}.json`);
 					await writeFile(
 						tsconfig,
@@ -295,6 +300,17 @@ void check;
 						}),
 						'eslint errors found.',
 					);
+				}
+				const previousCwd = process.cwd();
+				try {
+					process.chdir(dir);
+					a.equalValues(getLintTsconfigs(rootPkg, pkg), [
+						'tsconfig.worker.json',
+						'tsconfig.server.json',
+						'tsconfig.lint.json',
+					]);
+				} finally {
+					process.chdir(previousCwd);
 				}
 			} finally {
 				await rm(dir, { recursive: true, force: true });
@@ -640,6 +656,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
 				pkg.build = {
 					platform: 'neutral',
+					lintTsconfigs: ['tsconfig.lint.json'],
 					tsconfigs: ['tsconfig.worker.json'],
 				};
 				await writeFile(packagePath, JSON.stringify(pkg));
@@ -1075,6 +1092,13 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				}),
 			);
 			await writeFile(
+				join(packageDir, 'tsconfig.lint.json'),
+				JSON.stringify({
+					compilerOptions: { outDir: outputDir },
+					files: ['lint.ts'],
+				}),
+			);
+			await writeFile(
 				join(packageDir, 'tsconfig.server.json'),
 				JSON.stringify({
 					compilerOptions: { outDir: outputDir },
@@ -1104,6 +1128,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 			);
 			for (const name of [
 				'index',
+				'lint',
 				'worker',
 				'server',
 				'auth',
@@ -1121,6 +1146,7 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 				bugs: '',
 				repository: '',
 				build: {
+					lintTsconfigs: ['tsconfig.lint.json'],
 					tsconfigs: [
 						'tsconfig.worker.json',
 						'tsconfig.missing.json',

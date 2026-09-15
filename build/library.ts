@@ -37,11 +37,15 @@ import { generateTestFile, runBenchmarks, runTests } from "./spec.js";
 import { audit, auditDependencies } from "./audit.js";
 import { readJson } from "../program/index.js";
 
-import { getPackageTsconfigs, publishNpm, type Package } from "./npm.js";
+import {
+	getPackageLintTsconfigs,
+	publishNpm,
+	type Package,
+} from "./npm.js";
 import { cachedBuild } from "./cache.js";
 
 export function getLintTsconfigs(rootPkg: Package, pkg: Package) {
-	return getPackageTsconfigs(rootPkg, pkg);
+	return getPackageLintTsconfigs(rootPkg, pkg);
 }
 
 async function packageFiles(dir: string): Promise<string[]> {

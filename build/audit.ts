@@ -461,6 +461,7 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 	if (!pkg.browser && pkg.devDependencies) delete pkg.devDependencies;
 	if (pkg.browser) pkg.browser = browser;
 	pkg.build ??= {};
+	delete pkg.build.lintTsconfigs;
 	delete pkg.build.tsconfigs;
 	pkg.build.platform = await inferPackagePlatform(pkg, projectPath);
 	if (!pkg.repository && rootPkg.repository) {
@@ -550,6 +551,10 @@ function lintPackage({ pkg, name, rootPkg }: LintData) {
 		rule(
 			isPackagePlatform(pkg.build?.platform),
 			'Package "build.platform" must be neutral, browser, node, or worker.',
+		),
+		rule(
+			pkg.build?.lintTsconfigs === undefined,
+			'Package should not override "build.lintTsconfigs".',
 		),
 		rule(
 			pkg.build?.tsconfigs === undefined,

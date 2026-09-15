@@ -50,6 +50,7 @@ export interface Package {
 			functions?: number;
 		};
 		dependencyUsageFunctions?: string[];
+		lintTsconfigs?: string[];
 		tsconfigs?: string[];
 	};
 
@@ -79,10 +80,31 @@ export function getPackageBuildOptions(rootPkg: Package, pkg: Package) {
 	return build;
 }
 
+function existingPackageBuildFiles(
+	files: string[] | undefined,
+	override: string[] | undefined,
+) {
+	return (files ?? []).filter(path => override || existsSync(path));
+}
+
 export function getPackageTsconfigs(rootPkg: Package, pkg: Package) {
-	return (getPackageBuildOptions(rootPkg, pkg).tsconfigs ?? []).filter(
-		path => pkg.build?.tsconfigs || existsSync(path),
+	return existingPackageBuildFiles(
+		getPackageBuildOptions(rootPkg, pkg).tsconfigs,
+		pkg.build?.tsconfigs,
 	);
+}
+
+export function getPackageLintTsconfigs(rootPkg: Package, pkg: Package) {
+	const build = getPackageBuildOptions(rootPkg, pkg);
+	return [
+		...new Set([
+			...existingPackageBuildFiles(build.tsconfigs, pkg.build?.tsconfigs),
+			...existingPackageBuildFiles(
+				build.lintTsconfigs,
+				pkg.build?.lintTsconfigs,
+			),
+		]),
+	];
 }
 
 export async function readPackage(path: string) {

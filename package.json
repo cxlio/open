@@ -5,7 +5,7 @@
 	"version": "0.0.0",
 	"homepage": "https://cxlio.github.io/docs/",
 	"devDependencies": {
-		"@cxl/3doc": "^1.0.0",
+		"@cxl/3doc": "^1.0.1",
 		"@cxl/ui": "^6.0.0",
 		"@eslint/js": "^9.39.1",
 		"@types/node": "^24.0.3",
@@ -13,7 +13,7 @@
 		"@typescript/native": "npm:typescript@^7.0.2",
 		"esbuild-wasm": "^0.28.2",
 		"eslint": "^9.39.1",
-		"eslint-plugin-sonarjs": "^4.0.3",
+		"eslint-plugin-sonarjs": "^4.2.1",
 		"pngjs": "^6.0.0",
 		"puppeteer": "^25.9.0",
 		"typescript": "npm:@typescript/typescript6@^6.0.3",

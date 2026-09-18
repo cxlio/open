@@ -274,8 +274,43 @@ const preferTypeDiscrimination: Rule.RuleModule = {
 		},
 	},
 	create(context) {
+		const services: ParserServices = context.sourceCode.parserServices;
+		const checker = services.program.getTypeChecker();
+		const openTypeFlags =
+			typescript.TypeFlags.Any |
+			typescript.TypeFlags.Unknown |
+			typescript.TypeFlags.TypeParameter |
+			typescript.TypeFlags.NonPrimitive;
+		function isOpenType(type: typescript.Type): boolean {
+			if (type.flags & openTypeFlags) return true;
+			if (type.isUnionOrIntersection())
+				return type.types.some(isOpenType);
+			if (
+				checker.getIndexInfoOfType(type, typescript.IndexKind.String) ||
+				checker.getIndexInfoOfType(type, typescript.IndexKind.Number)
+			)
+				return true;
+			const declarations = type.getSymbol()?.declarations;
+			return (
+				!!declarations?.length &&
+				declarations.every(declaration => {
+					const file = declaration
+						.getSourceFile()
+						.fileName.replace(/\\/g, '/');
+					return file.includes('/node_modules/');
+				})
+			);
+		}
 		return {
 			"BinaryExpression[operator='in']"(node: Rule.Node) {
+				const tsNode = services.esTreeNodeToTSNodeMap.get(node);
+				if (
+					!tsNode ||
+					!typescript.isBinaryExpression(tsNode) ||
+					!typescript.isStringLiteralLike(tsNode.left) ||
+					isOpenType(checker.getTypeAtLocation(tsNode.right))
+				)
+					return;
 				context.report({ node, messageId: 'preferTypeDiscrimination' });
 			},
 		};
@@ -320,7 +355,7 @@ export const tsConfig: Linter.Config = {
 	},
 	rules: {
 		...sharedRules,
-		'local/prefer-type-discrimination': 'warn',
+		'local/prefer-type-discrimination': 'error',
 
 		'no-mixed-spaces-and-tabs': 'off',
 		'no-prototype-builtins': 'error',

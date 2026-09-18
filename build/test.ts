@@ -332,6 +332,45 @@ export const valid = new Promise<void>((_, reject) => reject(new Error('failure'
 			a.equal(rejectionMessages[0]?.line, 2);
 		});
 
+		it.should('require explicit discrimination for closed local types', async a => {
+			const messages = await lintFixture(
+				`interface Profile { name?: string }
+declare const profile: Profile;
+void ('name' in profile);
+type Result = { value: string } | { error: Error };
+declare const result: Result;
+void ('value' in result);
+interface Item { action?: string }
+declare const item: Item;
+void ('type' in item);
+declare const unknownValue: unknown;
+if (unknownValue && typeof unknownValue === 'object') void ('id' in unknownValue);
+declare const objectValue: object;
+void ('id' in objectValue);
+function generic<T>(value: T) {
+	if (value && typeof value === 'object') void ('id' in value);
+}
+declare const record: Record<string, unknown>;
+void ('id' in record);
+declare const error: Error;
+void ('code' in error);
+declare const key: string;
+void (key in profile);
+void generic;`,
+				eslintConfig,
+			);
+			const discriminationMessages = messages.filter(
+				message =>
+					message.ruleId === 'local/prefer-type-discrimination',
+			);
+			a.equal(discriminationMessages.length, 3);
+			a.equalValues(
+				discriminationMessages.map(message => message.line),
+				[4, 7, 10],
+			);
+			a.ok(discriminationMessages.every(message => message.severity === 2));
+		});
+
 		it.should('ban direct returns from spec tests', async a => {
 			const messages = await lintFixture(`export default spec('fixture', s => {
 	s.test('direct return', a => {

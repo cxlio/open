@@ -255,7 +255,6 @@ function isIterable<T>(val: T): val is T & Iterable<Value> {
 	return (
 		typeof val === 'object' &&
 		!!val &&
-		// eslint-disable-next-line local/prefer-type-discrimination -- Iterable is a runtime protocol, not a concrete class.
 		Symbol.iterator in val &&
 		typeof val[Symbol.iterator] === 'function'
 	);

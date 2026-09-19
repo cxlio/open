@@ -1,5 +1,5 @@
 import { writeFile } from 'fs/promises';
-import type { JsonResult } from '../spec/index.js';
+import type { JsonResult } from '@cxl/spec';
 import {
 	renderSpecificationDocument,
 	type SpecificationDocumentOptions,

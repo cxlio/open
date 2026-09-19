@@ -1,4 +1,4 @@
-import { spec } from '../spec/index.js';
+import { spec } from '@cxl/spec';
 import '@cxl/ui';
 
 export default spec('iframe URL', s => {

@@ -1,7 +1,7 @@
 import { resolve, dirname, relative } from 'path';
 
-import { Observable, fromAsync } from '../rx/index.js';
-import { readJson } from '../program/index.js';
+import { Observable, fromAsync } from '@cxl/rx';
+import { readJson } from '@cxl/program';
 import {
 	appLog,
 	buildOutputOptions,

@@ -1,11 +1,11 @@
-import { Observable, fromAsync, merge, of, EMPTY } from '../rx/index.js';
+import { Observable, fromAsync, merge, of, EMPTY } from '@cxl/rx';
 import { existsSync, readFileSync } from 'fs';
 import { join, relative, resolve } from 'path';
 import { file } from './file.js';
 import { execSync } from 'child_process';
 import type { Output } from './builder.js';
 import type { License, Package } from './npm.js';
-import { getErrorCode, readJson } from '../program/index.js';
+import { getErrorCode, readJson } from '@cxl/program';
 import * as esbuildApi from 'esbuild-wasm';
 
 const SCRIPTDIR = process.cwd();

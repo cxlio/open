@@ -2,13 +2,13 @@ import { createHash } from 'crypto';
 import { mkdir, writeFile } from 'fs/promises';
 import { cpus } from 'os';
 import { join } from 'path';
-import { getErrorCode, readJson } from '../program/index.js';
+import { getErrorCode, readJson } from '@cxl/program';
 
 import type {
 	BenchmarkData,
 	JsonResult,
 	Result,
-} from '../spec/index.js';
+} from '@cxl/spec';
 
 export interface BenchmarkEnvironment {
 	browser: string;

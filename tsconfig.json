@@ -23,7 +23,11 @@
 		"typeRoots": ["./node_modules/@types"],
 		"types": [],
 		"paths": {
-			"@cxl/rx": ["./rx"]
+			"@cxl/program": ["./program/index.ts"],
+			"@cxl/rx": ["./rx/index.ts"],
+			"@cxl/spec": ["./spec/index.ts"],
+			"@cxl/spec-runner": ["./spec-runner/index.ts"],
+			"@cxl/spec-runner/*": ["./spec-runner/*"]
 		}
 	},
 	"files": []

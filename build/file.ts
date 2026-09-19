@@ -8,7 +8,7 @@ import {
 	tap,
 	filter,
 	fromAsync,
-} from '../rx/index.js';
+} from '@cxl/rx';
 
 import { promises as fs, readFileSync } from 'fs';
 import { basename as pathBasename, dirname, resolve } from 'path';

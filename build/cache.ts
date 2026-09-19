@@ -1,7 +1,7 @@
 import { createHash, Hash } from 'crypto';
 import { dirname, isAbsolute, relative, resolve, sep } from 'path';
 import { promises as fs } from 'fs';
-import { getErrorCode, readJson } from '../program/index.js';
+import { getErrorCode, readJson } from '@cxl/program';
 
 interface CacheManifest {
 	fingerprint: string;

@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { Observable, merge, of } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('merge', s => {
 	s.test('should return itself when try to merge single observable', a => {

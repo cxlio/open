@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { Subject, take } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('take', a => {
 	a.should('take two values of an observable with many values', async a => {

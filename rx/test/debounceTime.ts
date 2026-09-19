@@ -8,7 +8,7 @@ import {
 	tap,
 	throwError,
 } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 declare const setTimeout: (fn: () => unknown, n?: number) => number;
 declare const clearTimeout: (n: number) => void;

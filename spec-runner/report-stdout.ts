@@ -1,4 +1,4 @@
-import { colors } from '../program/index.js';
+import { colors } from '@cxl/program';
 
 import type {
 	Report,

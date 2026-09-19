@@ -1,4 +1,4 @@
-import { spec } from '../spec/index.js';
+import { spec } from '@cxl/spec';
 
 const expected = new Uint8Array([0, 127, 128, 255, 195, 40, 226, 40, 161]);
 

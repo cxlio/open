@@ -1,7 +1,7 @@
 import { dirname, join, relative, resolve } from 'path';
 import { builtinModules } from 'module';
 import { existsSync, readdirSync } from 'fs';
-import { Observable, Subscriber } from '../rx/index.js';
+import { Observable, Subscriber } from '@cxl/rx';
 import type {
 	BuilderProgram,
 	BuildOptions,
@@ -15,7 +15,7 @@ import type {
 import * as ts from 'typescript';
 import type { Output } from './builder.js';
 import { getPackageName } from './package.js';
-import { readJson } from '../program/index.js';
+import { readJson } from '@cxl/program';
 import type { Package } from './npm.js';
 
 export interface TsconfigJson {

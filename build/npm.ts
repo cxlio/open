@@ -1,4 +1,4 @@
-import { parseJson, readJson, sh } from '../program/index.js';
+import { parseJson, readJson, sh } from '@cxl/program';
 import type { SpawnOptions } from 'child_process';
 import { buildOutputOptions } from './builder.js';
 import {

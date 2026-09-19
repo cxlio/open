@@ -5,7 +5,7 @@ import {
 	firstValueFrom,
 } from '../index.js';
 
-import type { TestApi } from '../../spec/index.js';
+import type { TestApi } from '@cxl/spec';
 
 interface Log {
 	events: string;

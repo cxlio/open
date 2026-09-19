@@ -1,4 +1,4 @@
-import { spec } from '../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('service worker fixture', s => {
 	s.test('module import', async a => {

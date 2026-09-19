@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { defer, mergeMap, of, from } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 function arrayRepeat<T>(value: T, times: number) {
 	const results = [];

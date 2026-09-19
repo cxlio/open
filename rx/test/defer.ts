@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { defer } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('defer', it => {
 	it.should('defer the creation of a simple observable', a => {

@@ -2,7 +2,7 @@ import type {
 	BenchmarkData,
 	JsonResult,
 	FigureData,
-} from '../spec/index.js';
+} from '@cxl/spec';
 import type { BenchmarkReport } from './benchmark.js';
 import { writeFile } from 'fs/promises';
 import { basename } from 'path';

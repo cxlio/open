@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { extname, isAbsolute, relative, resolve, sep } from 'path';
 import * as ts from 'typescript';
-import type { TestCoverage } from '../spec-runner/report.js';
+import type { TestCoverage } from '@cxl/spec-runner/report.js';
 import { getPackageTsconfigs, type Package } from './npm.js';
 import { parseTsConfig } from './tsc.js';
 

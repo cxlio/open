@@ -1,5 +1,5 @@
 import { from, fromAsync, of } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('from', s => {
 	s.test('should create an observable from an array', a => {

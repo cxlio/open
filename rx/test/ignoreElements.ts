@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { observable, ignoreElements } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('ignoreElements', it => {
 	it.should(

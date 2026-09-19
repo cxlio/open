@@ -1,5 +1,5 @@
 import { Subject, subject, Subscriber } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('Subject', s => {
 	s.test('Subject#constructor', function (a) {

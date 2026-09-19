@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { Observable, share, of } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('share', it => {
 	it.should('should mirror a simple source Observable', a => {

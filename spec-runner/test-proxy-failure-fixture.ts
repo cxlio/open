@@ -1,4 +1,4 @@
-import { spec } from '../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('managed proxy failure fixture', async s => {
 	await s.proxy('/managed', {

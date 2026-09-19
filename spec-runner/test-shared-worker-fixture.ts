@@ -1,4 +1,4 @@
-import { spec } from '../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('shared worker fixture', s => {
 	s.test('dynamic import', async a => {

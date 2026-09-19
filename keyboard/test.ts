@@ -1,4 +1,4 @@
-import { TestApi, spec, mockFn } from '../spec/index.js';
+import { TestApi, spec, mockFn } from '@cxl/spec';
 import {
 	type KeyboardLayout,
 	normalize,

@@ -1,5 +1,5 @@
 import { OrderedSubject } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('OrderedSubject', s => {
 	s.test('OrderedSubject#constructor', function (a) {

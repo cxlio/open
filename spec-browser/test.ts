@@ -1,5 +1,5 @@
-import { spec, type TestApi } from '../spec/index.js';
-import { renderSpecificationDocument } from '../spec-runner/specification.js';
+import { spec, type TestApi } from '@cxl/spec';
+import { renderSpecificationDocument } from '@cxl/spec-runner/specification.js';
 import browserRunner, { imageDataDiff, runTestFile } from './index.js';
 
 async function renderDocument(a: TestApi, title: string, srcdoc: string) {

@@ -1,4 +1,4 @@
-import { spec } from '../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('iframe viewport', s => {
 	s.test('matches parent dimensions', a => {

@@ -2,6 +2,8 @@ import js from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import ts from 'typescript-eslint';
 import { configs as sonarjsConfigs } from 'eslint-plugin-sonarjs';
+import { existsSync } from 'fs';
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'path';
 import type { Linter, Rule } from 'eslint';
 import * as typescript from 'typescript';
 
@@ -108,6 +110,82 @@ function hasEarlierCall(
 	typescript.forEachChild(fn, visit);
 	return found;
 }
+
+function findPackageRoot(file: string) {
+	let directory = dirname(file);
+	for (;;) {
+		if (existsSync(join(directory, 'package.json'))) return directory;
+		const parent = dirname(directory);
+		if (parent === directory) return;
+		directory = parent;
+	}
+}
+
+function getModuleSpecifier(
+	node: Rule.Node,
+	services: ParserServices,
+) {
+	const tsNode = services.esTreeNodeToTSNodeMap.get(node);
+	if (
+		tsNode &&
+		(typescript.isImportDeclaration(tsNode) ||
+			typescript.isExportDeclaration(tsNode)) &&
+		tsNode.moduleSpecifier &&
+		typescript.isStringLiteralLike(tsNode.moduleSpecifier)
+	)
+		return tsNode.moduleSpecifier.text;
+	if (
+		tsNode &&
+		typescript.isCallExpression(tsNode) &&
+		(tsNode.expression.kind === typescript.SyntaxKind.ImportKeyword ||
+			(typescript.isIdentifier(tsNode.expression) &&
+				tsNode.expression.text === 'require'))
+	) {
+		const argument = tsNode.arguments[0];
+		if (argument && typescript.isStringLiteralLike(argument))
+			return argument.text;
+	}
+}
+
+const noRelativePackageImports: Rule.RuleModule = {
+	meta: {
+		type: 'problem',
+		docs: {
+			description: 'Disallow relative imports outside the current package.',
+		},
+		schema: [],
+		messages: {
+			noRelativePackageImport:
+				'Import sibling packages by package name instead of relative path.',
+		},
+	},
+	create(context) {
+		const services: ParserServices = context.sourceCode.parserServices;
+		const packageRoot = findPackageRoot(context.filename);
+		function checkImport(node: Rule.Node) {
+			const specifier = getModuleSpecifier(node, services);
+			if (!packageRoot || !specifier?.startsWith('.')) return;
+			const target = resolve(dirname(context.filename), specifier);
+			const targetPath = relative(packageRoot, target);
+			if (
+				targetPath === '..' ||
+				targetPath.startsWith(`..${sep}`) ||
+				isAbsolute(targetPath)
+			)
+				context.report({
+					node,
+					messageId: 'noRelativePackageImport',
+				});
+		}
+		return {
+			ImportDeclaration: checkImport,
+			ExportNamedDeclaration: checkImport,
+			ExportAllDeclaration: checkImport,
+			ImportExpression: checkImport,
+			"CallExpression[callee.name='require']": checkImport,
+		};
+	},
+};
 
 const noThrowInSpec: Rule.RuleModule = {
 	meta: {
@@ -319,6 +397,7 @@ const preferTypeDiscrimination: Rule.RuleModule = {
 
 const localPlugin = {
 	rules: {
+		'no-relative-package-imports': noRelativePackageImports,
 		'no-real-timers-in-spec': noRealTimersInSpec,
 		'no-test-timeout-in-spec': noTestTimeoutInSpec,
 		'no-return-in-spec': noReturnInSpec,
@@ -328,6 +407,7 @@ const localPlugin = {
 };
 
 const sharedRules = {
+	'local/no-relative-package-imports': 'error',
 	'@typescript-eslint/member-ordering': 'error',
 	'no-extend-native': 'error',
 	'@typescript-eslint/no-useless-constructor': 'error',

@@ -2,13 +2,13 @@ import { existsSync, readFileSync } from 'fs';
 import { writeFile } from 'fs/promises';
 import { join, relative, resolve } from 'path';
 import { getPackageBuildOptions } from './npm.js';
-import { fromAsync, of } from '../rx/index.js';
-import { readJson } from '../program/index.js';
+import { fromAsync, of } from '@cxl/rx';
+import { readJson } from '@cxl/program';
 import { buildOutputOptions } from './builder.js';
 import { getDependencies } from './package.js';
 import { parseTsConfig } from './tsc.js';
-import type { CoverageSummary } from '../spec-runner/report.js';
-import { parseGrep } from '../spec-runner/grep.js';
+import type { CoverageSummary } from '@cxl/spec-runner/report.js';
+import { parseGrep } from '@cxl/spec-runner/grep.js';
 import type { Package } from './npm.js';
 import { getExpectedCoverageFiles } from './coverage.js';
 
@@ -113,6 +113,10 @@ function generateImportMap(
 	Object.assign(map, generateTsconfigImportMap(importMapRoot, true));
 	if (rootPkg.importmap) Object.assign(map, rootPkg.importmap);
 	return JSON.stringify({ imports: map });
+}
+
+function generateNodeImportMap(rootPkg: Package) {
+	return JSON.stringify({ imports: rootPkg.importmap ?? {} });
 }
 
 function formatImportMapPrefix(
@@ -242,17 +246,17 @@ export function runTests({
 	grep?: string;
 }) {
 	return fromAsync(async () => {
-		const { run: runSpec } = await import('../spec-runner/runner.js');
-		const { writeReport } = await import('../spec-runner/report.js');
+		const { run: runSpec } = await import('@cxl/spec-runner/runner.js');
+		const { writeReport } = await import('@cxl/spec-runner/report.js');
 		const { default: printReportV2 } =
-			await import('../spec-runner/report-stdout.js');
+			await import('@cxl/spec-runner/report-stdout.js');
 
 		const cwd = process.cwd();
 		const pkgJson = await readJson<Package>('package.json');
 		const rootPkg = await readJson<Package>('../package.json');
 		const ignoreTestCoverage = ignoreCoverage || !!grep;
 		const importmap = node
-			? undefined
+			? generateNodeImportMap(rootPkg)
 			: generateImportMap(rootPkg, pkgJson, resolve(outputDir, '../../'));
 		const { verbose } = buildOutputOptions();
 		const build = getPackageBuildOptions(rootPkg, pkgJson);
@@ -304,15 +308,15 @@ export function runBenchmarks({
 }) {
 	return fromAsync(async () => {
 		if (!existsSync(resolve(outputDir, 'test-benchmark.js'))) return;
-		const { run: runSpec } = await import('../spec-runner/runner.js');
+		const { run: runSpec } = await import('@cxl/spec-runner/runner.js');
 		const { default: printReport } =
-			await import('../spec-runner/report-stdout.js');
+			await import('@cxl/spec-runner/report-stdout.js');
 
 		const cwd = process.cwd();
 		const pkgJson = await readJson<Package>('package.json');
 		const rootPkg = await readJson<Package>('../package.json');
 		const importmap = node
-			? undefined
+			? generateNodeImportMap(rootPkg)
 			: generateImportMap(rootPkg, pkgJson, resolve(outputDir, '../../'));
 		const { verbose } = buildOutputOptions();
 		try {

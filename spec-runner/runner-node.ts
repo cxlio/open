@@ -6,7 +6,7 @@ import type {
 	JsonResult,
 	Result,
 	RunnerCommand,
-} from '../spec/index.js';
+} from '@cxl/spec';
 import type { SpecRunner } from './index.js';
 
 import { generateReport } from './report.js';
@@ -16,6 +16,7 @@ import {
 	getNodeBenchmarkEnvironment,
 	processBenchmarks,
 } from './benchmark.js';
+import { registerImportMap } from './importmap.js';
 
 type RunnerBridge = (command: RunnerCommand) => Promise<Result> | Result;
 
@@ -69,6 +70,10 @@ export default async function runNode(app: SpecRunner) {
 		const stdout = process.stdout.write;
 		const stderr = process.stderr.write;
 		const previousRunner = globalThis.__cxlRunner;
+		const importMap = registerImportMap(
+			app.importmap,
+			resolve(app.vfsRoot ?? '.'),
+		);
 		const ignoreOutput = () => true;
 		globalThis.__cxlRunner = command => {
 			if (command.type === 'proxy' || command.type === 'proxyService')
@@ -89,6 +94,7 @@ export default async function runNode(app: SpecRunner) {
 			const suite = module.default;
 			return await suite.run(app.grep).then(() => suite);
 		} finally {
+			importMap?.deregister();
 			process.stdout.write = stdout;
 			process.stderr.write = stderr;
 			try {

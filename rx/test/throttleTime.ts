@@ -1,4 +1,4 @@
-import { spec, TestApi } from '../../spec/index.js';
+import { spec, TestApi } from '@cxl/spec';
 import { subject, throttleTime } from '../index.js';
 
 export default spec('throttleTime', (suite: TestApi) => {

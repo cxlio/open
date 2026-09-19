@@ -1,6 +1,6 @@
 import { cold, expectLog } from './util.js';
 import { Subject, first } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('first', a => {
 	// Test: Emit only the first value of an observable with multiple values

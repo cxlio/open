@@ -1,5 +1,5 @@
 import { finalize, of, map, be } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('finalize', it => {
 	it.should('call finalize after complete', a => {

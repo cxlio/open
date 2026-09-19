@@ -1,4 +1,4 @@
-import { TestApi, spec } from '../spec/index.js';
+import { TestApi, spec } from '@cxl/spec';
 import { type Options, globToRegex } from './index.js';
 
 export default spec('glob', s => {

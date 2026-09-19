@@ -1,4 +1,4 @@
-import type { JsonResult, Result, RunnerCommand, Test } from '../spec/index.js';
+import type { JsonResult, Result, RunnerCommand, Test } from '@cxl/spec';
 import {
 	escapeSpecificationHtml,
 	specificationCss,
@@ -7,7 +7,7 @@ import {
 	specificationHeading,
 	specificationResults,
 	summarizeSpecification,
-} from '../spec-runner/specification.js';
+} from '@cxl/spec-runner/specification.js';
 import {
 	Component,
 	Page,

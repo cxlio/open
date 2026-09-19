@@ -9,8 +9,8 @@ import {
 	operation,
 	parseArgv,
 	type Logger,
-} from '../program/index.js';
-import { Observable } from '../rx/index.js';
+} from '@cxl/program';
+import { Observable } from '@cxl/rx';
 import { BASEDIR, readPackage } from './package.js';
 
 export interface Output {

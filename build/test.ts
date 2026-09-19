@@ -1,4 +1,4 @@
-import { spec, TestApi } from '../spec/index.js';
+import { spec, TestApi } from '@cxl/spec';
 import {
 	mkdir,
 	mkdtemp,
@@ -14,7 +14,7 @@ import { pathToFileURL } from 'url';
 import { execFile, execFileSync } from 'child_process';
 import { build as esbuild } from 'esbuild-wasm';
 import { ESLint } from 'eslint';
-import { formatHelp, sh } from '../program/index.js';
+import { formatHelp, sh } from '@cxl/program';
 import {
 	buildParameters,
 	buildOutputOptions,
@@ -58,6 +58,7 @@ import { eslintTsconfig } from './lint.js';
 import { getLintTsconfigs } from './library.js';
 import { rx } from './index.js';
 import { cachedBuild } from './cache.js';
+import { registerImportMap } from '@cxl/spec-runner/importmap.js';
 import * as ts from 'typescript';
 
 async function errorMessage(fn: () => Promise<unknown>) {
@@ -76,6 +77,7 @@ async function lintFixture(
 ) {
 	const dir = await mkdtemp(join(tmpdir(), 'cxl-build-eslint-'));
 	try {
+		await writeFile(join(dir, 'package.json'), '{}');
 		const project = join(dir, 'tsconfig.json');
 		await writeFile(
 			project,
@@ -88,8 +90,10 @@ async function lintFixture(
 				files: [fileName],
 			}),
 		);
+		const sourceFile = join(dir, fileName);
+		await mkdir(resolve(sourceFile, '..'), { recursive: true });
 		await writeFile(
-			join(dir, fileName),
+			sourceFile,
 			`import { spec } from ${JSON.stringify(join(import.meta.dirname, '../spec/index.js'))};
 ${source}`,
 		);
@@ -178,6 +182,95 @@ async function runAudit(
 
 export default spec('build', s => {
 	s.test('eslint config', it => {
+		it.should(
+			'ban and resolve imports across package boundaries',
+			async (a: TestApi) => {
+				const messages = await lintFixture(
+					`import '../internal.js';
+import '../../sibling/import.js';
+export { value } from '../../sibling/export.js';
+export * from '../../sibling/export-all.js';
+void import('../../sibling/dynamic.js');
+require('../../sibling/require.js');
+void import('@cxl/sibling');`,
+					specConfig,
+					'source/test.ts',
+				);
+				const boundaryMessages = messages.filter(
+					message =>
+						message.ruleId === 'local/no-relative-package-imports',
+				);
+				a.equal(boundaryMessages.length, 5);
+
+				const dir = await mkdtemp(
+					join(tmpdir(), 'cxl-build-package-import-'),
+				);
+				const application = join(dir, 'dist/application/index.js');
+				try {
+					await mkdir(resolve(application, '..'), { recursive: true });
+					await mkdir(join(dir, 'dist/sibling'), { recursive: true });
+					await writeFile(join(dir, 'package.json'), '{"type":"module"}');
+					await writeFile(
+						join(dir, 'dist/sibling/index.js'),
+						'export const value = true;',
+					);
+					await writeFile(
+						application,
+						ts.transpileModule(
+							"import { value } from '@test/sibling'; export { value };",
+							{ compilerOptions: { module: ts.ModuleKind.ESNext } },
+						).outputText,
+					);
+					const hooks = registerImportMap(
+						{ imports: { '@test/sibling': '/dist/sibling/index.js' } },
+						dir,
+					);
+					try {
+						const module: { value: boolean } = await import(
+							pathToFileURL(application).href
+						);
+						a.equal(module.value, true);
+						const pkg = {
+							name: '@test/application',
+							version: '1.0.0',
+							private: true,
+							bugs: '',
+							repository: '',
+							importmap: {
+								'@test/sibling': '/dist/sibling/index.js',
+							},
+						} satisfies Package;
+						const browser = await generateTestFile({
+							appId: 'application',
+							pkgJson: pkg,
+							rootPkg: pkg,
+						});
+						a.assert(browser);
+						a.ok(
+							browser.source
+								.toString()
+								.includes(
+									'"@test/sibling":"/dist/sibling/index.js"',
+								),
+						);
+						execFileSync(
+							process.execPath,
+							[
+								'--input-type=module',
+								'--eval',
+								`await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'cli.js')).href)})`,
+							],
+							{ cwd: dir },
+						);
+					} finally {
+						hooks?.deregister();
+					}
+				} finally {
+					await rm(dir, { recursive: true, force: true });
+				}
+			},
+		);
+
 		it.should('apply recommended rules to test files', async a => {
 			const messages = await lintFixture(`export default spec('fixture', s => {
 	s.test('empty block', () => {

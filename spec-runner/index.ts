@@ -4,7 +4,7 @@ import {
 	parseArgv,
 	type Logger,
 	type ParametersResult,
-} from '../program/index.js';
+} from '@cxl/program';
 
 import { run } from './runner.js';
 import { parseGrep } from './grep.js';

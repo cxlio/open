@@ -2,7 +2,7 @@ import { basename, dirname, join, resolve } from "path";
 import { existsSync } from "fs";
 import { mkdir, readdir, rm, writeFile } from "fs/promises";
 
-import { EMPTY, concat, fromAsync } from "../rx/index.js";
+import { EMPTY, concat, fromAsync } from "@cxl/rx";
 
 import { buildDts, renderJson, findExamples } from "@cxl/3doc";
 import {
@@ -35,7 +35,7 @@ import {
 import { buildDocs } from "./docs.js";
 import { generateTestFile, runBenchmarks, runTests } from "./spec.js";
 import { audit, auditDependencies } from "./audit.js";
-import { readJson } from "../program/index.js";
+import { readJson } from "@cxl/program";
 
 import {
 	getPackageLintTsconfigs,

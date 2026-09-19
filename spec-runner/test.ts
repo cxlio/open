@@ -1,5 +1,5 @@
-import { spec } from '../spec/index.js';
-import type { BenchmarkData, JsonResult } from '../spec/index.js';
+import { spec } from '@cxl/spec';
+import type { BenchmarkData, JsonResult } from '@cxl/spec';
 import browserRunner, {
 	collectCoverage,
 	ProxyManager,
@@ -217,7 +217,7 @@ export default spec({ name: 'tester', serial: true }, s => {
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
 		try {
 			const fixturePath = join(dir, 'console-fixture.mjs');
-			const specUrl = new URL('../spec/index.js', import.meta.url).href;
+			const specUrl = new URL('@cxl/spec', import.meta.url).href;
 			await writeFile(
 				fixturePath,
 				`import { execFileSync } from 'node:child_process';
@@ -250,7 +250,7 @@ export default spec('console fixture', s => s.test('passes', a => a.ok(true)));`
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
 		try {
 			const fixturePath = join(dir, 'failure-fixture.mjs');
-			const specUrl = new URL('../spec/index.js', import.meta.url).href;
+			const specUrl = new URL('@cxl/spec', import.meta.url).href;
 			await writeFile(
 				fixturePath,
 				`import { spec } from ${JSON.stringify(specUrl)};
@@ -635,7 +635,7 @@ export default spec('failure fixture', s => {
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
 		try {
 			const fixturePath = join(dir, 'proxy-fixture.mjs');
-			const specUrl = new URL('../spec/index.js', import.meta.url).href;
+			const specUrl = new URL('@cxl/spec', import.meta.url).href;
 			const serverPath = join(import.meta.dirname, 'test-proxy-server.js');
 			await writeFile(
 				fixturePath,

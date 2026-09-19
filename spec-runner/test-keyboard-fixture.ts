@@ -1,4 +1,4 @@
-import { spec } from '../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('keyboard fixture', s => {
 	s.test('modifier chords', async a => {

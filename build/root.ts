@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-import { getErrorCode, sh } from '../program/index.js';
+import { getErrorCode, sh } from '@cxl/program';
 import { readPackage, type Package } from './npm.js';
 
 export async function buildRoot() {

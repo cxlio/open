@@ -1,5 +1,5 @@
 import { interval } from '../index.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('interval', it => {
 	it.should('emit values at specified intervals', a => {

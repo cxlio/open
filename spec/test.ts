@@ -1,5 +1,5 @@
 import { spec, type RunnerCommand, type TestApi } from './index.js';
-import { ref } from '../rx/index.js';
+import { ref } from '@cxl/rx';
 
 export default spec('spec', s => {
 	s.test('should load', a => {

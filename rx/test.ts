@@ -42,7 +42,7 @@ import firstSuite from './test/first.js';
 import throttleTimeSuite from './test/throttleTime.js';
 import ignoreElementsSuite from './test/ignoreElements.js';
 
-import { TestApi, spec } from '../spec/index.js';
+import { TestApi, spec } from '@cxl/spec';
 
 declare function setInterval(fn: () => void, interval?: number): number;
 declare function clearInterval(intervalId: number): void;

@@ -20,6 +20,13 @@
 		"typescript-eslint": "8.58.2"
 	},
 	"type": "module",
+	"importmap": {
+		"@cxl/program": "/dist/program/index.js",
+		"@cxl/rx": "/dist/rx/index.js",
+		"@cxl/spec": "/dist/spec/index.js",
+		"@cxl/spec-runner": "/dist/spec-runner/index.js",
+		"@cxl/spec-runner/": "/dist/spec-runner/"
+	},
 	"bugs": "https://github.com/cxlio/open/issues",
 	"scripts": {
 		"build": "npm run build --prefix build && node ./dist/build/cli.js"

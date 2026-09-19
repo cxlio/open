@@ -1,4 +1,4 @@
-import { observable } from "../rx/index.js";
+import { observable } from "@cxl/rx";
 
 import type { Output } from "./builder.js";
 

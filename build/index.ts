@@ -1,5 +1,5 @@
 export * from "./file.js";
-export * as rx from "../rx/index.js";
+export * as rx from "@cxl/rx";
 export { pkg, readme, esbuild, readPackage } from "./package.js";
 export type { Package } from "./npm.js";
 export { buildLibrary } from "./library.js";

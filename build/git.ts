@@ -1,4 +1,4 @@
-import { sh } from '../program/index.js';
+import { sh } from '@cxl/program';
 import { spawn } from 'child_process';
 
 function git(args: string[], cwd?: string) {

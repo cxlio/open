@@ -25,7 +25,7 @@ import type {
 	RunnerCommand,
 	Result,
 	JsonResult,
-} from '../spec/index.js';
+} from '@cxl/spec';
 import type { SpecRunner } from './index.js';
 import type { PNG } from 'pngjs';
 

@@ -1,4 +1,4 @@
-import type { FigureData, JsonResult, Result } from '../spec/index.js';
+import type { FigureData, JsonResult, Result } from '@cxl/spec';
 
 export const specificationCss = `
 html { background: var(--cxl-color-surface, #fff); }

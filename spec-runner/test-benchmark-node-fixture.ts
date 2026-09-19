@@ -1,5 +1,5 @@
 import { readdir } from 'fs/promises';
-import { spec } from '../spec/index.js';
+import { spec } from '@cxl/spec';
 
 const options = { warmup: 0, sampleTime: 1, samples: 2 };
 

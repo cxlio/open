@@ -1,6 +1,6 @@
 import { Observable, filter } from '../index.js';
 import { cold, expectLog } from './util.js';
-import { spec } from '../../spec/index.js';
+import { spec } from '@cxl/spec';
 
 export default spec('filter', s => {
 	s.test('should filter out event values', a => {

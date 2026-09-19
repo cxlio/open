@@ -76,7 +76,7 @@ export default spec('switchMap', it => {
 
 			of(null)
 				.switchMap(() => synchronousObservable)
-				.takeWhile(x => x != 2)
+				.takeWhile(x => x !== 2)
 				.subscribe();
 
 			a.equalValues(sideEffects, [1, 2]);

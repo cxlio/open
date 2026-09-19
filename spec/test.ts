@@ -167,7 +167,7 @@ export default spec('spec', s => {
 				sampleTime: 1,
 				samples: 1,
 			});
-			a.throws(() => a.benchmark(() => 1), {
+			a.throws(() => void a.benchmark(() => 1), {
 				message: 'benchmark() called multiple times',
 			});
 		});

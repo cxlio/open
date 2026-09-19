@@ -119,9 +119,9 @@ export default spec('tester', s => {
 		});
 		await runner.run('iframe fixture has a fresh global scope');
 		a.ok(document.body.textContent?.includes('iframe fixture'));
-		const assertions = document.querySelector(
+		const assertions = document.querySelector<HTMLDetailsElement>(
 			'.specification-assertions',
-		) as HTMLDetailsElement | null;
+		);
 		a.ok(assertions);
 		a.equal(assertions?.open, false);
 		a.ok(assertions?.textContent?.includes('assertion'));

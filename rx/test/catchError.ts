@@ -68,7 +68,7 @@ export default spec('catchError', it => {
 			merge(of(10), throwError(new Error('Some error')))
 				.pipe(
 					catchError(() => synchronousObservable),
-					takeWhile(x => x != 2), // unsubscribe at the second side-effect
+					takeWhile(x => x !== 2), // unsubscribe at the second side-effect
 				)
 				.subscribe();
 

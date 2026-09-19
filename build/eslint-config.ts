@@ -410,14 +410,28 @@ const sharedRules = {
 	'local/no-relative-package-imports': 'error',
 	'@typescript-eslint/member-ordering': 'error',
 	'no-extend-native': 'error',
+	'no-dupe-class-members': 'error',
+	eqeqeq: 'error',
 	'@typescript-eslint/no-useless-constructor': 'error',
 	'@typescript-eslint/no-redundant-type-constituents': 'error',
 	'@typescript-eslint/no-non-null-assertion': 'error',
 	'@typescript-eslint/no-unnecessary-type-arguments': 'error',
+	'@typescript-eslint/no-unnecessary-type-assertion': 'error',
+	'@typescript-eslint/no-misused-promises': [
+		'error',
+		{ checksVoidReturn: { attributes: false } },
+	],
 	'@typescript-eslint/switch-exhaustiveness-check': [
 		'error',
 		{ considerDefaultExhaustiveForUnions: true },
 	],
+	'@typescript-eslint/prefer-optional-chain': 'error',
+	'@typescript-eslint/no-unsafe-call': 'error',
+	'@typescript-eslint/no-unsafe-member-access': 'error',
+	'@typescript-eslint/no-unsafe-return': 'error',
+	'@typescript-eslint/no-unsafe-argument': 'error',
+	complexity: ['error', { max: 22, variant: 'modified' }],
+	'local/prefer-type-discrimination': 'error',
 } satisfies NonNullable<Linter.Config['rules']>;
 
 export const tsConfig: Linter.Config = {
@@ -435,13 +449,10 @@ export const tsConfig: Linter.Config = {
 	},
 	rules: {
 		...sharedRules,
-		'local/prefer-type-discrimination': 'error',
 
 		'no-mixed-spaces-and-tabs': 'off',
 		'no-prototype-builtins': 'error',
-		'no-dupe-class-members': 'error',
 		'sort-imports': 'off',
-		eqeqeq: 'error',
 		'@typescript-eslint/no-var-requires': 'off',
 		'@typescript-eslint/no-explicit-any': 2,
 		'@typescript-eslint/no-unused-vars': 'off',
@@ -449,15 +460,9 @@ export const tsConfig: Linter.Config = {
 		'@typescript-eslint/no-this-alias': 'off',
 		'@typescript-eslint/no-use-before-define': 'off',
 		'@typescript-eslint/no-empty-interface': 'off',
-		'@typescript-eslint/no-unnecessary-type-assertion': 'error',
 		'@typescript-eslint/no-floating-promises': 'error',
 		'prefer-promise-reject-errors': 'off',
 		'@typescript-eslint/prefer-promise-reject-errors': 'error',
-		complexity: ['error', { max: 22, variant: 'modified' }],
-		'@typescript-eslint/no-misused-promises': [
-			'error',
-			{ checksVoidReturn: { attributes: false } },
-		],
 		'@typescript-eslint/consistent-type-assertions': [
 			'error',
 			{
@@ -468,13 +473,7 @@ export const tsConfig: Linter.Config = {
 			'error',
 			{ allowConstantLoopConditions: true },
 		],
-		'@typescript-eslint/prefer-optional-chain': 'error',
-
-		'@typescript-eslint/no-unsafe-call': 'error',
 		'@typescript-eslint/unbound-method': 'off',
-		'@typescript-eslint/no-unsafe-member-access': 'error',
-		'@typescript-eslint/no-unsafe-return': 'error',
-		'@typescript-eslint/no-unsafe-argument': 'error',
 		'no-restricted-syntax': [
 			'error',
 			{

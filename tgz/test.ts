@@ -95,7 +95,7 @@ export default spec('tgz', it => {
 		async a => {
 			const chunkSize = 100;
 			const transformStream = new TransformStream({
-				async transform(chunk, controller) {
+				async transform(chunk: Uint8Array, controller) {
 					let offset = 0;
 					while (offset < chunk.length) {
 						const newChunk = chunk.slice(

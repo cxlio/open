@@ -116,7 +116,7 @@ class ColdObservable extends Observable<string> {
 				if (value === '|') subs.complete();
 				else if (value === '#') subs.error(error);
 				else if (value !== '-')
-					subs.next((values && values[value]) || value);
+					subs.next(values?.[value] || value);
 			}
 
 			function handleGroup() {

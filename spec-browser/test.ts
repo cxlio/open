@@ -2,6 +2,24 @@ import { spec, type TestApi } from '../spec/index.js';
 import { renderSpecificationDocument } from '../spec-runner/specification.js';
 import browserRunner, { imageDataDiff, runTestFile } from './index.js';
 
+async function renderDocument(a: TestApi, title: string, srcdoc: string) {
+	const frame = document.createElement('iframe');
+	frame.title = title;
+	frame.srcdoc = srcdoc;
+	document.body.append(frame);
+	try {
+		await new Promise<void>(resolve =>
+			frame.addEventListener('load', () => resolve(), { once: true }),
+		);
+		const body = frame.contentDocument?.body;
+		a.ok(body);
+		if (body) await a.a11y(body);
+		return body?.textContent ?? '';
+	} finally {
+		frame.remove();
+	}
+}
+
 export default spec('tester', s => {
 	s.test('browser-runner', a => {
 		a.ok(browserRunner);
@@ -43,6 +61,46 @@ export default spec('tester', s => {
 		a.ok(second.tests[0]?.results[0]?.success);
 	});
 
+	s.test('ignores invalid iframe results', async a => {
+		const testFile = new URL('./isolation-fixture.js', import.meta.url).href;
+		const resultPromise = runTestFile(
+			testFile,
+			'iframe fixture has a fresh global scope',
+		);
+		const frame = document.body.lastElementChild;
+		a.ok(frame instanceof HTMLIFrameElement);
+		const source =
+			frame instanceof HTMLIFrameElement ? frame.contentWindow : null;
+		const forgedResult = {
+			name: 'forged',
+			results: [],
+			tests: [],
+			only: [],
+			runTime: 0,
+			timeout: 1000,
+		};
+		window.dispatchEvent(
+			new MessageEvent('message', {
+				origin: location.origin,
+				source,
+				data: { type: 'invalid', result: forgedResult },
+			}),
+		);
+		window.dispatchEvent(
+			new MessageEvent('message', {
+				origin: 'https://invalid.example',
+				source,
+				data: {
+					type: 'spec-browser-result',
+					result: forgedResult,
+				},
+			}),
+		);
+
+		const result = await resultPromise;
+		a.equal(result.name, 'iframe fixture');
+	});
+
 	s.test('matches the parent viewport', async a => {
 		const testFile = new URL('./viewport-fixture.js', import.meta.url).href;
 		const result = await runTestFile(testFile);
@@ -82,9 +140,10 @@ export default spec('tester', s => {
 	});
 
 	s.test('renders an accessible static specification document', async a => {
-		const frame = document.createElement('iframe');
-		frame.title = 'Static specification';
-		frame.srcdoc = renderSpecificationDocument(
+		await renderDocument(
+			a,
+			'Static specification',
+			renderSpecificationDocument(
 			{
 				name: 'Checkout',
 				results: [],
@@ -110,15 +169,28 @@ export default spec('tester', s => {
 				timeout: 1000,
 			},
 			{ uiModule: 'data:text/javascript,' },
+			),
 		);
-		document.body.append(frame);
-		await new Promise<void>(resolve =>
-			frame.addEventListener('load', () => resolve(), { once: true }),
+	});
+
+	s.test('renders a filtered specification failure accessibly', async a => {
+		const content = await renderDocument(
+			a,
+			'Filtered specification',
+			renderSpecificationDocument(
+				{
+					name: 'Filtered',
+					results: [],
+					tests: [],
+					only: [],
+					runTime: 0,
+					timeout: 1000,
+					skipped: true,
+				},
+				{ uiModule: 'data:text/javascript,' },
+			),
 		);
-		const body = frame.contentDocument?.body;
-		a.ok(body);
-		if (body) await a.a11y(body);
-		frame.remove();
+		a.ok(content.includes('No tests matched'));
 	});
 
 	s.test('renders screenshot evidence without inline source html', async (a: TestApi) => {

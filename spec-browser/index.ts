@@ -107,6 +107,25 @@ interface FrameMessage {
 	error?: string;
 }
 
+type MessageValue =
+	| object
+	| string
+	| number
+	| boolean
+	| bigint
+	| symbol
+	| null
+	| undefined;
+
+function isFrameMessage(value: MessageValue): value is FrameMessage {
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		'type' in value &&
+		value.type === 'spec-browser-result'
+	);
+}
+
 const FRAME_FILE_PARAMETER = '__cxlSpecBrowserFile';
 const FRAME_TARGET_PARAMETER = '__cxlSpecBrowserTarget';
 
@@ -124,12 +143,18 @@ export function runTestFile(testFile: string, targetPath?: string) {
 		frameUrl.hash = params.toString();
 		frame.src = frameUrl.href;
 
-		const onMessage = (ev: MessageEvent<FrameMessage>) => {
-			if (ev.source !== frame.contentWindow) return;
+		const onMessage = (ev: MessageEvent<MessageValue>) => {
+			const data = ev.data;
+			if (
+				ev.origin !== frameUrl.origin ||
+				ev.source !== frame.contentWindow ||
+				!isFrameMessage(data)
+			)
+				return;
 			window.removeEventListener('message', onMessage);
 			frame.remove();
-			if (ev.data.error) reject(new Error(ev.data.error));
-			else if (ev.data.result) resolve(ev.data.result);
+			if (data.error) reject(new Error(data.error));
+			else if (data.result) resolve(data.result);
 			else reject(new Error('Test iframe returned no result'));
 		};
 

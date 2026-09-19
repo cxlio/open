@@ -142,7 +142,7 @@ function expectedCoverage(files: string[]) {
 	);
 }
 
-export default spec('tester', s => {
+export default spec({ name: 'tester', serial: true }, s => {
 	s.test('service worker module import', async a => {
 		const files = ['service-worker.js', 'service-worker-dependency.js'];
 		const expectedCoverageFiles = await expectedCoverage(files);
@@ -405,6 +405,48 @@ export default spec('failure fixture', s => {
 		a.ok(document.includes('Payments &lt;script&gt;'));
 	});
 
+	s.test('skipped specifications do not report missing assertions', a => {
+		const skipped = renderSpecificationDocument({
+			name: 'Skipped',
+			results: [],
+			tests: [],
+			only: [],
+			runTime: 0,
+			timeout: 1000,
+			skipped: true,
+		});
+		const empty = renderSpecificationDocument({
+			name: 'Empty',
+			results: [],
+			tests: [],
+			only: [],
+			runTime: 0,
+			timeout: 1000,
+		});
+
+		a.equal(skipped.includes('No assertions found'), false);
+		a.ok(skipped.includes('No tests matched'));
+		a.ok(skipped.includes('0 requirements · 1 failure'));
+		a.ok(empty.includes('No assertions found'));
+	});
+
+	s.test('an empty filtered run fails', async a => {
+		const report = await generateReport({
+			name: 'Filtered',
+			results: [],
+			tests: [],
+			only: [],
+			runTime: 0,
+			timeout: 1000,
+			skipped: true,
+		});
+
+		a.equal(report.success, false);
+		a.equal(report.summary.testTotal, 0);
+		a.equal(report.summary.failureCount, 1);
+		a.equal(report.testReport.results[0]?.failureMessage, 'No tests matched');
+	});
+
 	s.test('browser-runner', it => {
 		it.should('time out delayed coverage startup', async a => {
 			let browser: puppeteer.Browser | undefined;
@@ -600,13 +642,13 @@ export default spec('failure fixture', s => {
 				`import { spec } from ${JSON.stringify(specUrl)};
 export default spec('managed proxy fixture', async s => {
 	await s.proxy('/managed', {
-		target: 'http://127.0.0.1:43123',
+		target: 'http://127.0.0.1:43125',
 		command: ${JSON.stringify(process.execPath)},
-		args: [${JSON.stringify(serverPath)}],
+		args: [${JSON.stringify(serverPath)}, '43125'],
 	});
 	await new Promise(resolve => setTimeout(resolve, 200));
 	s.test('starts service', async a => {
-		const response = await fetch('http://127.0.0.1:43123/hello?value=1');
+		const response = await fetch('http://127.0.0.1:43125/hello?value=1');
 		a.equal(await response.text(), 'GET /hello?value=1 ');
 	});
 });`,
@@ -622,7 +664,7 @@ export default spec('managed proxy fixture', async s => {
 				log: console.log.bind(console),
 			});
 			a.equal(report.success, true, JSON.stringify(report));
-			await assertPortAvailable(43123);
+			await assertPortAvailable(43125);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}

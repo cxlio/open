@@ -315,6 +315,13 @@ export async function generateReport(
 	options?: ReportOptions,
 ): Promise<Report> {
 	const testReport = renderTestReport(suite);
+	if (testReport.testCount === 0) {
+		testReport.failureCount = 1;
+		testReport.results.push({
+			success: false,
+			failureMessage: 'No tests matched',
+		});
+	}
 	const coverage =
 		v8Coverage && (await generateCoverageReport(v8Coverage, options));
 	return {

@@ -55,6 +55,48 @@ export default spec('spec', s => {
 		a.equal(assertions.toJSON().results[0]?.failureMessage, 'cleanup failed');
 	});
 
+	s.test('grep runs matching tests in nested specifications', async a => {
+		let matchingRuns = 0;
+		let excludedRuns = 0;
+		const nested = spec('nested', s => {
+			s.test('matching test', a => {
+				matchingRuns++;
+				a.ok(true);
+			});
+			s.test('excluded test', a => {
+				excludedRuns++;
+				a.ok(true);
+			});
+		});
+		const assertions = spec('root', s => s.addSpec(nested));
+
+		await assertions.run(/matching test/);
+
+		a.equal(matchingRuns, 1);
+		a.equal(excludedRuns, 0);
+		a.equal(assertions.toJSON().tests[0]?.tests.length, 1);
+	});
+
+	s.test('serial specifications run tests in order', async a => {
+		const order: string[] = [];
+		const assertions = spec({ name: 'serial', serial: true }, s => {
+			s.test('first', async a => {
+				order.push('first start');
+				await Promise.resolve();
+				order.push('first end');
+				a.ok(true);
+			});
+			s.test('second', a => {
+				order.push('second');
+				a.ok(true);
+			});
+		});
+
+		await assertions.run();
+
+		a.equalValues(order, ['first start', 'first end', 'second']);
+	});
+
 	s.test('proxy registrations are released by their owner', async a => {
 		const commands: RunnerCommand[] = [];
 		Object.assign(globalThis, {

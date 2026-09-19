@@ -82,6 +82,7 @@ export function summarizeSpecification(test: JsonResult): {
 	tests: number;
 	failures: number;
 } {
+	if (test.skipped) return { tests: 0, failures: 0 };
 	const children = test.only.length ? test.only : test.tests;
 	return children.reduce(
 		(summary, child) => {
@@ -113,8 +114,9 @@ export function specificationFigureSources(
 }
 
 export function specificationResults(
-	test: Pick<JsonResult, 'results' | 'tests' | 'only'>,
+	test: Pick<JsonResult, 'results' | 'tests' | 'only' | 'skipped'>,
 ) {
+	if (test.skipped) return [];
 	const results = [...test.results];
 	if (!results.length && !test.tests.length && !test.only.length)
 		results.push({ success: false, failureMessage: 'No assertions found' });
@@ -152,6 +154,7 @@ function renderTest(
 	baselinePath: string,
 	parentLevel?: number,
 ): string {
+	if (test.skipped) return '';
 	const results = specificationResults(test);
 	const children = test.only.length ? test.only : test.tests;
 	const failures = results.filter(result => !result.success).length;
@@ -184,10 +187,23 @@ export function renderSpecificationDocument(
 	test: JsonResult,
 	options: SpecificationDocumentOptions = {},
 ) {
-	const summary = summarizeSpecification(test);
+	const renderedTest = test.skipped
+		? {
+				...test,
+				skipped: false,
+				results: [
+					{ success: false, failureMessage: 'No tests matched' },
+				],
+				tests: [],
+				only: [],
+			}
+		: test;
+	const summary = test.skipped
+		? { tests: 0, failures: 1 }
+		: summarizeSpecification(test);
 	const uiModule = options.uiModule ??
 		'https://cdn.jsdelivr.net/npm/@cxl/ui@6.0.0/index.js';
-	const content = renderTest(test, 0, options.baselinePath ?? 'spec');
+	const content = renderTest(renderedTest, 0, options.baselinePath ?? 'spec');
 	return `<!doctype html>
 <html lang="en">
 <head>

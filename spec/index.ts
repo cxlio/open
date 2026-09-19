@@ -142,6 +142,7 @@ export interface Result {
 
 interface TestConfig {
 	name: string;
+	serial?: boolean;
 }
 
 let lastTestId = 1;
@@ -1043,15 +1044,20 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 	skipped = false;
 
 	readonly id = lastTestId++;
+	private serial = false;
 
 	constructor(
 		nameOrConfig: string | TestConfig,
 		public testFn: TestFn<T>,
 		protected TestApiFn: new ($test: Test<T>) => T,
 		public parent?: Test<T>,
+		private readonly specification = false,
 	) {
 		if (typeof nameOrConfig === 'string') this.name = nameOrConfig;
-		else this.name = nameOrConfig.name;
+		else {
+			this.name = nameOrConfig.name;
+			this.serial = !!nameOrConfig.serial;
+		}
 	}
 
 	onEvent(id: EventType, fn: () => Promise<unknown> | void) {
@@ -1141,19 +1147,18 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 			if (!promise) await this.emit('syncComplete');
 			else await promise;
 			syncCompleteNeeded = false;
-			if (this.only.length) {
+			const children = this.only.length ? this.only : this.tests;
+			if (this.serial)
+				for (const test of children) await test.run(grep, targetPath);
+			else
 				await Promise.all(
-					this.only.map(test => test.run(grep, targetPath)),
+					children.map(test => test.run(grep, targetPath)),
 				);
-				throw new Error('"only" was used');
-			} else if (this.tests.length)
-				await Promise.all(
-					this.tests.map(test => test.run(grep, targetPath)),
-				);
+			if (this.only.length) throw new Error('"only" was used');
 
 			if (
-				!this.parent &&
 				!!grep &&
+				!matchesGrep(grep, this.path()) &&
 				this.results.length === 0 &&
 				this.only.every(test => test.skipped) &&
 				this.tests.every(test => test.skipped)
@@ -1206,7 +1211,10 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 		return targetPath
 			? targetPath !== this.path() &&
 					!targetPath.startsWith(`${this.path()} `)
-			: !!grep && !!this.parent && !matchesGrep(grep, this.path());
+			: !!grep &&
+					!!this.parent &&
+					!this.specification &&
+					!matchesGrep(grep, this.path());
 	}
 }
 
@@ -1329,5 +1337,5 @@ export function triggerKeydown(el: Element, key: string) {
 }
 
 export function spec(name: string | TestConfig, fn: TestFn) {
-	return new Test(name, fn, TestApi);
+	return new Test(name, fn, TestApi, undefined, true);
 }

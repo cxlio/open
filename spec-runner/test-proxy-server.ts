@@ -9,4 +9,4 @@ const server = createServer((request, response) => {
 	});
 });
 
-server.listen(43123, '127.0.0.1');
+server.listen(Number(process.argv[2]), '127.0.0.1');

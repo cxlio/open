@@ -4,7 +4,7 @@ export default spec('managed proxy fixture', async s => {
 	await s.proxy('/managed', {
 		target: 'http://127.0.0.1:43123',
 		command: 'node',
-		args: ['./test-proxy-server.js'],
+		args: ['./test-proxy-server.js', '43123'],
 	});
 	await new Promise(resolve => setTimeout(resolve, 200));
 

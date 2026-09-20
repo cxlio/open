@@ -52,6 +52,18 @@ function runFailingCli(args: string[]) {
 	});
 }
 
+function runFailingNode(script: string) {
+	return new Promise<{ killed: boolean; stderr: string }>(resolve => {
+		execFile(
+			process.execPath,
+			['--input-type=module', '--eval', script],
+			{ cwd: import.meta.dirname, timeout: 1000, killSignal: 'SIGKILL' },
+			(error, _stdout, stderr) =>
+				resolve({ killed: !!error?.killed, stderr }),
+		);
+	});
+}
+
 const suite = {
 	name: 'suite',
 	failureCount: 0,
@@ -241,6 +253,44 @@ export default spec('console fixture', s => s.test('passes', a => a.ok(true)));`
 			const verbose = await runFailingCli([...args, '--verbose']);
 			a.equal(verbose.stdout.includes('node console output'), true);
 			a.equal(verbose.stderr.includes('node child stderr'), true);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	s.test('hard timeout stops execution', async a => {
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
+		try {
+			const fixturePath = join(dir, 'hanging-fixture.mjs');
+			await writeFile(
+				fixturePath,
+				`setInterval(() => undefined, 1000);
+await new Promise(() => {});`,
+			);
+			const runnerUrl = new URL('./runner.js', import.meta.url).href;
+			const importMapUrl = new URL('./importmap.js', import.meta.url).href;
+			const result = await runFailingNode(`
+const { registerImportMap } = await import(${JSON.stringify(importMapUrl)});
+registerImportMap({ imports: { '@cxl/program': '../program/index.js' } }, ${JSON.stringify(import.meta.dirname)});
+const { run } = await import(${JSON.stringify(runnerUrl)});
+await run({
+	node: true,
+	entryFile: ${JSON.stringify(fixturePath)},
+	ignoreCoverage: true,
+	updateBaselines: false,
+	mjs: true,
+	reportPath: 'test-report.json',
+	hardTimeout: 10,
+	sources: new Map(),
+	log: () => undefined,
+});`);
+			a.equal(result.killed, false);
+			a.ok(
+				result.stderr.includes(
+					'Spec runner timed out after 0.01 seconds',
+				),
+				result.stderr,
+			);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}

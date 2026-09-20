@@ -28,6 +28,7 @@ export type SpecRunnerOptions = ParametersResult<typeof parameters>;
 export type SpecRunner = Omit<SpecRunnerOptions, '$' | 'grep'> & {
 	entryFile: string;
 	expectedCoverageFiles?: TestCoverage[];
+	hardTimeout?: number;
 	importmap?: string;
 	reportPath: string;
 	documentPath?: string;

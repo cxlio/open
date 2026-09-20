@@ -74,10 +74,11 @@ async function lintFixture(
 	source: string,
 	baseConfig = specConfig,
 	fileName = 'test.ts',
+	packageJson: object = {},
 ) {
 	const dir = await mkdtemp(join(tmpdir(), 'cxl-build-eslint-'));
 	try {
-		await writeFile(join(dir, 'package.json'), '{}');
+		await writeFile(join(dir, 'package.json'), JSON.stringify(packageJson));
 		const project = join(dir, 'tsconfig.json');
 		await writeFile(
 			project,
@@ -201,6 +202,21 @@ void import('@cxl/sibling');`,
 						message.ruleId === 'local/no-relative-package-imports',
 				);
 				a.equal(boundaryMessages.length, 5);
+
+				const nodeMessages = await lintFixture(
+					"import '../../sibling/import.js';",
+					specConfig,
+					'source/test.ts',
+					{ build: { platform: 'node' } },
+				);
+				a.equal(
+					nodeMessages.filter(
+						message =>
+							message.ruleId ===
+							'local/no-relative-package-imports',
+					).length,
+					0,
+				);
 
 				const dir = await mkdtemp(
 					join(tmpdir(), 'cxl-build-package-import-'),

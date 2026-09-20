@@ -2,7 +2,7 @@ import js from '@eslint/js';
 import { defineConfig } from 'eslint/config';
 import ts from 'typescript-eslint';
 import { configs as sonarjsConfigs } from 'eslint-plugin-sonarjs';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'path';
 import type { Linter, Rule } from 'eslint';
 import * as typescript from 'typescript';
@@ -121,6 +121,26 @@ function findPackageRoot(file: string) {
 	}
 }
 
+function isNodePackage(packageRoot: string | undefined) {
+	if (!packageRoot) return false;
+	const packageJson: unknown = JSON.parse(
+		readFileSync(join(packageRoot, 'package.json'), 'utf8'),
+	);
+	if (
+		typeof packageJson !== 'object' ||
+		!packageJson ||
+		!('build' in packageJson)
+	)
+		return false;
+	const build = packageJson.build;
+	return (
+		typeof build === 'object' &&
+		!!build &&
+		'platform' in build &&
+		build.platform === 'node'
+	);
+}
+
 function getModuleSpecifier(
 	node: Rule.Node,
 	services: ParserServices,
@@ -162,6 +182,7 @@ const noRelativePackageImports: Rule.RuleModule = {
 	create(context) {
 		const services: ParserServices = context.sourceCode.parserServices;
 		const packageRoot = findPackageRoot(context.filename);
+		if (isNodePackage(packageRoot)) return {};
 		function checkImport(node: Rule.Node) {
 			const specifier = getModuleSpecifier(node, services);
 			if (!packageRoot || !specifier?.startsWith('.')) return;

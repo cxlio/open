@@ -542,6 +542,40 @@ void generic;`,
 				],
 			);
 		});
+
+		it.should('ban timer helpers used by spec tests', async a => {
+			const messages = await lintFixture(`const timeout = () =>
+	new Promise<void>(resolve => setTimeout(resolve, 1));
+const interval = () => setInterval(() => undefined, 1);
+const indirect = () => timeout();
+const unused = () => setTimeout(() => undefined, 1);
+const frame = () => requestAnimationFrame(() => undefined);
+declare const imported: () => void;
+
+export default spec('fixture', s => {
+	s.test('real timer helpers', async () => {
+		await indirect();
+		interval();
+		frame();
+		imported();
+	});
+	s.test('virtual timer helpers', async a => {
+		a.mockSetTimeout();
+		await timeout();
+		a.mockSetInterval();
+		interval();
+	});
+});
+void unused;
+`);
+			a.equalValues(
+				messages.map(message => message.ruleId),
+				[
+					'local/no-real-timers-in-spec',
+					'local/no-real-timers-in-spec',
+				],
+			);
+		});
 	});
 
 	s.test('output', it => {

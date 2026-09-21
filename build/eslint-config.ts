@@ -86,12 +86,14 @@ function specTestFunction(
 	}
 }
 
+type TimerMockMethod =
+	| 'mockRequestAnimationFrame'
+	| 'mockSetInterval'
+	| 'mockSetTimeout';
+
 function hasEarlierCall(
 	fn: typescript.Expression,
-	method:
-		| 'mockRequestAnimationFrame'
-		| 'mockSetInterval'
-		| 'mockSetTimeout',
+	method: TimerMockMethod,
 	position: number,
 ) {
 	let found = false;
@@ -109,6 +111,60 @@ function hasEarlierCall(
 	}
 	typescript.forEachChild(fn, visit);
 	return found;
+}
+
+function timerMockMethod(
+	node: typescript.CallExpression,
+): Exclude<TimerMockMethod, 'mockRequestAnimationFrame'> | undefined {
+	const expression = node.expression;
+	if (typescript.isIdentifier(expression)) {
+		if (expression.text === 'setTimeout') return 'mockSetTimeout';
+		if (expression.text === 'setInterval') return 'mockSetInterval';
+		return;
+	}
+	if (
+		!typescript.isPropertyAccessExpression(expression) ||
+		!typescript.isIdentifier(expression.expression) ||
+		!['globalThis', 'self', 'window'].includes(expression.expression.text)
+	)
+		return;
+	if (expression.name.text === 'setTimeout') return 'mockSetTimeout';
+	if (expression.name.text === 'setInterval') return 'mockSetInterval';
+}
+
+function helperTimerMethods(
+	node: typescript.CallExpression,
+	checker: typescript.TypeChecker,
+	sourceFile: typescript.SourceFile,
+	seen = new Set<typescript.Node>(),
+) {
+	const declaration = checker.getResolvedSignature(node)?.declaration;
+	if (
+		declaration?.getSourceFile() !== sourceFile ||
+		seen.has(declaration) ||
+		!('body' in declaration) ||
+		!declaration.body
+	)
+		return new Set<TimerMockMethod>();
+	seen.add(declaration);
+	const methods = new Set<TimerMockMethod>();
+	function visit(child: typescript.Node) {
+		if (typescript.isCallExpression(child)) {
+			const method = timerMockMethod(child);
+			if (method) methods.add(method);
+			else
+				for (const helperMethod of helperTimerMethods(
+					child,
+					checker,
+					sourceFile,
+					seen,
+				))
+					methods.add(helperMethod);
+		}
+		typescript.forEachChild(child, visit);
+	}
+	visit(declaration.body);
+	return methods;
 }
 
 function findPackageRoot(file: string) {
@@ -285,10 +341,7 @@ const noRealTimersInSpec: Rule.RuleModule = {
 		const checker = services.program.getTypeChecker();
 		function checkTimer(
 			node: Rule.Node,
-			method:
-				| 'mockRequestAnimationFrame'
-				| 'mockSetInterval'
-				| 'mockSetTimeout',
+			method: TimerMockMethod,
 		) {
 			const fn = specTestFunction(
 				context.sourceCode.getAncestors(node),
@@ -304,20 +357,44 @@ const noRealTimersInSpec: Rule.RuleModule = {
 			});
 		}
 		return {
+			CallExpression(node: Rule.Node) {
+				const tsNode = services.esTreeNodeToTSNodeMap.get(node);
+				if (!tsNode || !typescript.isCallExpression(tsNode)) return;
+				const directMethod = timerMockMethod(tsNode);
+				if (directMethod) {
+					checkTimer(node, directMethod);
+					return;
+				}
+				const fn = specTestFunction(
+					context.sourceCode.getAncestors(node),
+					services,
+					checker,
+				);
+				if (!fn) return;
+				const declaration = checker.getResolvedSignature(tsNode)?.declaration;
+				if (
+					declaration?.getSourceFile() === fn.getSourceFile() &&
+					declaration.getStart() >= fn.getStart() &&
+					declaration.end <= fn.end
+				)
+					return;
+				for (const method of helperTimerMethods(
+					tsNode,
+					checker,
+					tsNode.getSourceFile(),
+				)) {
+					if (!hasEarlierCall(fn, method, tsNode.getStart()))
+						context.report({
+							node,
+							messageId: 'noRealTimer',
+							data: { method: `a.${method}` },
+						});
+				}
+			},
 			":matches(CallExpression[callee.type='Identifier'][callee.name='requestAnimationFrame'], CallExpression[callee.type='MemberExpression'][callee.object.name=/^(globalThis|self|window)$/][callee.property.name='requestAnimationFrame'])"(
 				node: Rule.Node,
 			) {
 				checkTimer(node, 'mockRequestAnimationFrame');
-			},
-			":matches(CallExpression[callee.type='Identifier'][callee.name='setInterval'], CallExpression[callee.type='MemberExpression'][callee.object.name=/^(globalThis|self|window)$/][callee.property.name='setInterval'])"(
-				node: Rule.Node,
-			) {
-				checkTimer(node, 'mockSetInterval');
-			},
-			":matches(CallExpression[callee.type='Identifier'][callee.name='setTimeout'], CallExpression[callee.type='MemberExpression'][callee.object.name=/^(globalThis|self|window)$/][callee.property.name='setTimeout'])"(
-				node: Rule.Node,
-			) {
-				checkTimer(node, 'mockSetTimeout');
 			},
 		};
 	},

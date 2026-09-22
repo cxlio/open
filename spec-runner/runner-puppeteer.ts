@@ -305,7 +305,7 @@ async function handleConsole(msg: puppeteer.ConsoleMessage, app: SpecRunner) {
 	app.log(`console ${type}: ${url}${lineText}`);
 	for (const arg of msg.args())
 		try {
-			console.log(
+			app.log(
 				await arg.evaluate(v => {
 					if (v instanceof Error) {
 						return { message: v.message, stack: v.stack };
@@ -315,7 +315,7 @@ async function handleConsole(msg: puppeteer.ConsoleMessage, app: SpecRunner) {
 				}),
 			);
 		} catch {
-			console.log(arg.toString());
+			app.log(arg.toString());
 		}
 }
 

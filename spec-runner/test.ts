@@ -30,22 +30,23 @@ function assertPortAvailable(port: number) {
 	});
 }
 
-function runCli(args: string[]) {
-	return new Promise<string>((resolve, reject) => {
-		execFile(
-			process.execPath,
-			[join(import.meta.dirname, 'index.js'), ...args],
-			{ cwd: import.meta.dirname },
-			(error, stdout) => (error ? reject(error) : resolve(stdout)),
-		);
-	});
-}
+const cliImportMap = `data:text/javascript,${encodeURIComponent(`
+import { registerImportMap } from ${JSON.stringify(new URL('./importmap.js', import.meta.url).href)};
+registerImportMap(
+	{ imports: { '@cxl/program': '../program/index.js' } },
+	${JSON.stringify(import.meta.dirname)},
+);`)}`;
 
 function runFailingCli(args: string[]) {
 	return new Promise<{ stdout: string; stderr: string }>(resolve => {
 		execFile(
 			process.execPath,
-			[join(import.meta.dirname, 'index.js'), ...args],
+			[
+				'--import',
+				cliImportMap,
+				join(import.meta.dirname, 'index.js'),
+				...args,
+			],
 			{ cwd: import.meta.dirname },
 			(_error, stdout, stderr) => resolve({ stdout, stderr }),
 		);
@@ -133,6 +134,13 @@ const environment = {
 	profile: 'default',
 };
 
+const browserImportmap = JSON.stringify({
+	imports: { '@cxl/spec': '/spec/index.js' },
+});
+const rootBrowserImportmap = JSON.stringify({
+	imports: { '@cxl/spec': '/dist/spec/index.js' },
+});
+
 function expectedCoverage(files: string[]) {
 	return Promise.all(
 		files.map(async file => ({
@@ -160,6 +168,7 @@ export default spec({ name: 'tester', serial: true }, s => {
 		const expectedCoverageFiles = await expectedCoverage(files);
 		const report = await browserRunner({
 			entryFile: './test-service-worker-fixture.js',
+			importmap: browserImportmap,
 			expectedCoverageFiles,
 			ignoreCoverage: false,
 			mjs: true,
@@ -181,6 +190,7 @@ export default spec({ name: 'tester', serial: true }, s => {
 		const expectedCoverageFiles = await expectedCoverage(files);
 		const report = await browserRunner({
 			entryFile: './test-shared-worker-fixture.js',
+			importmap: browserImportmap,
 			expectedCoverageFiles,
 			ignoreCoverage: false,
 			mjs: true,
@@ -200,26 +210,42 @@ export default spec({ name: 'tester', serial: true }, s => {
 	s.test('browser console output', async a => {
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
 		try {
-			const args = [
-				'./test-console-fixture.js',
-				'--ignoreCoverage',
-				'--vfsRoot',
-				'..',
-				'--reportPath',
-				join(dir, 'report.json'),
-				'--documentPath',
-				join(dir, 'report.html'),
-			];
-			const stdout = await runCli(args);
+			const output: unknown[] = [];
+			const options = {
+				entryFile: './test-console-fixture.js',
+				ignoreCoverage: true,
+				vfsRoot: '..',
+				importmap: browserImportmap,
+				mjs: true,
+				node: false,
+				updateBaselines: false,
+				reportPath: join(dir, 'report.json'),
+				documentPath: join(dir, 'report.html'),
+				sources: new Map(),
+				log: (...messages: unknown[]) => output.push(...messages),
+			};
+			const report = await run(options);
+			a.ok(report.success);
 			a.equal(
-				stdout.trim(),
-				`generated: ${join(dir, 'report.html')}\ntests: passed (2)\ngenerated: ${join(dir, 'report.json')}`,
+				output.some(value => String(value).includes('browser console output')),
+				false,
 			);
 			const document = await readFile(join(dir, 'report.html'), 'utf8');
 			a.ok(document.includes('<c-page><c-layout'));
 			a.ok(document.includes('Specification: console fixture'));
-			const verboseStdout = await runCli([...args, '--verbose']);
-			a.equal(verboseStdout.includes('browser console output'), true);
+			const verboseOutput: unknown[] = [];
+			const verboseReport = await run({
+				...options,
+				verbose: true,
+				log: (...messages: unknown[]) => verboseOutput.push(...messages),
+			});
+			a.ok(verboseReport.success);
+			a.equal(
+				verboseOutput.some(value =>
+					String(value).includes('browser console output'),
+				),
+				true,
+			);
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
@@ -229,7 +255,7 @@ export default spec({ name: 'tester', serial: true }, s => {
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
 		try {
 			const fixturePath = join(dir, 'console-fixture.mjs');
-			const specUrl = new URL('@cxl/spec', import.meta.url).href;
+			const specUrl = import.meta.resolve('@cxl/spec');
 			await writeFile(
 				fixturePath,
 				`import { execFileSync } from 'node:child_process';
@@ -300,7 +326,7 @@ await run({
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
 		try {
 			const fixturePath = join(dir, 'failure-fixture.mjs');
-			const specUrl = new URL('@cxl/spec', import.meta.url).href;
+			const specUrl = import.meta.resolve('@cxl/spec');
 			await writeFile(
 				fixturePath,
 				`import { spec } from ${JSON.stringify(specUrl)};
@@ -670,6 +696,7 @@ export default spec('failure fixture', s => {
 			node: false,
 			mjs: true,
 			entryFile: './test-proxy-fixture.js',
+			importmap: browserImportmap,
 			vfsRoot: '../',
 			ignoreCoverage: true,
 			updateBaselines: false,
@@ -685,7 +712,7 @@ export default spec('failure fixture', s => {
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-spec-runner-'));
 		try {
 			const fixturePath = join(dir, 'proxy-fixture.mjs');
-			const specUrl = new URL('@cxl/spec', import.meta.url).href;
+			const specUrl = import.meta.resolve('@cxl/spec');
 			const serverPath = join(import.meta.dirname, 'test-proxy-server.js');
 			await writeFile(
 				fixturePath,
@@ -725,6 +752,7 @@ export default spec('managed proxy fixture', async s => {
 			node: false,
 			mjs: true,
 			entryFile: './test-proxy-failure-fixture.js',
+			importmap: browserImportmap,
 			vfsRoot: '../',
 			ignoreCoverage: true,
 			updateBaselines: false,
@@ -743,6 +771,7 @@ export default spec('managed proxy fixture', async s => {
 			node: false,
 			mjs: true,
 			entryFile: './test-binary-fixture.js',
+			importmap: rootBrowserImportmap,
 			vfsRoot: '../../',
 			ignoreCoverage: true,
 			updateBaselines: false,
@@ -928,6 +957,7 @@ export default spec('managed proxy fixture', async s => {
 				node: false,
 				mjs: true,
 				entryFile: './test-benchmark-fixture.js',
+				importmap: browserImportmap,
 				vfsRoot: '../',
 				ignoreCoverage: true,
 				updateBaselines: false,
@@ -971,6 +1001,7 @@ export default spec('managed proxy fixture', async s => {
 			node: false,
 			mjs: true,
 			entryFile: './test-drag-fixture.js',
+			importmap: browserImportmap,
 			vfsRoot: '../',
 			ignoreCoverage: true,
 			updateBaselines: false,
@@ -986,6 +1017,7 @@ export default spec('managed proxy fixture', async s => {
 			node: false,
 			mjs: true,
 			entryFile: './test-keyboard-fixture.js',
+			importmap: browserImportmap,
 			vfsRoot: '../',
 			ignoreCoverage: true,
 			updateBaselines: false,

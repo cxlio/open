@@ -519,6 +519,7 @@ const sharedRules = {
 		'error',
 		{ checksVoidReturn: { attributes: false } },
 	],
+	'@typescript-eslint/no-floating-promises': 'error',
 	'@typescript-eslint/switch-exhaustiveness-check': [
 		'error',
 		{ considerDefaultExhaustiveForUnions: true },
@@ -558,7 +559,6 @@ export const tsConfig: Linter.Config = {
 		'@typescript-eslint/no-this-alias': 'off',
 		'@typescript-eslint/no-use-before-define': 'off',
 		'@typescript-eslint/no-empty-interface': 'off',
-		'@typescript-eslint/no-floating-promises': 'error',
 		'prefer-promise-reject-errors': 'off',
 		'@typescript-eslint/prefer-promise-reject-errors': 'error',
 		'@typescript-eslint/consistent-type-assertions': [

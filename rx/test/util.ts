@@ -2,7 +2,6 @@ import {
 	Observable,
 	BehaviorSubject,
 	Subject,
-	firstValueFrom,
 } from '../index.js';
 
 import type { TestApi } from '@cxl/spec';
@@ -81,8 +80,12 @@ function logOperator() {
 }
 
 export function logEvents(observable: Observable<unknown>) {
-	const result = firstValueFrom(observable.pipe(logOperator()));
+	let result: Log | undefined;
+	observable.pipe(logOperator()).subscribe(value => {
+		result = value;
+	});
 	scheduler.run();
+	if (!result) throw new Error('Expected observable log');
 	return result;
 }
 
@@ -91,10 +94,7 @@ export function expectLog(
 	obs: Observable<unknown>,
 	events: string,
 ) {
-	return logEvents(obs).then(result => {
-		a.equal(result.events, events);
-		return result;
-	});
+	a.equal(logEvents(obs).events, events);
 }
 
 class ColdObservable extends Observable<string> {

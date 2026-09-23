@@ -11,7 +11,7 @@ function arrayRepeat<T>(value: T, times: number) {
 }
 
 export default spec('mergeMap', it => {
-	it.should('map-and-flatten each item to an Observable', async a => {
+	it.should('map-and-flatten each item to an Observable', a => {
 		const values = { x: '10', y: '30', z: '50' };
 		const e1 = cold('--1-----3--5-------|', values);
 		const e1subs = '^                  !';
@@ -19,7 +19,7 @@ export default spec('mergeMap', it => {
 		const expected = '--10-10-10-30-30503050-50---|';
 		const result = e1.pipe(mergeMap(x => e2.map(i => +i * +x)));
 
-		await expectLog(a, result, expected);
+		expectLog(a, result, expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 
@@ -63,21 +63,21 @@ export default spec('mergeMap', it => {
 
 	it.should(
 		'mergeMap many outer to many inner, and inner throws',
-		async a => {
+		a => {
 			const e1 = cold('-a-------b-------c-------d-------|');
 			const e1subs = '^                        !';
 			const i1 = cold('----i---j---k---l-------#');
 			const expected = '-----i---j---(ki)---(lj)---(ki)---#';
 			const result = e1.mergeMap(() => i1);
 
-			await expectLog(a, result, expected);
+			expectLog(a, result, expected);
 			a.equal(e1.subscriptions, e1subs);
 		},
 	);
 
 	it.should(
 		'mergeMap many outer to many inner, inner never completes',
-		async a => {
+		a => {
 			const e1 = cold('-a-------b-------c-------d-------|');
 			const e1subs = '^                                !';
 			const i1 = cold('----i---j---k---l-------------------------');
@@ -86,7 +86,7 @@ export default spec('mergeMap', it => {
 
 			const result = e1.mergeMap(() => i1);
 
-			await expectLog(a, result, expected);
+			expectLog(a, result, expected);
 			a.equal(e1.subscriptions, e1subs);
 		},
 	);
@@ -102,29 +102,29 @@ export default spec('mergeMap', it => {
 		a.equal(e1.subscriptions, e1subs);
 	});
 
-	it.should('handle an empty source Observable', async a => {
+	it.should('handle an empty source Observable', a => {
 		const e1 = cold('|');
 		const e1subs = '(^!)';
 		const expected = '|';
 
 		const result = e1.pipe(mergeMap(() => of('value')));
 
-		await expectLog(a, result, expected);
+		expectLog(a, result, expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 
-	it.should('handle outer error', async a => {
+	it.should('handle outer error', a => {
 		const e1 = cold('#');
 		const e1subs = '(^!)';
 		const expected = '#';
 
 		const result = e1.pipe(mergeMap(() => of('value')));
 
-		await expectLog(a, result, expected);
+		expectLog(a, result, expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 
-	it.should('handle inner error', async a => {
+	it.should('handle inner error', a => {
 		const e1 = cold('-1-|');
 		const e1subs = '^!';
 		const i1 = cold('#');
@@ -132,7 +132,7 @@ export default spec('mergeMap', it => {
 
 		const result = e1.pipe(mergeMap(() => i1));
 
-		await expectLog(a, result, expected);
+		expectLog(a, result, expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 
@@ -150,7 +150,7 @@ export default spec('mergeMap', it => {
 		});
 	});
 
-	it.should('handle project function that throws', async a => {
+	it.should('handle project function that throws', a => {
 		const e1 = cold('--1--|');
 		const e1subs = '^ !';
 		const expected = '--#';
@@ -161,11 +161,11 @@ export default spec('mergeMap', it => {
 			}),
 		);
 
-		await expectLog(a, result, expected);
+		expectLog(a, result, expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 
-	it.should('handle inner Observable that completes immediately', async a => {
+	it.should('handle inner Observable that completes immediately', a => {
 		const e1 = cold('1---2---|');
 		const e1subs = '^       !';
 		const i1 = cold('|');
@@ -173,7 +173,7 @@ export default spec('mergeMap', it => {
 
 		const result = e1.pipe(mergeMap(() => i1));
 
-		await expectLog(a, result, expected);
+		expectLog(a, result, expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 });

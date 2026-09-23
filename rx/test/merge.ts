@@ -47,7 +47,7 @@ export default spec('merge', s => {
 		expectLog(a, merge(e1, e2), '#');
 	});
 
-	s.test('should merge hot and error', async a => {
+	s.test('should merge hot and error', a => {
 		const e1 = cold('--a--b--c--|');
 		const e1subs = '^      !';
 		const e2 = cold('-------#');
@@ -55,7 +55,7 @@ export default spec('merge', s => {
 		const expected = '--a--b-#';
 		const result = merge(e1, e2);
 
-		await expectLog(a, result, expected);
+		expectLog(a, result, expected);
 		a.equal(e1.subscriptions, e1subs);
 		a.equal(e2.subscriptions, e2subs);
 	});

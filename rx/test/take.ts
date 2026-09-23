@@ -3,12 +3,12 @@ import { Subject, take } from '../index.js';
 import { spec } from '@cxl/spec';
 
 export default spec('take', a => {
-	a.should('take two values of an observable with many values', async a => {
+	a.should('take two values of an observable with many values', a => {
 		const e1 = cold('--a-----b----c---d--|');
 		const e1subs = '^       !';
 		const expected = '--a-----(b|)';
 
-		await expectLog(a, e1.pipe(take(2)), expected);
+		expectLog(a, e1.pipe(take(2)), expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 

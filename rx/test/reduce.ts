@@ -3,7 +3,7 @@ import { reduce } from '../index.js';
 import { spec } from '@cxl/spec';
 
 export default spec('reduce', a => {
-	a.should('reduce', async a => {
+	a.should('reduce', a => {
 		const values = {
 			a: '1',
 			b: '3',
@@ -18,11 +18,11 @@ export default spec('reduce', a => {
 			return o + +x;
 		};
 
-		await expectLog(a, e1.pipe(reduce(reduceFunction, 0)), expected);
+		expectLog(a, e1.pipe(reduce(reduceFunction, 0)), expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 
-	a.should('reduce with seed', async a => {
+	a.should('reduce with seed', a => {
 		const e1 = cold('--a--b--|');
 		const e1subs = '^       !';
 		const expected = '--------(nab|)';
@@ -32,7 +32,7 @@ export default spec('reduce', a => {
 			return o + x;
 		};
 
-		await expectLog(a, e1.pipe(reduce(reduceFunction, seed)), expected);
+		expectLog(a, e1.pipe(reduce(reduceFunction, seed)), expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 });

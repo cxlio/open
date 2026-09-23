@@ -78,14 +78,14 @@ export default spec('zip', it => {
 		a.equal(e2.subscriptions, e2subs);
 	});
 
-	it.should('work with never and empty', async a => {
+	it.should('work with never and empty', a => {
 		const e1 = cold('-');
 		const e1subs = '(^!)';
 		const e2 = cold('|');
 		const e2subs = '(^!)';
 		const expected = '|';
 
-		await expectLog(a, zip(e1, e2), expected);
+		expectLog(a, zip(e1, e2), expected);
 		a.equal(e1.subscriptions, e1subs);
 		a.equal(e2.subscriptions, e2subs);
 	});

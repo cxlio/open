@@ -6,23 +6,23 @@ export default spec('first', a => {
 	// Test: Emit only the first value of an observable with multiple values
 	a.should(
 		'emit the first value of an observable with multiple values',
-		async a => {
+		a => {
 			const e1 = cold('--a-----b----c---d--|');
 			const e1subs = '^ !';
 			const expected = '--(a|)'; // Emit the first value and complete
 
-			await expectLog(a, e1.pipe(first()), expected);
+			expectLog(a, e1.pipe(first()), expected);
 			a.equal(e1.subscriptions, e1subs);
 		},
 	);
 
 	// Test: Complete with an error if the observable is empty
-	a.should('error when the observable is empty', async a => {
+	a.should('error when the observable is empty', a => {
 		const e1 = cold('------|');
 		const e1subs = '^     !';
 		const expected = '------#'; // Expect an EmptyError
 
-		await expectLog(a, e1.pipe(first()), expected);
+		expectLog(a, e1.pipe(first()), expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 
@@ -43,12 +43,12 @@ export default spec('first', a => {
 	});
 
 	// Test: Complete with error if no values before the source completes
-	a.should('error when no values emitted', async a => {
+	a.should('error when no values emitted', a => {
 		const e1 = cold('--|');
 		const e1subs = '^ !';
 		const expected = '--#'; // EmptyError expected
 
-		await expectLog(a, e1.pipe(first()), expected);
+		expectLog(a, e1.pipe(first()), expected);
 		a.equal(e1.subscriptions, e1subs);
 	});
 });

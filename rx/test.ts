@@ -491,21 +491,16 @@ export default spec('rx', suite => {
 		}),
 
 		spec('toPromise', s => {
-			s.test('rx#toPromise', a => {
-				const done = a.async(),
-					A = new Observable(s => {
-						s.next('hello');
-						s.complete();
-					}),
+			s.test('rx#toPromise', async a => {
+				const A = new Observable(s => {
+					s.next('hello');
+					s.complete();
+				}),
 					B = new Observable(s => s.error(true)),
 					promise = toPromise(A);
 
-				promise.then(val => a.equal(val, 'hello'));
-
-				toPromise(B).catch(e => {
-					a.equal(e, true);
-					done();
-				});
+				a.equal(await promise, 'hello');
+				a.equal(await toPromise(B).catch((e: unknown) => e), true);
 			});
 		}),
 

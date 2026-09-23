@@ -62,14 +62,14 @@ export default spec('share', it => {
 		a.equal(source.subscriptions, sourceSubs[1]);
 	});
 
-	it.should('not resubscribe to source if already complete', async a => {
+	it.should('not resubscribe to source if already complete', a => {
 		const source = cold('|');
 		const sourceSubs = `(^!^!)`;
 		const shared = source.pipe(share());
 		const expected = '|';
 
-		await expectLog(a, shared, expected);
-		await expectLog(a, shared, expected);
+		expectLog(a, shared, expected);
+		expectLog(a, shared, expected);
 		a.equal(source.subscriptions, sourceSubs);
 	});
 });

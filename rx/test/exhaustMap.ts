@@ -22,17 +22,15 @@ export default spec('exhaustMap', it => {
 	it.should('handle outer throw', a => {
 		const x = cold('--a--b--c--|');
 		const e1 = cold('#');
-		logEvents(e1.pipe(exhaustMap(() => x))).then(({ events }) => {
-			a.equal(events, '#');
-		});
+		const { events } = logEvents(e1.pipe(exhaustMap(() => x)));
+		a.equal(events, '#');
 	});
 
 	it.should('handle outer empty', a => {
 		const x = cold('--a--b--c--|');
 		const e1 = cold('|');
-		logEvents(e1.pipe(exhaustMap(() => x))).then(result => {
-			a.equal(result.events, '|');
-		});
+		const result = logEvents(e1.pipe(exhaustMap(() => x)));
+		a.equal(result.events, '|');
 	});
 
 	it.should('handle outer never', a => {
@@ -55,8 +53,7 @@ export default spec('exhaustMap', it => {
 				throw 'error';
 			}),
 		);
-		logEvents(result).then(({ events }) => {
-			a.equal(events, '---#');
-		});
+		const { events } = logEvents(result);
+		a.equal(events, '---#');
 	});
 });

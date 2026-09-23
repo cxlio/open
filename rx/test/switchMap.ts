@@ -17,17 +17,15 @@ export default spec('switchMap', it => {
 	it.should('handle outer throw', a => {
 		const x = cold('--a--b--c--|');
 		const e1 = cold('#');
-		logEvents(e1.switchMap(() => x)).then(({ events }) => {
-			a.equal(events, '#');
-		});
+		const { events } = logEvents(e1.switchMap(() => x));
+		a.equal(events, '#');
 	});
 
 	it.should('handle outer empty', a => {
 		const x = cold('--a--b--c--|');
 		const e1 = cold('|');
-		logEvents(e1.switchMap(() => x)).then(result => {
-			a.equal(result.events, '|');
-		});
+		const result = logEvents(e1.switchMap(() => x));
+		a.equal(result.events, '|');
 	});
 
 	it.should('raise error if project throws', a => {
@@ -35,9 +33,8 @@ export default spec('switchMap', it => {
 		const result = e1.switchMap(() => {
 			throw 'error';
 		});
-		logEvents(result).then(({ events }) => {
-			a.equal(events, '---#');
-		});
+		const { events } = logEvents(result);
+		a.equal(events, '---#');
 	});
 
 	it.should('unsub inner observables', a => {

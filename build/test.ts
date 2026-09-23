@@ -70,6 +70,21 @@ async function errorMessage(fn: () => Promise<unknown>) {
 	throw new Error('Expected operation to fail');
 }
 
+function withWorkspaceImportMap(source: string) {
+	const root = resolve(import.meta.dirname, '../..');
+	const importMap = pathToFileURL(
+		join(import.meta.dirname, '../spec-runner/importmap.js'),
+	).href;
+	const packageFile = join(root, 'package.json');
+	return `const [{ registerImportMap }, { readFile }] = await Promise.all([
+	import(${JSON.stringify(importMap)}),
+	import('node:fs/promises'),
+]);
+const { importmap } = JSON.parse(await readFile(${JSON.stringify(packageFile)}, 'utf8'));
+registerImportMap({ imports: importmap }, ${JSON.stringify(root)});
+${source}`;
+}
+
 async function lintFixture(
 	source: string,
 	baseConfig = specConfig,
@@ -349,7 +364,6 @@ void check;
 				const messages = await lintFixture(
 					`export default spec('fixture', s => {
 	s.test('test-only patterns', a => {
-		Promise.resolve();
 		const unused = 1;
 		const value = {} as object;
 		a.ok(value);
@@ -1361,10 +1375,11 @@ void unused;
 				const packageDir = join(dir, 'package');
 				const entry = join(dir, 'index.d.ts');
 				const rxEntry = join(dir, 'rx.d.ts');
+				const tsconfig = join(dir, 'tsconfig.json');
 				await mkdir(packageDir);
 				await writeFile(
 					rxEntry,
-					`export { Observable, concat, of, EMPTY } from ${JSON.stringify(join(import.meta.dirname, '../rx/index.js'))};
+					`export { Observable, concat, of, EMPTY, type Operator } from ${JSON.stringify(join(import.meta.dirname, '../rx/index.js'))};
 `,
 				);
 				await writeFile(
@@ -1373,6 +1388,12 @@ void unused;
 export { type Output, type Task } from ${JSON.stringify(join(import.meta.dirname, 'builder.js'))};
 export * as rx from './rx.js';
 `,
+				);
+				await writeFile(
+					tsconfig,
+					JSON.stringify({
+						compilerOptions: { paths: { '@cxl/rx': [rxEntry] } },
+					}),
 				);
 				await writeFile(
 					consumer,
@@ -1390,7 +1411,7 @@ void composed;
 				const declarationPath = join(packageDir, 'index.d.ts');
 				await writeFile(
 					declarationPath,
-					await bundleDeclarations(entry, []),
+					await bundleDeclarations(entry, [], tsconfig),
 				);
 				const declaration = await readFile(declarationPath, 'utf8');
 				const sourceFile = ts.createSourceFile(
@@ -1973,9 +1994,11 @@ void result;
 				const moduleUrl = pathToFileURL(
 					join(import.meta.dirname, 'spec.js'),
 				).href;
-				const script = `const output = await import(${JSON.stringify(moduleUrl)}).then(module => module.generateTestFile(${JSON.stringify(options)}));
+				const script = withWorkspaceImportMap(
+					`const output = await import(${JSON.stringify(moduleUrl)}).then(module => module.generateTestFile(${JSON.stringify(options)}));
 if (!output) throw new Error('Missing generated test file');
-process.stdout.write(output.source);`;
+process.stdout.write(output.source);`,
+				);
 				const source = execFileSync(
 					process.execPath,
 					['--input-type=module', '--eval', script],
@@ -2032,7 +2055,9 @@ export default spec('fixture', s => s.test('filesystem discovery', a =>
 `,
 			);
 			const options = { appId: 'fixture', outputDir, node: true };
-			const script = `await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runBenchmarks(${JSON.stringify(options)}))`;
+			const script = withWorkspaceImportMap(
+				`await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runBenchmarks(${JSON.stringify(options)}))`,
+			);
 			await new Promise<void>((resolve, reject) => {
 				execFile(
 					process.execPath,
@@ -2113,7 +2138,9 @@ export default spec('fixture', s => s.test('shares module identity', a => {
 				node: false,
 				ignoreCoverage: true,
 			};
-			const script = `await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runTests(${JSON.stringify(options)}))`;
+			const script = withWorkspaceImportMap(
+				`await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runTests(${JSON.stringify(options)}))`,
+			);
 			await new Promise<void>((resolve, reject) => {
 				execFile(
 					process.execPath,
@@ -2151,7 +2178,9 @@ export default spec('fixture', s => s.test('passes', a => a.ok(true)));
 				node: true,
 				ignoreCoverage: true,
 			};
-			const script = `await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runTests(${JSON.stringify(options)}))`;
+			const script = withWorkspaceImportMap(
+				`await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runTests(${JSON.stringify(options)}))`,
+			);
 			await new Promise<void>((resolve, reject) => {
 				execFile(
 					process.execPath,
@@ -2220,7 +2249,9 @@ export default spec('fixture', s => s.test('passes', a => {
 `,
 			);
 			const options = { appId: 'fixture', outputDir, node: true };
-			const script = `await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runTests(${JSON.stringify(options)}))`;
+			const script = withWorkspaceImportMap(
+				`await import(${JSON.stringify(pathToFileURL(join(import.meta.dirname, 'spec.js')).href)}).then(module => module.runTests(${JSON.stringify(options)}))`,
+			);
 			await new Promise<void>((resolve, reject) => {
 				execFile(
 					process.execPath,

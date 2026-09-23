@@ -15,11 +15,11 @@ export default spec('combineLatest', it => {
 		expectLog(a, combined, expected);
 	});
 
-	it.should("work with two EMPTY's", async a => {
+	it.should("work with two EMPTY's", a => {
 		const e1 = cold('|');
 		const e2 = cold('|');
 
-		await expectLog(a, combineLatest(e1, e2), '|');
+		expectLog(a, combineLatest(e1, e2), '|');
 		a.equal(e1.subscriptions, '(^!)');
 		a.equal(e2.subscriptions, '(^!)');
 	});
@@ -55,7 +55,7 @@ export default spec('combineLatest', it => {
 		a.equal(e2.subscriptions, e2subs);
 	});
 
-	it.should('work with two nevers', async a => {
+	it.should('work with two nevers', a => {
 		const e1 = cold('-');
 		const e1subs = '^';
 		const e2 = cold('-');
@@ -64,7 +64,7 @@ export default spec('combineLatest', it => {
 
 		const result = combineLatest(e1, e2).map(([x, y]) => x + y);
 
-		await expectLog(a, result, expected);
+		expectLog(a, result, expected);
 		a.equal(e1.subscriptions, e1subs);
 		a.equal(e2.subscriptions, e2subs);
 	});
@@ -128,12 +128,12 @@ export default spec('combineLatest', it => {
 		a.equal(e2.subscriptions, e2subs);
 	});
 
-	it.should('complete immediately if all sources are EMPTY', async a => {
+	it.should('complete immediately if all sources are EMPTY', a => {
 		const e1 = cold('|');
 		const e2 = cold('|');
 		const e3 = cold('|');
 
-		await expectLog(a, combineLatest(e1, e2, e3), '|');
+		expectLog(a, combineLatest(e1, e2, e3), '|');
 		a.equal(e1.subscriptions, '(^!)');
 		a.equal(e2.subscriptions, '(^!)');
 		a.equal(e3.subscriptions, '(^!)');

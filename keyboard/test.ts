@@ -209,10 +209,10 @@ export default spec('keyboard', s => {
 			});
 
 			a.assert(typeof on.lastEvent?.arguments[1] === 'function');
-			on.lastEvent?.arguments[1](event);
+			on.lastEvent.arguments[1](event);
 			a.equal(onKeyMock.lastArguments, undefined);
 
-			on.lastEvent?.arguments[1](event2);
+			on.lastEvent.arguments[1](event2);
 			a.equal(onKeyMock.lastArguments?.[0], `alt+'`);
 
 			dispose();
@@ -236,10 +236,10 @@ export default spec('keyboard', s => {
 			});
 
 			a.assert(typeof on.lastEvent?.arguments[1] === 'function');
-			on.lastEvent?.arguments[1](event);
+			on.lastEvent.arguments[1](event);
 			a.equal(onKeyMock.lastArguments, undefined);
 
-			on.lastEvent?.arguments[1](event2);
+			on.lastEvent.arguments[1](event2);
 			a.equal(onKeyMock.lastArguments?.[0], `alt+'`);
 
 			dispose();
@@ -276,13 +276,13 @@ export default spec('keyboard', s => {
 			});
 
 			a.assert(typeof on.lastEvent?.arguments[1] === 'function');
-			on.lastEvent?.arguments[1](eventArrowUp);
+			on.lastEvent.arguments[1](eventArrowUp);
 			a.equal(onKeyMock.lastArguments?.[0], 'up');
-			on.lastEvent?.arguments[1](eventArrowDown);
+			on.lastEvent.arguments[1](eventArrowDown);
 			a.equal(onKeyMock.lastArguments?.[0], 'q');
-			on.lastEvent?.arguments[1](eventArrowLeft);
+			on.lastEvent.arguments[1](eventArrowLeft);
 			a.equal(onKeyMock.lastArguments?.[0], '0');
-			on.lastEvent?.arguments[1](eventArrowRight);
+			on.lastEvent.arguments[1](eventArrowRight);
 			a.equal(onKeyMock.lastArguments?.[0], 'alt+meta+right');
 
 			dispose();
@@ -310,9 +310,9 @@ export default spec('keyboard', s => {
 
 			// This will call the handler linked to the event
 			a.assert(typeof on.lastEvent?.arguments[1] === 'function');
-			on.lastEvent?.arguments[1](eventA);
+			on.lastEvent.arguments[1](eventA);
 			a.equal(onKeyMock.lastArguments?.[0], 'a');
-			on.lastEvent?.arguments[1](eventB);
+			on.lastEvent.arguments[1](eventB);
 			a.equal(onKeyMock.lastArguments?.[0], 'a b');
 
 			// Cleanup
@@ -337,7 +337,7 @@ export default spec('keyboard', s => {
 			// Simulate keydown event
 			const eventA = new KeyboardEvent('keydown', { key: 'a' });
 			a.assert(typeof on.lastEvent?.arguments[1] === 'function');
-			on.lastEvent?.arguments[1](eventA);
+			on.lastEvent.arguments[1](eventA);
 
 			// Advance time beyond delay
 			time.advance(200);
@@ -345,7 +345,7 @@ export default spec('keyboard', s => {
 
 			// Simulate another keydown event
 			const eventC = new KeyboardEvent('keydown', { key: 'c' });
-			on.lastEvent?.arguments[1](eventC);
+			on.lastEvent.arguments[1](eventC);
 			a.equal(onKeyMock.lastArguments?.[0], 'c');
 
 			// Cleanup
@@ -369,8 +369,8 @@ export default spec('keyboard', s => {
 			const eventY = new KeyboardEvent('keydown', { key: 'y' });
 
 			a.assert(typeof on.lastEvent?.arguments[1] === 'function');
-			on.lastEvent?.arguments[1](eventX);
-			on.lastEvent?.arguments[1](eventY);
+			on.lastEvent.arguments[1](eventX);
+			on.lastEvent.arguments[1](eventY);
 
 			a.equal(onKeyMock.lastArguments?.[0], 'x y');
 

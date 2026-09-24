@@ -34,7 +34,7 @@ export default spec('tgz', it => {
 		a.equal(files.length, 1);
 		a.equal(files[0]?.path, 'test1.txt');
 		a.equal(files[0]?.content.byteLength, 4);
-		a.equal(files[0]?.content && decode(files[0]?.content), '123\n');
+		a.equal(files[0]?.content && decode(files[0].content), '123\n');
 	});
 
 	it.should('load long filenames', async a => {

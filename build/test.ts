@@ -497,7 +497,7 @@ void generic;`,
 		it.should('ban direct returns from spec tests', async a => {
 			const messages = await lintFixture(`export default spec('fixture', s => {
 	s.test('direct return', a => {
-		if (!a) return;
+		return;
 	});
 	s.test('nested return', () => {
 		const nested = () => {
@@ -1118,7 +1118,6 @@ void unused;
 							metafile: true,
 							outfile: 'package/index.js',
 						});
-						if (!result.metafile) throw new Error('Missing esbuild metafile');
 						return {
 							outputs: Object.keys(result.metafile.outputs).map(path =>
 								resolve(dir, path),

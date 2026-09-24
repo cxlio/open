@@ -519,7 +519,14 @@ const sharedRules = {
 		'error',
 		{ checksVoidReturn: { attributes: false } },
 	],
-	'@typescript-eslint/no-floating-promises': 'error',
+	'@typescript-eslint/no-floating-promises': [
+		'error',
+		{ ignoreVoid: false },
+	],
+	'@typescript-eslint/no-unnecessary-condition': [
+		'error',
+		{ allowConstantLoopConditions: true },
+	],
 	'@typescript-eslint/switch-exhaustiveness-check': [
 		'error',
 		{ considerDefaultExhaustiveForUnions: true },
@@ -566,10 +573,6 @@ export const tsConfig: Linter.Config = {
 			{
 				assertionStyle: 'never',
 			},
-		],
-		'@typescript-eslint/no-unnecessary-condition': [
-			'error',
-			{ allowConstantLoopConditions: true },
 		],
 		'@typescript-eslint/unbound-method': 'off',
 		'no-restricted-syntax': [

@@ -308,8 +308,19 @@ function rule(valid: boolean, message: string): Rule {
 	return { valid, message };
 }
 
-async function collectUsedPackages(pkg: Package, projectPath: string) {
+export function usedPackagesFromMetafile(metafile: esbuild.Metafile) {
 	const used = new Set<string>();
+	for (const output of Object.values(metafile.outputs)) {
+		for (const item of output.imports) {
+			if (!item.external) continue;
+			const packageName = getPackageName(item.path);
+			if (packageName) used.add(packageName);
+		}
+	}
+	return used;
+}
+
+async function collectUsedPackages(pkg: Package, projectPath: string) {
 	const tsconfig = await readJson<Tsconfig | null>(
 		path.join(projectPath, 'tsconfig.json'),
 		null,
@@ -317,7 +328,7 @@ async function collectUsedPackages(pkg: Package, projectPath: string) {
 	const outputDir = tsconfig?.compilerOptions?.outDir;
 	const external = getPackageExternal(pkg);
 
-	if (!outputDir || !external.length) return used;
+	if (!outputDir || !external.length) return new Set<string>();
 	const resolvedOutputDir = path.resolve(projectPath, outputDir);
 
 	const result = await esbuild.build({
@@ -337,18 +348,7 @@ async function collectUsedPackages(pkg: Package, projectPath: string) {
 		write: false,
 	});
 
-	const outputs = result.metafile.outputs;
-
-	for (const output of Object.values(outputs)) {
-		for (const item of output.imports) {
-			if (!item.external) continue;
-
-			const packageName = getPackageName(item.path);
-			if (packageName) used.add(packageName);
-		}
-	}
-
-	return used;
+	return usedPackagesFromMetafile(result.metafile);
 }
 
 function collectSourceUsedPackages(
@@ -610,9 +610,14 @@ async function lintTest({ projectPath }: LintData) {
 	};
 }
 
-async function lintDependencies({ name, rootPkg, pkg, projectPath }: LintData) {
+async function lintDependencies(
+	{ name, rootPkg, pkg, projectPath }: LintData,
+	metafile?: esbuild.Metafile,
+) {
 	const rules = [];
-	const usedPackages = await collectUsedPackages(pkg, projectPath);
+	const usedPackages = metafile
+		? usedPackagesFromMetafile(metafile)
+		: await collectUsedPackages(pkg, projectPath);
 	await collectConfiguredUsedPackages(
 		rootPkg,
 		pkg,
@@ -917,6 +922,7 @@ export function audit(projectPath?: string, log?: AuditLog) {
 export function auditDependencies(
 	projectPath?: string,
 	log?: AuditLog,
+	metafile?: esbuild.Metafile,
 ) {
-	return runAudit([lintDependencies], projectPath, log);
+	return runAudit([data => lintDependencies(data, metafile)], projectPath, log);
 }

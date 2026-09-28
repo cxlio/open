@@ -13,6 +13,7 @@ import { join, resolve } from 'path';
 import { pathToFileURL } from 'url';
 import { execFile, execFileSync } from 'child_process';
 import { build as esbuild } from 'esbuild-wasm';
+import type { Metafile } from 'esbuild-wasm';
 import { ESLint } from 'eslint';
 import { formatHelp, sh } from '@cxl/program';
 import {
@@ -50,6 +51,7 @@ import {
 	audit,
 	auditDependencies,
 	requiredRootCompilerOptions,
+	usedPackagesFromMetafile,
 } from './audit.js';
 import { bundleDeclarations } from './tsc.js';
 import { file } from './file.js';
@@ -674,6 +676,79 @@ void unused;
 	});
 
 	s.test('audit output', it => {
+		it.should('collect external packages from real bundle metadata', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-metafile-'));
+			try {
+				await writeFile(join(dir, 'index.js'),
+					"import '@scope/pkg/subpath'; import 'plain/subpath'; import 'node:fs'; import './local.js';");
+				await writeFile(join(dir, 'local.js'), 'export {};');
+				const result = await esbuild({
+					absWorkingDir: dir,
+					bundle: true,
+					entryPoints: ['index.js'],
+					external: ['@scope/pkg', 'plain'],
+					metafile: true,
+					outfile: 'out.js',
+					platform: 'node',
+					write: false,
+				});
+				a.equalValues([...usedPackagesFromMetafile(result.metafile)].sort(),
+					['@scope/pkg', 'plain']);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('use supplied metadata without a standalone bundle', async a => {
+			const { dir, packageDir } = await createAuditFixture();
+			try {
+				const packagePath = join(packageDir, 'package.json');
+				const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
+				pkg.dependencies = { external: '1.0.0' };
+				await writeFile(packagePath, JSON.stringify(pkg));
+				const rootPath = join(dir, 'package.json');
+				const root = JSON.parse(await readFile(rootPath, 'utf8')) as Package;
+				root.devDependencies = { external: '1.0.0' };
+				await writeFile(rootPath, JSON.stringify(root));
+				const entry = join(packageDir, 'entry.js');
+				const outputDir = join(dir, 'bundle');
+				const output = join(outputDir, 'out.js');
+				let metafile: Metafile | undefined;
+				await writeFile(entry, "import 'external';");
+				const run = () => cachedBuild({
+					manifest: join(dir, 'bundle-cache.json'),
+					inputs: [entry],
+					key: 'audit-bundle',
+					outputDir,
+					metadata: {
+						validate: (value: Metafile | undefined): value is Metafile =>
+							!!value?.outputs,
+						complete: value => { metafile = value; },
+					},
+				}, async () => {
+					const result = await esbuild({
+						bundle: true,
+						entryPoints: [entry],
+						external: ['external'],
+						metafile: true,
+						outfile: output,
+					});
+					return { inputs: [entry], outputs: [output], metadata: result.metafile };
+				});
+				a.ok(await run());
+				await auditDependencies(packageDir, () => {}, metafile);
+				metafile = undefined;
+				a.ok(!(await run()));
+				await auditDependencies(packageDir, () => {}, metafile);
+				await mkdir(join(dir, 'dist', 'pkg'), { recursive: true });
+				await writeFile(join(dir, 'dist', 'pkg', 'index.js'), "import 'external';");
+				await auditDependencies(packageDir, () => {});
+				a.ok(true);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
 		it.should('report applied fixes in quiet mode', async a => {
 			const { dir, packageDir } = await createAuditFixture();
 			try {
@@ -1092,6 +1167,46 @@ void unused;
 	});
 
 	s.test('build cache', it => {
+		it.should('reuse metadata and rebuild when cached metadata is missing', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-cache-'));
+			try {
+				const input = join(dir, 'input.js');
+				const output = join(dir, 'package', 'index.js');
+				const manifest = join(dir, 'cache.json');
+				const seen: string[] = [];
+				let builds = 0;
+				await writeFile(input, 'export {};');
+				const run = () => cachedBuild({
+					manifest,
+					inputs: [input],
+					key: 'metadata',
+					outputDir: join(dir, 'package'),
+					metadata: {
+						validate: (value: string | undefined): value is string =>
+							typeof value === 'string',
+						complete: value => seen.push(value),
+					},
+				}, async () => {
+					builds++;
+					await mkdir(join(dir, 'package'), { recursive: true });
+					await writeFile(output, 'export {};');
+					return { inputs: [], outputs: [output], metadata: `build-${builds}` };
+				});
+				a.ok(await run());
+				a.ok(!(await run()));
+				const stored = JSON.parse(await readFile(manifest, 'utf8')) as {
+					metadata?: string;
+				};
+				delete stored.metadata;
+				await writeFile(manifest, JSON.stringify(stored));
+				a.ok(await run());
+				a.equal(builds, 2);
+				a.equalValues(seen, ['build-1', 'build-1', 'build-2']);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
 		it.should('invalidate outputs when discovered inputs change', async a => {
 			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-cache-'));
 			try {

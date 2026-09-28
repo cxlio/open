@@ -3,27 +3,33 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'path';
 import { promises as fs } from 'fs';
 import { getErrorCode, readJson } from '@cxl/program';
 
-interface CacheManifest {
+interface CacheManifest<T> {
 	fingerprint: string;
 	inputs: string[];
 	outputs: string[];
+	metadata?: T;
 }
 
-export interface BuildCacheOptions {
+export interface BuildCacheOptions<T = never> {
 	manifest: string;
 	inputs: readonly string[];
 	key: string;
 	outputDir: string;
+	metadata?: {
+		validate: (value: T | undefined) => value is T;
+		complete: (value: T) => void;
+	};
 }
 
-export interface BuildCacheResult {
+export interface BuildCacheResult<T = never> {
 	inputs: readonly string[];
 	outputs: readonly string[];
+	metadata?: T;
 }
 
-function isBuildCacheResult(
-	result: readonly string[] | BuildCacheResult,
-): result is BuildCacheResult {
+function isBuildCacheResult<T>(
+	result: readonly string[] | BuildCacheResult<T>,
+): result is BuildCacheResult<T> {
 	return !Array.isArray(result);
 }
 
@@ -51,9 +57,9 @@ async function fingerprint(inputs: readonly string[], key: string) {
 	return hash.digest('hex');
 }
 
-async function readManifest(path: string) {
+async function readManifest<T>(path: string) {
 	try {
-		const value = await readJson<CacheManifest | null>(path, null);
+		const value = await readJson<CacheManifest<T> | null>(path, null);
 		if (
 			value !== null &&
 			typeof value.fingerprint === 'string' &&
@@ -102,12 +108,13 @@ async function removeOutputs(outputDir: string, outputs: readonly string[]) {
 	);
 }
 
-async function writeManifest(
+async function writeManifest<T>(
 	path: string,
 	fingerprint: string,
 	inputs: readonly string[],
 	outputDir: string,
 	outputs: readonly string[],
+	metadata?: T,
 ) {
 	const normalized = outputs.map(output => {
 		const value = relative(resolve(outputDir), resolve(output));
@@ -118,31 +125,39 @@ async function writeManifest(
 	const temp = `${path}.${process.pid}.tmp`;
 	await fs.writeFile(
 		temp,
-		JSON.stringify({ fingerprint, inputs, outputs: normalized }, null, '\t'),
+		JSON.stringify({ fingerprint, inputs, outputs: normalized, metadata }, null, '\t'),
 	);
 	await fs.rename(temp, path);
 }
 
-export async function cachedBuild(
-	options: BuildCacheOptions,
-	build: () => Promise<readonly string[] | BuildCacheResult>,
+export async function cachedBuild<T = never>(
+	options: BuildCacheOptions<T>,
+	build: () => Promise<readonly string[] | BuildCacheResult<T>>,
 ) {
 	const outputDir = resolve(options.outputDir);
-	const previous = await readManifest(options.manifest);
+	const previous = await readManifest<T>(options.manifest);
+	const cachedMetadata = previous?.metadata;
 	const currentFingerprint = await fingerprint(
 		[...options.inputs, ...(previous?.inputs ?? [])],
 		options.key,
 	);
 	if (
 		previous?.fingerprint === currentFingerprint &&
+		(!options.metadata || options.metadata.validate(cachedMetadata)) &&
 		(await outputsExist(outputDir, previous.outputs))
-	)
+	) {
+		if (options.metadata?.validate(cachedMetadata))
+			options.metadata.complete(cachedMetadata);
 		return false;
+	}
 
 	if (previous) await removeOutputs(outputDir, previous.outputs);
 	const result = await build();
 	const inputs = isBuildCacheResult(result) ? result.inputs : [];
 	const outputs = isBuildCacheResult(result) ? result.outputs : result;
+	const metadata = isBuildCacheResult(result) ? result.metadata : undefined;
+	if (options.metadata && !options.metadata.validate(metadata))
+		throw new Error('Cached build did not produce valid metadata');
 	const relativeOutputs = outputs.map(output =>
 		relative(outputDir, resolve(output)),
 	);
@@ -159,6 +174,9 @@ export async function cachedBuild(
 		inputs,
 		outputDir,
 		outputs,
+		metadata,
 	);
+	if (options.metadata?.validate(metadata))
+		options.metadata.complete(metadata);
 	return true;
 }

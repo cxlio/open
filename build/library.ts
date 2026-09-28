@@ -43,6 +43,23 @@ import {
 	type Package,
 } from "./npm.js";
 import { cachedBuild } from "./cache.js";
+import type { Metafile } from "esbuild-wasm";
+
+function isMetafile(value: Metafile | undefined): value is Metafile {
+	return (
+		!!value?.outputs &&
+		Object.values(value.outputs).every(
+			(output) =>
+				Array.isArray(output.imports) &&
+				output.imports.every(
+					(item) =>
+						typeof item.path === "string" &&
+						(item.external === undefined ||
+							typeof item.external === "boolean"),
+				),
+			)
+	);
+}
 
 export function getLintTsconfigs(rootPkg: Package, pkg: Package) {
 	return getPackageLintTsconfigs(rootPkg, pkg);
@@ -120,6 +137,7 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 	);
 	const cacheDir = join(outputDir, ".package-cache");
 	const tsconfigInputs = ["tsconfig.json", "../tsconfig.json"];
+	let packageMetafile: Metafile | undefined;
 	const declarationBuild = fromAsync(() =>
 		cachedBuild(
 			{
@@ -163,6 +181,12 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 					platform,
 				}),
 				outputDir: pkgDir,
+				metadata: {
+					validate: isMetafile,
+					complete: (metafile) => {
+						packageMetafile = metafile;
+					},
+				},
 			},
 			async () => {
 				await removePackageFiles(
@@ -189,6 +213,9 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 						}),
 					);
 				const results = await Promise.all(builds);
+				const primaryMetafile = results[0]?.metafile;
+				if (!primaryMetafile)
+					throw new Error("Missing esbuild metafile");
 				const inputs = new Set<string>();
 				const outputs: string[] = [];
 				for (const result of results) {
@@ -199,7 +226,7 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 					for (const output of Object.keys(result.metafile.outputs))
 						outputs.push(resolve(output));
 				}
-				return { inputs: [...inputs], outputs };
+				return { inputs: [...inputs], outputs, metadata: primaryMetafile };
 			},
 		),
 	).ignoreElements();
@@ -324,7 +351,6 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 			tasks: [
 				readme(),
 				...lintTasks(),
-				fromAsync(auditDependencies).ignoreElements(),
 				...(auditedBeforeBuild
 					? []
 					: [fromAsync(audit).ignoreElements()]),
@@ -338,7 +364,14 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 				file("LICENSE.md", "LICENSE.md").catchError(() => EMPTY),
 				pkg(pkgMain),
 				declarationBuild,
-				javascriptBuild,
+				concat(
+					javascriptBuild,
+					fromAsync(() => {
+						if (!packageMetafile)
+							throw new Error("Missing package metafile");
+						return auditDependencies(undefined, undefined, packageMetafile);
+					}).ignoreElements(),
+				),
 			],
 		},
 		{

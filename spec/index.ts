@@ -210,7 +210,7 @@ async function measureBenchmark(
 
 	const warmupEnd = performance.now() + resolved.warmup;
 	let iterations = 1;
-	let elapsed = 0;
+	let elapsed: number;
 	do {
 		elapsed = await measure(iterations);
 		const ratio = resolved.sampleTime / Math.max(elapsed, 0.001);

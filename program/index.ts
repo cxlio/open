@@ -437,12 +437,10 @@ export async function operation<T>(
 ): Promise<OperationResult<T>> {
 	const start = hrtime();
 	const item = await (typeof fn === 'function' ? fn() : fn);
-	let tasks = 0;
-
 	const end = hrtime();
 	const result = {
 		start,
-		tasks: ++tasks,
+		tasks: 1,
 		time: end - start,
 		result: item,
 	};

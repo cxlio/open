@@ -17,8 +17,8 @@
 		"./eslint-config.js": "./eslint-config.js"
 	},
 	"dependencies": {
-		"@eslint/js": "^9.39.1",
-		"eslint": "^9.39.1",
+		"@eslint/js": "^10.0.1",
+		"eslint": "^10.11.0",
 		"eslint-plugin-sonarjs": "^4.2.1",
 		"esbuild-wasm": "^0.28.2",
 		"typescript": "^6.0.3",

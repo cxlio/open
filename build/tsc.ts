@@ -138,7 +138,7 @@ export function parseTsConfig(tsconfig: string) {
 		);
 	} catch (e) {
 		if (e instanceof Error) throw e;
-		throw new Error('Unknown Error');
+		throw new Error('Unknown Error', { cause: e });
 	}
 
 	if (!parsed) {

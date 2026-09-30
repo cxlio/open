@@ -493,6 +493,119 @@ const preferTypeDiscrimination: Rule.RuleModule = {
 	},
 };
 
+const noTrivialTypeGuard: Rule.RuleModule = {
+	meta: {
+		type: 'suggestion',
+		docs: { description: 'Disallow functions that wrap a single type check.' },
+		schema: [],
+		messages: {
+			noTrivialTypeGuard: 'Use the type check directly instead of wrapping it in a function.',
+		},
+	},
+	create(context) {
+		const services: ParserServices = context.sourceCode.parserServices;
+		const checker = services.program.getTypeChecker();
+		return {
+			'FunctionDeclaration, FunctionExpression, ArrowFunctionExpression'(
+				node: Rule.Node,
+			) {
+				const fn = services.esTreeNodeToTSNodeMap.get(node);
+				if (
+					!fn ||
+					!(typescript.isFunctionDeclaration(fn) ||
+						typescript.isFunctionExpression(fn) ||
+						typescript.isArrowFunction(fn) ||
+						typescript.isMethodDeclaration(fn)) ||
+					!fn.body
+				)
+					return;
+				if (
+					!typescript.isFunctionDeclaration(fn) &&
+					!typescript.isVariableDeclaration(fn.parent)
+				)
+					return;
+				const body = fn.body;
+				const onlyStatement = typescript.isBlock(body)
+					? body.statements[0]
+					: undefined;
+				const expression = typescript.isBlock(body)
+					? body.statements.length === 1 &&
+						onlyStatement &&
+						typescript.isReturnStatement(onlyStatement)
+						? onlyStatement.expression
+						: undefined
+					: body;
+				if (!expression) return;
+				const isParameter = (value: typescript.Node): boolean => {
+					if (typescript.isParenthesizedExpression(value))
+						return isParameter(value.expression);
+					return typescript.isIdentifier(value) &&
+						fn.parameters.some(
+							parameter =>
+								typescript.isIdentifier(parameter.name) &&
+								parameter.name.text === value.text,
+						);
+				};
+				const isLiteral = (value: typescript.Node) =>
+					typescript.isLiteralExpression(value) ||
+					value.kind === typescript.SyntaxKind.NullKeyword ||
+					(typescript.isIdentifier(value) && value.text === 'undefined');
+				function isEqualityCheck(
+					left: typescript.Expression,
+					right: typescript.Expression,
+				) {
+					const isCheckedValue = (value: typescript.Expression) =>
+						isParameter(value) ||
+						(typescript.isTypeOfExpression(value) &&
+							isParameter(value.expression));
+					return (
+						(isCheckedValue(left) && isLiteral(right)) ||
+						(isCheckedValue(right) && isLiteral(left))
+					);
+				}
+				function isSingleCheck(value: typescript.Expression): boolean {
+					if (typescript.isParenthesizedExpression(value))
+						return isSingleCheck(value.expression);
+					if (typescript.isPrefixUnaryExpression(value))
+						return (
+							value.operator === typescript.SyntaxKind.ExclamationToken &&
+							isSingleCheck(value.operand)
+						);
+					if (typescript.isCallExpression(value)) {
+						if (value.arguments.length !== 1) return false;
+						const signature = checker.getResolvedSignature(value);
+						const predicate = signature &&
+							checker.getTypePredicateOfSignature(signature);
+						const argument = predicate?.kind ===
+							typescript.TypePredicateKind.Identifier
+							? value.arguments[predicate.parameterIndex]
+							: undefined;
+						return !!argument && isParameter(argument);
+					}
+					if (!typescript.isBinaryExpression(value)) return false;
+					const { left, right, operatorToken } = value;
+					if (operatorToken.kind === typescript.SyntaxKind.InstanceOfKeyword) {
+						return isParameter(left);
+					}
+					if (operatorToken.kind === typescript.SyntaxKind.InKeyword) {
+						return isLiteral(left) && isParameter(right);
+					}
+					const isEqualityOperator = [
+						typescript.SyntaxKind.EqualsEqualsToken,
+						typescript.SyntaxKind.EqualsEqualsEqualsToken,
+						typescript.SyntaxKind.ExclamationEqualsToken,
+						typescript.SyntaxKind.ExclamationEqualsEqualsToken,
+					].includes(operatorToken.kind);
+					if (!isEqualityOperator) return false;
+					return isEqualityCheck(left, right);
+				}
+				if (isSingleCheck(expression))
+					context.report({ node, messageId: 'noTrivialTypeGuard' });
+			},
+		};
+	},
+};
+
 const localPlugin = {
 	rules: {
 		'no-relative-package-imports': noRelativePackageImports,
@@ -501,6 +614,7 @@ const localPlugin = {
 		'no-return-in-spec': noReturnInSpec,
 		'no-throw-in-spec': noThrowInSpec,
 		'prefer-type-discrimination': preferTypeDiscrimination,
+		'no-trivial-type-guard': noTrivialTypeGuard,
 	},
 };
 
@@ -538,6 +652,7 @@ const sharedRules = {
 	'@typescript-eslint/no-unsafe-argument': 'error',
 	complexity: ['error', { max: 22, variant: 'modified' }],
 	'local/prefer-type-discrimination': 'error',
+	'local/no-trivial-type-guard': 'error',
 } satisfies NonNullable<Linter.Config['rules']>;
 
 export const tsConfig: Linter.Config = {

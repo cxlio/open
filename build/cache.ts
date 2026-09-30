@@ -27,12 +27,6 @@ export interface BuildCacheResult<T = never> {
 	metadata?: T;
 }
 
-function isBuildCacheResult<T>(
-	result: readonly string[] | BuildCacheResult<T>,
-): result is BuildCacheResult<T> {
-	return !Array.isArray(result);
-}
-
 function updateHash(hash: Hash, value: string | Buffer) {
 	const source = typeof value === 'string' ? Buffer.from(value) : value;
 	hash.update(String(source.length));
@@ -153,9 +147,9 @@ export async function cachedBuild<T = never>(
 
 	if (previous) await removeOutputs(outputDir, previous.outputs);
 	const result = await build();
-	const inputs = isBuildCacheResult(result) ? result.inputs : [];
-	const outputs = isBuildCacheResult(result) ? result.outputs : result;
-	const metadata = isBuildCacheResult(result) ? result.metadata : undefined;
+	const inputs = 'inputs' in result ? result.inputs : [];
+	const outputs = 'outputs' in result ? result.outputs : result;
+	const metadata = 'inputs' in result ? result.metadata : undefined;
 	if (options.metadata && !options.metadata.validate(metadata))
 		throw new Error('Cached build did not produce valid metadata');
 	const relativeOutputs = outputs.map(output =>

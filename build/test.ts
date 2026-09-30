@@ -496,6 +496,58 @@ void generic;`,
 			a.ok(discriminationMessages.every(message => message.severity === 2));
 		});
 
+		it.should('reject wrappers around a single type check', async a => {
+			const messages = await lintFixture(
+				`class Component {}
+interface Target { open?: boolean }
+function isComponent(target: Target): target is Component & Target { return target instanceof Component; }
+const isString = (value: string | number) => typeof value === 'string';
+const isArray = (value: unknown) => Array.isArray(value);
+const isNotArray = (value: unknown) => !Array.isArray(value);
+const hasName = (value: object) => 'name' in value;
+const isNull = (value: string | null) => value === null;
+declare function baseGuard(value: unknown): value is number;
+const isNumber = (value: unknown) => baseGuard(value);
+function isOpen(target: Target) { return target instanceof Component && target.open === true; }
+function checked(target: Target) { const valid = true; return valid && target instanceof Component; }
+declare const other: unknown;
+const unrelated = (value: unknown) => other instanceof Component;
+declare function booleanCheck(value: unknown): boolean;
+const isBoolean = (value: unknown) => booleanCheck(value);
+void [1].filter(value => typeof value === 'number');
+const isWrapped = (value: unknown) => (Array.isArray(value));
+void [isComponent, isString, isArray, isNotArray, hasName, isNull, isNumber, isOpen, checked, unrelated, isBoolean, isWrapped];`,
+				eslintConfig,
+			);
+			const wrapperMessages = messages.filter(
+				message => message.ruleId === 'local/no-trivial-type-guard',
+			);
+			a.equalValues(
+				wrapperMessages.map(message => message.line),
+				[4, 5, 6, 7, 8, 9, 11, 19],
+			);
+		});
+
+		it.should('distinguish direct checks from predicate calls with added logic', async a => {
+			const messages = await lintFixture(
+				`class Component {}
+const isComponent = (value: object) => (value) instanceof Component;
+const isString = (value: string | number) => typeof (value) === 'string';
+const hasName = (value: object) => 'name' in (value);
+const isArray = (value: unknown) => Array.isArray((value));
+const isNull = (value: string | null) => (value) === null;
+declare function guard(value: unknown, enabled: boolean): value is number;
+declare function enabled(): boolean;
+const checked = (value: unknown) => guard(value, enabled());
+void [isComponent, isString, hasName, isArray, isNull, checked];`,
+				eslintConfig,
+			);
+			a.equalValues(
+				messages.filter(message => message.ruleId === 'local/no-trivial-type-guard').map(message => message.line),
+				[3, 4, 5, 6, 7],
+			);
+		});
+
 		it.should('ban direct returns from spec tests', async a => {
 			const messages = await lintFixture(`export default spec('fixture', s => {
 	s.test('direct return', a => {

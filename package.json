@@ -5,7 +5,7 @@
 	"version": "0.0.0",
 	"homepage": "https://cxlio.github.io/docs/",
 	"devDependencies": {
-		"@cxl/3doc": "^1.0.1",
+		"@cxl/3doc": "^1.1.0",
 		"@cxl/ui": "^6.0.0",
 		"@eslint/js": "^10.0.1",
 		"@types/node": "^24.0.3",

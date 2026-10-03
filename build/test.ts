@@ -654,6 +654,51 @@ void [isComponent, isString, isArray, isNotArray, hasName, isNull, isNumber, isO
 			);
 		});
 
+		it.should('preserve guards whose declared narrowing differs from the check', async a => {
+			const messages = await lintFixture(
+				`type KeymapState = 'ready' | 'done';
+function isKeymapState(value: string): value is KeymapState { return typeof value === 'string'; }
+const isReady = (value: string | number): value is 'ready' => typeof value === 'string';
+declare function baseGuard(value: unknown): value is string;
+function isState(value: unknown): value is KeymapState { return baseGuard(value); }
+class Component { name = '' }
+class Button extends Component { disabled = false }
+function isButton(value: object): value is Button { return value instanceof Component; }
+function hasName(value: object): value is { name: string } { return 'name' in value; }
+function isOther(value: string | number, other: string | number): value is string { return typeof other === 'string'; }
+function isAnything(value: unknown): value is any { return typeof value === 'string'; }
+const isStateExpression = function(value: string): value is KeymapState { return typeof value === 'string'; };
+type Key = string & { readonly brand: unique symbol };
+function isKey(value: string): value is Key { return typeof value === 'string'; }
+void [isKeymapState, isReady, isState, isButton, hasName, isOther, isAnything, isStateExpression, isKey];`,
+				eslintConfig,
+			);
+			a.equalValues(
+				messages.filter(message => message.ruleId === 'local/no-trivial-type-guard'),
+				[],
+			);
+		});
+
+		it.should('reject guards whose declared narrowing matches the check', async a => {
+			const messages = await lintFixture(
+				`type Text = string;
+function isText(value: string | number): value is Text { return typeof value === 'string'; }
+const isReady = (value: 'ready' | number): value is 'ready' => typeof value === 'string';
+declare function baseGuard(value: unknown): value is number;
+function isNumber(value: unknown): value is number { return baseGuard(value); }
+function isNotText(value: string | number): value is number { return !(typeof value === 'string'); }
+type Result = { name: string } | { error: Error };
+function hasName(value: Result): value is { name: string } { return 'name' in value; }
+function isNonNull<T>(value: T): value is NonNullable<T> { return value != null; }
+void [isText, isReady, isNumber, isNotText, hasName, isNonNull];`,
+				eslintConfig,
+			);
+			a.equalValues(
+				messages.filter(message => message.ruleId === 'local/no-trivial-type-guard').map(message => message.line),
+				[3, 4, 6, 7, 9, 10],
+			);
+		});
+
 		it.should('distinguish direct checks from predicate calls with added logic', async a => {
 			const messages = await lintFixture(
 				`class Component {}

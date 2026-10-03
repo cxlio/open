@@ -504,6 +504,54 @@ const noTrivialTypeGuard: Rule.RuleModule = {
 	create(context) {
 		const services: ParserServices = context.sourceCode.parserServices;
 		const checker = services.program.getTypeChecker();
+		function matchesPredicate(
+			expression: typescript.Expression,
+			predicate: typescript.TypePredicateNode,
+		): boolean {
+			if (!typescript.isIdentifier(predicate.parameterName) || !predicate.type)
+				return false;
+			const source = expression.getSourceFile();
+			const start = expression.getStart();
+			const text = source.text.slice(0, start) +
+				`(${expression.getText()}) ? ${predicate.parameterName.text} : undefined` +
+				source.text.slice(expression.end);
+			const options = services.program.getCompilerOptions();
+			const host = typescript.createCompilerHost(options);
+			const readFile = host.readFile;
+			host.readFile = file => file === source.fileName
+				? text
+				: readFile(file);
+			const getSourceFile = host.getSourceFile;
+			host.getSourceFile = (file, languageVersion, onError, shouldCreateNewSourceFile) =>
+				file === source.fileName
+					? getSourceFile(file, languageVersion, onError, shouldCreateNewSourceFile)
+					: services.program.getSourceFile(file) ??
+						getSourceFile(file, languageVersion, onError, shouldCreateNewSourceFile);
+			const program = typescript.createProgram({
+				rootNames: services.program.getRootFileNames(),
+				options,
+				host,
+				projectReferences: services.program.getProjectReferences(),
+			});
+			const narrowedChecker = program.getTypeChecker();
+			let narrowed: typescript.Type | undefined;
+			let declared: typescript.Type | undefined;
+			function visit(node: typescript.Node) {
+				if (typescript.isConditionalExpression(node) && node.getStart() === start)
+					narrowed = narrowedChecker.getTypeAtLocation(node.whenTrue);
+				if (typescript.isTypePredicateNode(node) &&
+					node.getStart() === predicate.getStart() && node.type)
+					declared = narrowedChecker.getTypeFromTypeNode(node.type);
+				typescript.forEachChild(node, visit);
+			}
+			const narrowedSource = program.getSourceFile(source.fileName);
+			if (narrowedSource) visit(narrowedSource);
+			const openFlags = typescript.TypeFlags.Any | typescript.TypeFlags.Unknown;
+			return !!narrowed && !!declared &&
+				!(narrowed.flags & openFlags) && !(declared.flags & openFlags) &&
+				narrowedChecker.isTypeAssignableTo(narrowed, declared) &&
+				narrowedChecker.isTypeAssignableTo(declared, narrowed);
+		}
 		return {
 			'FunctionDeclaration, FunctionExpression, ArrowFunctionExpression'(
 				node: Rule.Node,
@@ -535,10 +583,15 @@ const noTrivialTypeGuard: Rule.RuleModule = {
 						: undefined
 					: body;
 				if (!expression) return;
+				const predicate = fn.type && typescript.isTypePredicateNode(fn.type)
+					? fn.type
+					: undefined;
 				const isParameter = (value: typescript.Node): boolean => {
 					if (typescript.isParenthesizedExpression(value))
 						return isParameter(value.expression);
 					return typescript.isIdentifier(value) &&
+						(!predicate || (typescript.isIdentifier(predicate.parameterName) &&
+							predicate.parameterName.text === value.text)) &&
 						fn.parameters.some(
 							parameter =>
 								typescript.isIdentifier(parameter.name) &&
@@ -598,7 +651,8 @@ const noTrivialTypeGuard: Rule.RuleModule = {
 					if (!isEqualityOperator) return false;
 					return isEqualityCheck(left, right);
 				}
-				if (isSingleCheck(expression))
+				if (isSingleCheck(expression) &&
+					(!predicate || matchesPredicate(expression, predicate)))
 					context.report({ node, messageId: 'noTrivialTypeGuard' });
 			},
 		};

@@ -11,7 +11,7 @@ import {
 	type Logger,
 } from '@cxl/program';
 import { Observable } from '@cxl/rx';
-import { BASEDIR, readPackage } from './package.js';
+import { getBuildDirectory, readPackage } from './package.js';
 
 export interface Output {
 	path: string;
@@ -52,6 +52,10 @@ export const buildParameters = {
 	grep: {
 		type: 'string',
 		help: 'Run only tests whose full name matches the pattern.',
+	},
+	packages: {
+		type: 'string',
+		help: 'Build comma-separated package directories in one process.',
 	},
 } as const;
 
@@ -117,8 +121,9 @@ export function formatBuildError(error: Error | string) {
 export async function build(...targets: BuildConfiguration[]) {
 	if (!targets.length) throw new Error('Invalid configuration');
 
-	if (BASEDIR !== process.cwd()) {
-		process.chdir(BASEDIR);
+	const directory = getBuildDirectory();
+	if (directory !== process.cwd()) {
+		process.chdir(directory);
 	}
 
 	const pkg = await readPackage();

@@ -13,6 +13,27 @@ const SCRIPTDIR = process.cwd();
 export const BASEDIR = execSync(`npm prefix`, { cwd: SCRIPTDIR })
 	.toString()
 	.trim();
+const directory = { path: BASEDIR };
+
+export function getBuildDirectory() {
+	return directory.path;
+}
+
+export async function withBuildDirectory(
+	path: string,
+	build: () => Promise<void>,
+) {
+	const cwd = process.cwd();
+	const base = directory.path;
+	try {
+		process.chdir(path);
+		directory.path = process.cwd();
+		await build();
+	} finally {
+		directory.path = base;
+		process.chdir(cwd);
+	}
+}
 
 const LICENSE_MAP: Record<License, string> = {
 	'GPL-3.0': 'license-GPL-3.0.md',
@@ -170,6 +191,7 @@ export function esbuild(options: esbuildApi.BuildOptions) {
 
 export function buildEsbuild(options: esbuildApi.BuildOptions) {
 	return esbuildApi.build({
+		absWorkingDir: process.cwd(),
 		minify: true,
 		bundle: true,
 		splitting: true,
@@ -185,7 +207,7 @@ export function buildEsbuild(options: esbuildApi.BuildOptions) {
 
 export const esbuildVersion = esbuildApi.version;
 
-export async function readPackage(base: string = BASEDIR) {
+export async function readPackage(base: string = getBuildDirectory()) {
 	const pkg = resolve(base, 'package.json');
 
 	if (!existsSync(pkg)) throw new Error(`"${pkg}" not found`);
@@ -264,7 +286,7 @@ function readIfExists(file: string) {
  */
 export function readme() {
 	return fromAsync(async () => {
-		const pkg = await readPackage(BASEDIR);
+		const pkg = await readPackage();
 		const extra = readIfExists('USAGE.md');
 		const encodedName = encodeURIComponent(pkg.name);
 

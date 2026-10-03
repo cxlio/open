@@ -1,5 +1,6 @@
 import { spec, TestApi } from '@cxl/spec';
 import {
+	cp,
 	mkdir,
 	mkdtemp,
 	readFile,
@@ -12,6 +13,8 @@ import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { pathToFileURL } from 'url';
 import { execFile, execFileSync } from 'child_process';
+import { promisify } from 'util';
+import { createHash } from 'crypto';
 import { build as esbuild } from 'esbuild-wasm';
 import type { Metafile } from 'esbuild-wasm';
 import { ESLint } from 'eslint';
@@ -62,6 +65,8 @@ import { rx } from './index.js';
 import { cachedBuild } from './cache.js';
 import { registerImportMap } from '@cxl/spec-runner/importmap.js';
 import * as ts from 'typescript';
+
+const execFileAsync = promisify(execFile);
 
 async function errorMessage(fn: () => Promise<unknown>) {
 	try {
@@ -199,6 +204,127 @@ async function runAudit(
 }
 
 export default spec('build', s => {
+	s.test('ordinary CLI lint startup', async a => {
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-build-lint-startup-'));
+		try {
+			const hook = join(dir, 'imports.mjs');
+			await writeFile(
+				hook,
+				`import { registerHooks } from 'node:module';
+registerHooks({
+	load(url, context, nextLoad) {
+		if (url.includes('/eslint-plugin-sonarjs/')) console.log('SONARJS_LOADED');
+		return nextLoad(url, context);
+	},
+});`,
+			);
+			const { stdout: output } = await execFileAsync(
+				process.execPath,
+				['--import', hook, join(import.meta.dirname, 'cli.js')],
+				{ cwd: resolve(import.meta.dirname, '../../rx'), encoding: 'utf8' },
+			);
+			a.ok(!output.includes('SONARJS_LOADED'));
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	s.test('batch CLI builds', async it => {
+		const { dir, packageDir } = await createAuditFixture();
+		it.afterAll(() => rm(dir, { recursive: true, force: true }));
+		await writeFile(join(packageDir, 'types.ts'), 'export interface Value { id: number }');
+		await writeFile(
+			join(packageDir, 'index.ts'),
+			"import type { Value } from './types.js'; export const value: Value = { id: 1 };",
+		);
+		await writeFile(
+			join(packageDir, 'tsconfig.json'),
+			JSON.stringify({
+				extends: '../tsconfig.json',
+				compilerOptions: { outDir: '../dist/pkg' },
+				files: ['index.ts', 'types.ts'],
+			}),
+		);
+		await writeFile(
+			join(packageDir, 'tsconfig.test.json'),
+			JSON.stringify({
+				extends: './tsconfig.json',
+				include: ['test.ts'],
+				references: [{ path: './tsconfig.json' }],
+			}),
+		);
+		await symlink(resolve(import.meta.dirname, '../../node_modules'), join(dir, 'node_modules'), 'dir');
+		const second = join(dir, 'second');
+		await cp(packageDir, second, { recursive: true });
+		await writeFile(join(second, 'index.ts'), "export const value = 'second';");
+		await writeFile(
+			join(second, 'package.json'),
+			JSON.stringify({
+				...JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8')) as Package,
+				name: '@test/second',
+				homepage: 'https://example.com/docs/@test/second',
+			}),
+		);
+		const run = async () => (await execFileAsync(
+			process.execPath,
+			[join(import.meta.dirname, 'cli.js'), 'package', '--packages', 'pkg,second'],
+			{ cwd: dir, encoding: 'utf8' },
+		)).stdout;
+		it.should('build both packages', async it => {
+			it.equal((await run()).match(/^package: /gm)?.length, 2);
+			const firstOutput = join(dir, 'dist/pkg/package/index.js');
+			const secondOutput = join(dir, 'dist/second/package/index.js');
+			const firstSource = await readFile(firstOutput, 'utf8');
+			const secondSource = await readFile(secondOutput, 'utf8');
+			it.ok(firstSource.includes('id:1'));
+			it.ok(secondSource.includes('second'));
+			it.should('repeat builds with isolated package outputs', async a => {
+				await run();
+				a.equal(await readFile(firstOutput, 'utf8'), firstSource);
+				a.equal(await readFile(secondOutput, 'utf8'), secondSource);
+				a.test('changed project types and sources', async a => {
+					await writeFile(join(packageDir, 'types.ts'), 'export interface Value { id: string }');
+					a.ok((await errorMessage(run)).includes('Typescript compilation failed'));
+					await writeFile(
+						join(packageDir, 'index.ts'),
+						"import type { Value } from './types.js'; export const value: Value = { id: 'changed' };",
+					);
+					await run();
+					a.ok((await readFile(firstOutput, 'utf8')).includes('changed'));
+					a.ok((await readFile(join(dir, 'dist/pkg/package/index.d.ts'), 'utf8')).includes('id: string'));
+					a.test('configured lint projects and failure propagation', async a => {
+						await writeFile(
+							join(dir, 'package.json'),
+							JSON.stringify({
+								...JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as Package,
+								build: { lintTsconfigs: ['tsconfig.lint.json'] },
+							}),
+						);
+						await writeFile(
+							join(packageDir, 'tsconfig.lint.json'),
+							JSON.stringify({ extends: './tsconfig.json', files: ['lint.ts'] }),
+						);
+						await writeFile(
+							join(packageDir, 'lint.ts'),
+							'export function choose(value: boolean) { if (value) { return 1; } else { return 1; } }',
+						);
+						await writeFile(join(second, 'index.ts'), "export const value = 'unbuilt';");
+						a.ok((await errorMessage(run)).includes('sonarjs/no-all-duplicated-branches'));
+						a.equal(await readFile(secondOutput, 'utf8'), secondSource);
+					});
+				});
+			});
+		});
+	});
+
+	s.test('batch CLI rejects empty package directories', async a => {
+		a.ok((await errorMessage(() => execFileAsync(
+			process.execPath,
+			[join(import.meta.dirname, 'cli.js'), '--packages', 'rx,'],
+			{ cwd: resolve(import.meta.dirname, '../..'), encoding: 'utf8' },
+		))).includes('Package directories must not be empty'));
+	});
+
 	s.test('eslint config', it => {
 		it.should(
 			'ban and resolve imports across package boundaries',
@@ -679,9 +805,10 @@ void unused;
 			a.equal(
 				formatHelp(buildParameters),
 				[
-					'  -h, --help       Show help.',
-					'  --verbose        Print detailed build output.',
-					'  --grep <string>  Run only tests whose full name matches the pattern.',
+					'  -h, --help           Show help.',
+					'  --verbose            Print detailed build output.',
+					'  --grep <string>      Run only tests whose full name matches the pattern.',
+					'  --packages <string>  Build comma-separated package directories in one process.',
 				].join('\n'),
 			);
 		});
@@ -1219,6 +1346,42 @@ void unused;
 	});
 
 	s.test('build cache', it => {
+		it.should('reuse legacy fingerprints for missing inputs', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-cache-'));
+			try {
+				const input = join(dir, 'missing.js');
+				const output = join(dir, 'index.js');
+				const manifest = join(dir, 'cache.json');
+				const hash = createHash('sha256');
+				for (const value of ['legacy', input, 'present', 'missing']) {
+					hash.update(String(Buffer.byteLength(value)));
+					hash.update(':');
+					hash.update(value);
+				}
+				await writeFile(output, 'cached');
+				await writeFile(manifest, JSON.stringify({
+					fingerprint: hash.digest('hex'),
+					inputs: [],
+					outputs: ['index.js'],
+				}));
+				let builds = 0;
+				a.ok(!(await cachedBuild({
+					manifest,
+					inputs: [input],
+					key: 'legacy',
+					outputDir: dir,
+				}, async () => {
+					builds++;
+					await writeFile(output, 'rebuilt');
+					return [output];
+				})));
+				a.equal(builds, 0);
+				a.equal(await readFile(output, 'utf8'), 'cached');
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
 		it.should('reuse metadata and rebuild when cached metadata is missing', async a => {
 			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-cache-'));
 			try {
@@ -1347,6 +1510,48 @@ void unused;
 				options.key = JSON.stringify({ recipe: 2 });
 				a.ok(await run());
 				a.equal(builds, 5);
+			} finally {
+				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('track missing inputs and retry after input read errors', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-cache-'));
+			try {
+				const input = join(dir, 'input.js');
+				const missing = join(dir, 'missing.js');
+				const invalid = join(dir, 'invalid.js');
+				const outputDir = join(dir, 'package');
+				const output = join(outputDir, 'index.js');
+				const options = {
+					manifest: join(dir, 'cache.json'),
+					inputs: [input, missing],
+					key: 'missing-input',
+					outputDir,
+				};
+				let builds = 0;
+				const run = () => cachedBuild(options, async () => {
+					await mkdir(outputDir, { recursive: true });
+					await writeFile(output, String(++builds));
+					return [output];
+				});
+				await writeFile(input, 'input');
+				a.ok(await run());
+				a.ok(!(await run()));
+				await writeFile(missing, 'present');
+				a.ok(await run());
+				await rm(missing);
+				a.ok(await run());
+				await mkdir(invalid);
+				options.inputs.push(invalid);
+				a.ok((await errorMessage(run)).includes('EISDIR'));
+				a.equal(builds, 3);
+				a.equal(await readFile(output, 'utf8'), '3');
+				await rm(invalid, { recursive: true });
+				await writeFile(invalid, 'valid');
+				a.ok(await run());
+				a.ok(!(await run()));
+				a.equal(builds, 4);
 			} finally {
 				await rm(dir, { recursive: true, force: true });
 			}

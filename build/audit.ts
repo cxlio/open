@@ -114,7 +114,6 @@ const inheritedPackageCompilerOptions = Object.keys(
 	requiredRootCompilerOptions,
 ).filter(name => !packageCompilerOptionOverrides.has(name));
 const TestScript = 'npm run build -- test';
-const baseDir = path.resolve('.');
 const requiredPackageFields: (keyof Package)[] = [
 	'name',
 	'version',
@@ -842,7 +841,7 @@ async function verifyProject(
 
 async function runAudit(
 	linters: Linter[],
-	projectPath = baseDir,
+	projectPath = process.cwd(),
 	log: AuditLog = console.log,
 ) {
 	const { verbose } = buildOutputOptions();

@@ -27,7 +27,8 @@ export interface TsconfigJson {
 	exclude?: string[];
 }
 
-const { readDirectory, getCurrentDirectory, fileExists, readFile } = ts.sys;
+const { readDirectory, fileExists, readFile } = ts.sys;
+const getCurrentDirectory = () => process.cwd();
 const DefaultTsconfig = 'tsconfig.json';
 
 const parseConfigHost: ParseConfigFileHost = {
@@ -71,7 +72,7 @@ function getBuilder(
 	tsconfig = DefaultTsconfig,
 	defaultOptions: BuildOptions = { module: ts.ModuleKind.CommonJS },
 ) {
-	const host = ts.createSolutionBuilderHost(ts.sys);
+	const host = ts.createSolutionBuilderHost({ ...ts.sys, getCurrentDirectory });
 	const options = parseTsConfig(tsconfig);
 
 	if (options.errors.length) {
@@ -238,6 +239,7 @@ async function declarationProgram(entryFile: string, tsconfig: string) {
 		target: ts.ScriptTarget.Latest,
 	};
 	const host = ts.createCompilerHost(options);
+	host.getCurrentDirectory = getCurrentDirectory;
 	host.resolveModuleNameLiterals = (moduleLiterals, containingFile) =>
 		moduleLiterals.map(moduleLiteral => {
 			const specifier = moduleLiteral.text;

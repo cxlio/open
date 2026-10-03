@@ -37,15 +37,22 @@ function updateHash(hash: Hash, value: string | Buffer) {
 async function fingerprint(inputs: readonly string[], key: string) {
 	const hash = createHash('sha256');
 	updateHash(hash, key);
-	for (const input of [...new Set(inputs)].sort((a, b) => a.localeCompare(b))) {
-		updateHash(hash, input);
-		try {
+	const sorted = [...new Set(inputs)].sort((a, b) => a.localeCompare(b));
+	for (let offset = 0; offset < sorted.length; offset += 32) {
+		const batch = sorted.slice(offset, offset + 32);
+		const contents = await Promise.all(batch.map(async input => {
+			try {
+				return await fs.readFile(input);
+			} catch (error) {
+				if (!(error instanceof Error) || getErrorCode(error) !== 'ENOENT')
+					throw error;
+			}
+		}));
+		for (const [index, input] of batch.entries()) {
+			updateHash(hash, input);
+			const content = contents[index];
 			updateHash(hash, 'present');
-			updateHash(hash, await fs.readFile(input));
-		} catch (error) {
-			if (!(error instanceof Error) || getErrorCode(error) !== 'ENOENT')
-				throw error;
-			updateHash(hash, 'missing');
+			updateHash(hash, content === undefined ? 'missing' : content);
 		}
 	}
 	return hash.digest('hex');

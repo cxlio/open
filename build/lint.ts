@@ -44,14 +44,19 @@ function eslintWithConfig(
 	configName: 'default' | 'specConfig',
 ) {
 	return new Observable<Output>(subs => {
-		Promise.all([import('eslint'), import('./eslint-config.js')]).then(
+		Promise.all([
+			import('eslint'),
+			configName === 'specConfig'
+				? import('./eslint-config-base.js').then(module => module.specConfig)
+				: import('./eslint-config.js').then(module => module.default),
+		]).then(
 			([{ ESLint }, config]) => {
 				if (buildOutputOptions().verbose) appLog(`eslint ${ESLint.version}`);
 				const linter = new ESLint({
 					cache: true,
 					cwd: process.cwd(),
 					overrideConfigFile: true,
-					baseConfig: config[configName],
+					baseConfig: config,
 					...options,
 				});
 				return linter.lintFiles(files).then(handleEslintResult);

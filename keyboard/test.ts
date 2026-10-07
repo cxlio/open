@@ -191,6 +191,232 @@ export default spec('keyboard', s => {
 	});
 
 	s.test('handleKeyboard', it => {
+		it.should('allow browser text entry while consuming control shortcuts', async a => {
+			const input = a.element('input');
+			let inputEvents = 0;
+			let shortcuts = 0;
+			input.addEventListener('beforeinput', () => inputEvents++);
+			const dispose = handleKeyboard({
+				element: input,
+				delay: 0,
+				onKey: key => {
+					if (key !== 'ctrl+x') return false;
+					shortcuts++;
+					return true;
+				},
+			});
+			a.afterAll(dispose);
+			a.equal(
+				(await a.action({ type: 'type', value: 'hello', element: input })).success,
+				true,
+			);
+			a.equal(input.value, 'hello');
+			a.equal(inputEvents, 5);
+			await a.action({ type: 'keyDown', value: 'Control', element: input });
+			await a.action({ type: 'press', value: 'x', element: input });
+			await a.action({ type: 'keyUp', value: 'Control', element: input });
+			a.equal(shortcuts, 1);
+			a.equal(input.value, 'hello');
+			a.equal(inputEvents, 5);
+		});
+
+		for (const capture of [false, true]) {
+			it.should(`leave text input events untouched with capture=${capture}`, (a: TestApi) => {
+				const element = a.element('div');
+				const input = document.createElement('input');
+				element.append(input);
+				let translated = 0;
+				let called = 0;
+				let propagated = 0;
+				const dispose = handleKeyboard({
+					element,
+					capture,
+					layout: {
+						translate: () => {
+							translated++;
+							return 'x';
+						},
+					},
+					onKey: () => {
+						called++;
+						return true;
+					},
+				});
+				element.parentElement?.addEventListener('keydown', () => propagated++);
+				for (const init of [
+					{ key: 'Enter', isComposing: true },
+					{ key: 'Escape', isComposing: true },
+					{ key: 'x', keyCode: 229 },
+					{
+						key: '@',
+						code: 'KeyQ',
+						ctrlKey: true,
+						altKey: true,
+						modifierAltGraph: true,
+					},
+					{ key: '€', code: 'KeyE', modifierAltGraph: true },
+				]) {
+					const event = new KeyboardEvent('keydown', {
+						...init,
+						bubbles: true,
+						cancelable: true,
+					});
+					a.assert(input.dispatchEvent(event));
+					a.equal(event.defaultPrevented, false);
+				}
+				a.equal(translated, 0);
+				a.equal(called, 0);
+				a.equal(propagated, 5);
+				dispose();
+			});
+
+			it.should(`track composition and reset sequences with capture=${capture}`, (a: TestApi) => {
+				const element = a.element('div');
+				const input = document.createElement('input');
+				element.append(input);
+				const keys: string[] = [];
+				const dispose = handleKeyboard({
+					element,
+					capture,
+					delay: Infinity,
+					onKey: key => {
+						keys.push(key);
+						return false;
+					},
+				});
+				input.dispatchEvent(
+					new KeyboardEvent('keydown', { key: 'a', bubbles: true }),
+				);
+				input.dispatchEvent(
+					new CompositionEvent('compositionstart', { bubbles: true }),
+				);
+				const event = new KeyboardEvent('keydown', {
+					key: 'Enter',
+					bubbles: true,
+					cancelable: true,
+				});
+				a.equal(event.isComposing, false);
+				a.assert(input.dispatchEvent(event));
+				a.equal(keys.join(','), 'a');
+				input.dispatchEvent(
+					new CompositionEvent('compositionend', { bubbles: true }),
+				);
+				input.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 'Enter',
+						keyCode: 229,
+						bubbles: true,
+					}),
+				);
+				input.dispatchEvent(
+					new KeyboardEvent('keydown', { key: 'b', bubbles: true }),
+				);
+				a.equal(keys.join(','), 'a,b');
+				dispose();
+			});
+		}
+
+		it.should('preserve ordinary shortcuts and genuine Ctrl+Alt combinations', a => {
+			const element = a.element('input');
+			const keys: string[] = [];
+			const dispose = handleKeyboard({
+				element,
+				layout: { altName: 'alt', modName: 'meta' },
+				onKey: key => {
+					keys.push(key);
+					return true;
+				},
+			});
+			for (const init of [
+				{ ctrlKey: true },
+				{ altKey: true },
+				{ shiftKey: true },
+				{ metaKey: true },
+				{ ctrlKey: true, altKey: true },
+			]) {
+				const event = new KeyboardEvent('keydown', {
+					key: 'x',
+					code: 'KeyX',
+					...init,
+					cancelable: true,
+				});
+				a.equal(event.getModifierState('AltGraph'), false);
+				a.equal(element.dispatchEvent(event), false);
+				a.equal(event.defaultPrevented, true);
+			}
+			a.equal(keys.join(','), 'ctrl+x,alt+x,shift+x,meta+x,ctrl+alt+x');
+			dispose();
+		});
+
+		it.should('ignore text events without appending keys or extending sequence timing', a => {
+			let now = 1000;
+			a.mock(Date, 'now', () => now);
+			const element = a.element('input');
+			const keys: string[] = [];
+			const dispose = handleKeyboard({
+				element,
+				delay: 100,
+				onKey: key => {
+					keys.push(key);
+					return false;
+				},
+			});
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+			now += 25;
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: '@', modifierAltGraph: true }));
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', isComposing: true }));
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229 }));
+			now += 25;
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
+			a.equal(keys.join(','), 'a,a b,b');
+			now += 75;
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: '@', modifierAltGraph: true }));
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', isComposing: true }));
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229 }));
+			now += 25;
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }));
+			a.equal(keys.join(','), 'a,a b,b,c');
+			dispose();
+		});
+
+		it.should('remove composition listeners on disposal', a => {
+			const element = a.element('input');
+			let translated = 0;
+			const options = {
+				element,
+				delay: Infinity,
+				layout: {
+					translate: () => {
+						translated++;
+						return 'x';
+					},
+				},
+				onKey: () => false,
+			};
+			const dispose = handleKeyboard(options);
+			element.dispatchEvent(new CompositionEvent('compositionstart'));
+			dispose();
+			element.dispatchEvent(new CompositionEvent('compositionend'));
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }));
+			a.equal(translated, 0);
+			const keys: string[] = [];
+			const disposeAgain = handleKeyboard({
+				...options,
+				onKey: key => {
+					keys.push(key);
+					return false;
+				},
+			});
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+			element.dispatchEvent(new CompositionEvent('compositionstart'));
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
+			element.dispatchEvent(new CompositionEvent('compositionend'));
+			element.dispatchEvent(new KeyboardEvent('keydown', { key: 'c' }));
+			a.equal(keys.join(','), 'x,x');
+			a.equal(translated, 2);
+			disposeAgain();
+		});
+
 		it.should('fallback to en-US layout', (a: TestApi) => {
 			const event = new KeyboardEvent('keydown', { key: 'Dead' });
 			const event2 = new KeyboardEvent('keydown', {
@@ -317,7 +543,7 @@ export default spec('keyboard', s => {
 
 			// Cleanup
 			dispose();
-			a.equal(off.lastEvent?.called, 1);
+			a.equal(off.lastEvent?.called, 3);
 		});
 
 		it.should('reset sequence after delay', (a: TestApi) => {
@@ -350,7 +576,7 @@ export default spec('keyboard', s => {
 
 			// Cleanup
 			dispose();
-			a.equal(off.lastEvent?.called, 1);
+			a.equal(off.lastEvent?.called, 3);
 		});
 
 		it.should('handle rapid key presses correctly', (a: TestApi) => {
@@ -391,7 +617,7 @@ export default spec('keyboard', s => {
 				});
 
 				dispose();
-				a.equal(off.lastEvent?.called, 1);
+				a.equal(off.lastEvent?.called, 3);
 			},
 		);
 	});

@@ -220,11 +220,21 @@ export function handleKeyboard({
 	const D = delay === undefined ? 250 : delay;
 	let sequence: string[] = [];
 	let lastT = 0;
+	let composing = false;
 
 	layout ??= getDefaultLayout();
 	const newLayout = augmentLayout(layout);
 
 	function handler(ev: KeyboardEvent) {
+		if (
+			composing ||
+			ev.isComposing ||
+			// eslint-disable-next-line sonarjs/deprecation -- IME boundary keydowns can report isComposing=false.
+			ev.keyCode === 229 ||
+			ev.getModifierState('AltGraph')
+		)
+			return;
+
 		const k = keyboardEventToString(ev, newLayout);
 		let t = Date.now();
 		if (!k) return;
@@ -246,8 +256,24 @@ export function handleKeyboard({
 
 		lastT = t;
 	}
+	function compositionStart() {
+		composing = true;
+		sequence = [];
+		lastT = 0;
+	}
+	function compositionEnd() {
+		composing = false;
+	}
+	element.addEventListener('compositionstart', compositionStart, { capture });
+	element.addEventListener('compositionend', compositionEnd, { capture });
 	element.addEventListener('keydown', handler, { capture });
-	return () => element.removeEventListener('keydown', handler, { capture });
+	return () => {
+		element.removeEventListener('compositionstart', compositionStart, {
+			capture,
+		});
+		element.removeEventListener('compositionend', compositionEnd, { capture });
+		element.removeEventListener('keydown', handler, { capture });
+	};
 }
 
 /**

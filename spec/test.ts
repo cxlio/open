@@ -1,5 +1,9 @@
-import { spec, type RunnerCommand, type TestApi } from './index.js';
+import { spec, type Result, type RunnerCommand, type TestApi } from './index.js';
 import { ref } from '@cxl/rx';
+
+declare global {
+	var __cxlRunner: ((command: RunnerCommand) => Promise<Result> | Result) | undefined;
+}
 
 export default spec('spec', s => {
 	s.test('should load', a => {
@@ -99,12 +103,11 @@ export default spec('spec', s => {
 
 	s.test('proxy registrations are released by their owner', async a => {
 		const commands: RunnerCommand[] = [];
-		Object.assign(globalThis, {
-			__cxlRunner: async (command: RunnerCommand) => {
-				commands.push(command);
-				return { success: true, failureMessage: 'Proxy' };
-			},
-		});
+		const previousRunner = globalThis.__cxlRunner;
+		globalThis.__cxlRunner = async command => {
+			commands.push(command);
+			return { success: true, failureMessage: 'Proxy' };
+		};
 		try {
 			const assertions = spec('proxy', s => {
 				s.test('owner', async a => {
@@ -118,9 +121,10 @@ export default spec('spec', s => {
 			});
 			await assertions.run();
 		} finally {
-			Reflect.deleteProperty(globalThis, '__cxlRunner');
+			globalThis.__cxlRunner = previousRunner;
 		}
 
+		a.equal(globalThis.__cxlRunner, previousRunner);
 		a.equal(commands[0]?.type, 'proxy');
 		a.equal(commands[1]?.type, 'proxyService');
 		a.equal(commands[2]?.type, 'proxyRelease');

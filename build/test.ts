@@ -568,6 +568,66 @@ void check;
 			}
 		});
 
+		it.should('reject undeclared properties added to existing objects', async a => {
+			const source = `declare const port: MessagePort;
+declare const worker: SharedWorker;
+Object.assign(port, { errorTarget: worker });
+interface Profile { name: string; age?: number }
+declare const profile: Profile;
+declare const extra: { enabled: boolean };
+Object.assign(profile, { name: 'updated' }, extra);
+Object.defineProperty(profile, 'enabled', { value: true });
+Object.defineProperties(profile, { enabled: { value: true }, name: { value: 'updated' } });
+const assign = Object.assign;
+assign(profile, { ['enabled']: true });
+const { defineProperty } = Object;
+defineProperty(profile, 'enabled', { value: true });
+declare const union: { name: string } | { age: number };
+Object.assign(union, { name: 'updated' });
+function generic<T extends Profile>(value: T) { Object.assign(value, { enabled: true }); }
+declare const key: unique symbol;
+Object.assign(profile, { [key]: true });
+Object.defineProperty(profile, key, { value: true });
+void generic;
+Object.assign(profile, { name: 'updated', age: 1 });
+Object.defineProperty(profile, 'age', { value: 1 });
+Object.defineProperties(profile, { age: { value: 1 } });
+const extended: Profile & { enabled: boolean } = Object.assign({}, profile, { enabled: true });
+Object.assign(extended, { enabled: false });
+declare const record: Record<string, number>;
+Object.assign(record, { count: 1 });
+declare const numeric: { [key: number]: string };
+Object.assign(numeric, { 1: 'one' });
+declare const pattern: { [key: \`data-\${string}\`]: number };
+Object.assign(pattern, { 'data-count': 1 });
+declare const symbolTarget: { [key]: boolean };
+Object.assign(symbolTarget, { [key]: true });
+Object.defineProperty(symbolTarget, key, { value: false });
+declare const symbolRecord: { [key: symbol]: boolean };
+Object.assign(symbolRecord, { [key]: true });
+declare const commonUnion: { name: string; age: number } | { name: string };
+Object.assign(commonUnion, { name: 'updated' });
+function update<T extends Profile>(value: T) { Object.assign(value, { name: 'updated' }); }
+declare const dynamic: string;
+Object.defineProperty(profile, dynamic, { value: true });
+function shadowed(Object: { assign(target: Profile, source: object): void }) { Object.assign(profile, { enabled: true }); }
+void [update, shadowed];`;
+			for (const config of [eslintConfig, specConfig]) {
+				const messages = (await lintFixture(source, config)).filter(
+					message => message.ruleId === 'local/no-undeclared-properties',
+				);
+				a.equalValues(
+					messages.map(message => message.line),
+					[4, 8, 9, 10, 12, 14, 16, 17, 19, 20],
+				);
+				a.ok(messages.every(message => message.severity === 2));
+				a.equal(
+					messages[0]?.message,
+					'Property "errorTarget" is not declared on the target type. Create a new object with an explicit extended type instead.',
+				);
+			}
+		});
+
 		it.should('require Error promise rejection reasons', async a => {
 			const messages = await lintFixture(
 				`export const invalid = new Promise<void>((_, reject) => reject('failure'));

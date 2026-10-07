@@ -659,6 +659,114 @@ const noTrivialTypeGuard: Rule.RuleModule = {
 	},
 };
 
+const noUndeclaredProperties: Rule.RuleModule = {
+	meta: {
+		type: 'problem',
+		docs: {
+			description: 'Disallow adding properties absent from the target type.',
+		},
+		schema: [],
+		messages: {
+			undeclaredProperty:
+				'Property "{{name}}" is not declared on the target type. Create a new object with an explicit extended type instead.',
+		},
+	},
+	create(context) {
+		const services: ParserServices = context.sourceCode.parserServices;
+		const checker = services.program.getTypeChecker();
+		function allowsProperty(
+			type: typescript.Type,
+			name: string,
+			key: typescript.Type,
+		): boolean {
+			if (type.flags & (typescript.TypeFlags.Any | typescript.TypeFlags.Unknown))
+				return true;
+			if (type.flags & typescript.TypeFlags.TypeParameter) {
+				const constraint = checker.getBaseConstraintOfType(type);
+				return !constraint || allowsProperty(constraint, name, key);
+			}
+			if (type.isUnion())
+				return type.types.every(branch => allowsProperty(branch, name, key));
+			return (
+				type.getProperties().some(property => property.getName() === name) ||
+				checker.getIndexInfosOfType(type).some(index =>
+					checker.isTypeAssignableTo(key, index.keyType) ||
+					(index.keyType.flags & typescript.TypeFlags.Number &&
+						String(Number(name)) === name),
+				)
+			);
+		}
+		return {
+			CallExpression(node: Rule.Node) {
+				const call = services.esTreeNodeToTSNodeMap.get(node);
+				if (!call || !typescript.isCallExpression(call)) return;
+				const declaration = checker.getResolvedSignature(call)?.declaration;
+				if (
+					!declaration ||
+					!typescript.isMethodSignature(declaration) ||
+					!services.program.isSourceFileDefaultLibrary(declaration.getSourceFile()) ||
+					!typescript.isInterfaceDeclaration(declaration.parent) ||
+					declaration.parent.name.text !== 'ObjectConstructor' ||
+					!typescript.isIdentifier(declaration.name)
+				)
+					return;
+				const method = declaration.name.text;
+				if (!['assign', 'defineProperty', 'defineProperties'].includes(method)) return;
+				let target = call.arguments[0];
+				if (!target) return;
+				while (typescript.isParenthesizedExpression(target))
+					target = target.expression;
+				if (typescript.isObjectLiteralExpression(target)) return;
+				const targetType = checker.getTypeAtLocation(target);
+				const reported = new Set<string>();
+				function checkKey(
+					name: string,
+					key: typescript.Type = checker.getStringLiteralType(name),
+				) {
+					if (reported.has(name) || allowsProperty(targetType, name, key))
+						return;
+					reported.add(name);
+					context.report({ node, messageId: 'undeclaredProperty', data: { name } });
+				}
+				function checkSource(type: typescript.Type) {
+					if (type.isUnion()) {
+						for (const branch of type.types) checkSource(branch);
+						return;
+					}
+					for (const property of checker.getPropertiesOfType(type)) {
+						const name = property.getName();
+						checkKey(
+							name,
+							name.startsWith('__@')
+								? checker.getESSymbolType()
+								: checker.getStringLiteralType(name),
+						);
+					}
+				}
+				function checkPropertyKey(key: typescript.Type) {
+					for (const branch of key.isUnion() ? key.types : [key]) {
+						if (branch.isStringLiteral() || branch.isNumberLiteral())
+							checkKey(String(branch.value));
+						else if (
+							branch.flags & typescript.TypeFlags.UniqueESSymbol &&
+							'escapedName' in branch
+						)
+							checkKey(String(branch.escapedName), branch);
+					}
+				}
+				const source = call.arguments[1];
+				if (!source) return;
+				if (method === 'assign') {
+					for (const argument of call.arguments.slice(1))
+						checkSource(checker.getTypeAtLocation(argument));
+				} else if (method === 'defineProperties')
+					checkSource(checker.getTypeAtLocation(source));
+				else checkPropertyKey(checker.getTypeAtLocation(source));
+			},
+		};
+	},
+};
+
 const localPlugin = {
 	rules: {
 		'no-relative-package-imports': noRelativePackageImports,
@@ -668,11 +776,13 @@ const localPlugin = {
 		'no-throw-in-spec': noThrowInSpec,
 		'prefer-type-discrimination': preferTypeDiscrimination,
 		'no-trivial-type-guard': noTrivialTypeGuard,
+		'no-undeclared-properties': noUndeclaredProperties,
 	},
 };
 
 const sharedRules = {
 	'local/no-relative-package-imports': 'error',
+	'local/no-undeclared-properties': 'error',
 	'@typescript-eslint/member-ordering': 'error',
 	'no-extend-native': 'error',
 	'no-dupe-class-members': 'error',
@@ -786,4 +896,3 @@ export const specConfig = defineConfig([
 		},
 	},
 ]);
-

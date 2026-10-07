@@ -739,6 +739,51 @@ void [isKeymapState, isReady, isState, isButton, hasName, isOther, isAnything, i
 			);
 		});
 
+		it.should('distinguish nested any from exact predicate types', async a => {
+			const messages = await lintFixture(
+				`type Value = string | number;
+type Box<T> = { value: T };
+type AnyArray = any[];
+declare function isBox(value: unknown): value is Box<any>;
+declare function isTuple(value: unknown): value is [any];
+declare function isNested(value: unknown): value is Box<any[]>;
+declare function isCallable(value: unknown): value is (input: any) => any;
+function isValues<T>(value: T): value is T & Value[] { return Array.isArray(value); }
+const isStrings = (value: unknown): value is string[] => Array.isArray(value);
+const isStringBox = function(value: unknown): value is { value: string } { return isBox(value); };
+function isStringTuple(value: unknown): value is [string] { return isTuple(value); }
+function isNestedStrings(value: unknown): value is Box<string[]> { return isNested(value); }
+function isStringFunction(value: unknown): value is (input: string) => string { return isCallable(value); }
+function isAnyArray<T>(value: T): value is T & AnyArray { return Array.isArray(value); }
+function isAnyBox(value: unknown): value is Box<any> { return isBox(value); }
+function isAnyTuple(value: unknown): value is [any] { return isTuple(value); }
+function isAnyNested(value: unknown): value is Box<any[]> { return isNested(value); }
+function isGenericArray<__NarrowedType>(value: __NarrowedType): value is __NarrowedType & any[] { return Array.isArray(value); }
+function isAnyFunction(value: unknown): value is (input: any) => any { return isCallable(value); }
+void [isValues, isStrings, isStringBox, isStringTuple, isNestedStrings, isStringFunction, isAnyArray, isAnyBox, isAnyTuple, isAnyNested, isGenericArray, isAnyFunction];`,
+				eslintConfig,
+			);
+			a.equalValues(
+				messages.filter(message => message.ruleId === 'local/no-trivial-type-guard').map(message => message.line),
+				[15, 16, 17, 18, 19, 20],
+			);
+		});
+
+		it.should('preserve class predicates with nested any', async a => {
+			const messages = await lintFixture(
+				`declare class HiddenBox<T> { private value: T; }
+declare function isHidden(value: unknown): value is HiddenBox<any>;
+function isStringHidden(value: unknown): value is HiddenBox<string> { return isHidden(value); }
+function isAnyHidden(value: unknown): value is HiddenBox<any> { return isHidden(value); }
+void [isStringHidden, isAnyHidden];`,
+				eslintConfig,
+			);
+			a.equalValues(
+				messages.filter(message => message.ruleId === 'local/no-trivial-type-guard').map(message => message.line),
+				[5],
+			);
+		});
+
 		it.should('reject guards whose declared narrowing matches the check', async a => {
 			const messages = await lintFixture(
 				`type Text = string;

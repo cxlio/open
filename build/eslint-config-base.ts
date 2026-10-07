@@ -512,8 +512,28 @@ const noTrivialTypeGuard: Rule.RuleModule = {
 				return false;
 			const source = expression.getSourceFile();
 			const start = expression.getStart();
+			let parameter = '__NarrowedType';
+			while (source.text.includes(parameter)) parameter += '_';
+			const declaredType = checker.getTypeFromTypeNode(predicate.type);
+			const constituents = declaredType.isIntersection() ? declaredType.types : [declaredType];
+			const structural = constituents.every(type =>
+				!!(type.flags & typescript.TypeFlags.Object) &&
+				!checker.isArrayType(type) && !checker.isTupleType(type) &&
+				type.getProperties().every(property => property.declarations?.every(declaration =>
+					!(typescript.getCombinedModifierFlags(declaration) &
+						(typescript.ModifierFlags.Private | typescript.ModifierFlags.Protected)) &&
+					!(typescript.isPropertyDeclaration(declaration) &&
+						typescript.isPrivateIdentifier(declaration.name)),
+				) ?? true) &&
+				!type.getCallSignatures().length && !type.getConstructSignatures().length,
+			);
+			const identity = (type: string) => structural
+				? `{ [${parameter}_Key in keyof (${type})]: (${type})[${parameter}_Key] }`
+				: type;
+			const signature = (type: string) =>
+				`(<${parameter},>(): ${parameter} extends (${identity(type)}) ? 1 : 2 => { throw 0; })`;
 			const text = source.text.slice(0, start) +
-				`(${expression.getText()}) ? ${predicate.parameterName.text} : undefined` +
+				`(${expression.getText()}) ? (${predicate.parameterName.text}, ${signature(`typeof ${predicate.parameterName.text}`)}) : ${signature(predicate.type.getText())}` +
 				source.text.slice(expression.end);
 			const options = services.program.getCompilerOptions();
 			const host = typescript.createCompilerHost(options);
@@ -536,9 +556,16 @@ const noTrivialTypeGuard: Rule.RuleModule = {
 			const narrowedChecker = program.getTypeChecker();
 			let narrowed: typescript.Type | undefined;
 			let declared: typescript.Type | undefined;
+			let narrowedSignature: typescript.Type | undefined;
+			let declaredSignature: typescript.Type | undefined;
 			function visit(node: typescript.Node) {
-				if (typescript.isConditionalExpression(node) && node.getStart() === start)
-					narrowed = narrowedChecker.getTypeAtLocation(node.whenTrue);
+				if (typescript.isConditionalExpression(node) && node.getStart() === start &&
+					typescript.isParenthesizedExpression(node.whenTrue) &&
+					typescript.isBinaryExpression(node.whenTrue.expression)) {
+					narrowed = narrowedChecker.getTypeAtLocation(node.whenTrue.expression.left);
+					narrowedSignature = narrowedChecker.getTypeAtLocation(node.whenTrue.expression.right);
+					declaredSignature = narrowedChecker.getTypeAtLocation(node.whenFalse);
+				}
 				if (typescript.isTypePredicateNode(node) &&
 					node.getStart() === predicate.getStart() && node.type)
 					declared = narrowedChecker.getTypeFromTypeNode(node.type);
@@ -547,10 +574,12 @@ const noTrivialTypeGuard: Rule.RuleModule = {
 			const narrowedSource = program.getSourceFile(source.fileName);
 			if (narrowedSource) visit(narrowedSource);
 			const openFlags = typescript.TypeFlags.Any | typescript.TypeFlags.Unknown;
-			return !!narrowed && !!declared &&
+			return !!narrowed && !!declared && !!narrowedSignature && !!declaredSignature &&
 				!(narrowed.flags & openFlags) && !(declared.flags & openFlags) &&
 				narrowedChecker.isTypeAssignableTo(narrowed, declared) &&
-				narrowedChecker.isTypeAssignableTo(declared, narrowed);
+				narrowedChecker.isTypeAssignableTo(declared, narrowed) &&
+				narrowedChecker.isTypeAssignableTo(narrowedSignature, declaredSignature) &&
+				narrowedChecker.isTypeAssignableTo(declaredSignature, narrowedSignature);
 		}
 		return {
 			'FunctionDeclaration, FunctionExpression, ArrowFunctionExpression'(

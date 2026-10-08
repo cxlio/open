@@ -36,7 +36,7 @@ function mapSpecifier(
 	if (target) return target + specifier.slice(match.length);
 }
 
-if (import.meta.main) {
+export async function runCli() {
 	const importMap = findImportMap(import.meta.dirname);
 	if (importMap) {
 		const { imports, root } = importMap;
@@ -55,3 +55,5 @@ if (import.meta.main) {
 
 	await import('./cli-main.js').then(module => module.main());
 }
+
+if (import.meta.main) await runCli();

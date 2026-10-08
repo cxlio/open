@@ -6,17 +6,17 @@ import {
 	readFile,
 	readdir,
 	rm,
+	stat,
 	symlink,
 	writeFile,
 } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join, resolve } from 'path';
 import { pathToFileURL } from 'url';
-import { execFile, execFileSync } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { createHash } from 'crypto';
 import { build as esbuild } from 'esbuild-wasm';
-import type { Metafile } from 'esbuild-wasm';
 import { ESLint } from 'eslint';
 import { formatHelp, sh } from '@cxl/program';
 import {
@@ -56,7 +56,7 @@ import {
 	requiredRootCompilerOptions,
 	usedPackagesFromMetafile,
 } from './audit.js';
-import { bundleDeclarations } from './tsc.js';
+import { bundleDeclarations, declarationProgram } from './tsc.js';
 import { file } from './file.js';
 import eslintConfig, { specConfig } from './eslint-config.js';
 import { eslintTsconfig } from './lint.js';
@@ -92,11 +92,24 @@ registerImportMap({ imports: importmap }, ${JSON.stringify(root)});
 ${source}`;
 }
 
+async function checkTypes(file: string, options: ts.CompilerOptions): Promise<string[]> {
+	const compiler = pathToFileURL(resolve(import.meta.dirname, '../../node_modules/typescript/lib/typescript.js')).href;
+	const { stdout } = await execFileAsync(process.execPath, ['--input-type=module', '--eval', `
+import * as ts from ${JSON.stringify(compiler)};
+const program = ts.createProgram([${JSON.stringify(file)}], ${JSON.stringify(options)});
+process.stdout.write(JSON.stringify(ts.getPreEmitDiagnostics(program).map(diagnostic =>
+	ts.flattenDiagnosticMessageText(diagnostic.messageText, '\\n')
+)));
+`]);
+	return JSON.parse(stdout) as string[];
+}
+
 async function lintFixture(
 	source: string,
 	baseConfig = specConfig,
 	fileName = 'test.ts',
 	packageJson: object = {},
+	lib = ['es2025'],
 ) {
 	const dir = await mkdtemp(join(tmpdir(), 'cxl-build-eslint-'));
 	try {
@@ -109,6 +122,8 @@ async function lintFixture(
 					module: 'NodeNext',
 					moduleResolution: 'NodeNext',
 					strict: true,
+					lib,
+					types: [],
 				},
 				files: [fileName],
 			}),
@@ -126,7 +141,7 @@ ${source}`,
 			cwd: dir,
 			overrideConfig: {
 				languageOptions: {
-					parserOptions: { project, projectService: false },
+					parserOptions: { project, projectService: false, jsDocParsingMode: 'none' },
 				},
 			},
 			overrideConfigFile: true,
@@ -203,8 +218,135 @@ async function runAudit(
 	return output.join('\n');
 }
 
-export default spec('build', s => {
-	s.test('ordinary CLI lint startup', async a => {
+const suite = spec({ name: 'build', serial: true }, () => {
+	const checks = spec('checks', () => undefined);
+	const s = new TestApi(checks);
+	const integration = spec({ name: 'CLI integration', serial: true }, () => undefined);
+	const cli = new TestApi(integration);
+	cli.test('startup build script', async a => {
+		const root = resolve(import.meta.dirname, '../..');
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-build-startup-'));
+		const buildDir = join(dir, 'build');
+		a.afterAll(() => rm(dir, { recursive: true, force: true }));
+		await mkdir(buildDir);
+		await mkdir(join(dir, 'runtime'));
+		await mkdir(join(dir, 'spec-browser'));
+		await symlink(join(root, 'node_modules'), join(dir, 'node_modules'), 'dir');
+		await cp(join(root, 'build/build.sh'), join(buildDir, 'build.sh'));
+		await symlink(join(root, 'build/bootstrap.mts'), join(buildDir, 'bootstrap.mts'));
+		await writeFile(join(dir, 'package.json'), '{"type":"module"}');
+		await writeFile(join(buildDir, 'package.json'), '{"type":"module"}');
+		await writeFile(join(buildDir, 'license-test.md'), 'fixture license');
+		await writeFile(join(buildDir, 'eslint-config.ts'), 'export default {};');
+		await writeFile(join(buildDir, 'cli.ts'), `import { writeFileSync } from 'node:fs';
+export async function runCli() {
+writeFileSync('../dist/build/package.json', '{"type":"module"}');
+console.log(JSON.stringify(process.argv.slice(2)));
+}`);
+		await writeFile(join(dir, 'runtime/index.ts'), 'export const value: number = 1;');
+		await writeFile(join(dir, 'spec-browser/dependency.ts'), 'export const value = "first";');
+		await writeFile(join(dir, 'spec-browser/index.ts'), 'export { value } from "./dependency.js";');
+		const config = {
+			compilerOptions: {
+				composite: true,
+				strict: true,
+				module: 'nodenext',
+				target: 'es2025',
+				types: ['node'],
+			},
+		};
+		await writeFile(join(dir, 'tsconfig.json'), JSON.stringify(config));
+		await writeFile(join(buildDir, 'tsconfig.json'), JSON.stringify({
+			extends: '../tsconfig.json',
+			compilerOptions: { outDir: '../dist/build' },
+			include: ['*.ts'],
+			references: [{ path: '../runtime' }],
+		}));
+		await writeFile(join(dir, 'runtime/tsconfig.json'), JSON.stringify({
+			extends: '../tsconfig.json',
+			compilerOptions: { outDir: '../dist/runtime' },
+			files: ['index.ts'],
+		}));
+		const run = (...args: string[]) => execFileAsync('sh', ['build.sh', ...args], {
+			cwd: buildDir,
+		});
+		const outputs = [
+			'dist/build/cli.js',
+			'dist/build/cli.d.ts',
+			'dist/runtime/index.js',
+			'dist/build/spec-browser.js',
+			'dist/build/license-test.md',
+			'dist/build/package/license-test.md',
+			'dist/build/package/eslint-config.js',
+			'dist/build/package/spec-browser.js',
+			'dist/build/package/3doc.js',
+		].map(path => join(dir, path));
+		const timestamps = () => Promise.all(outputs.map(async path => (await stat(path)).mtimeMs));
+		a.test('cold build and CLI arguments', async a => {
+			a.ok((await run('package', 'two words')).stdout.includes('["package","two words"]'));
+			a.equal(await readFile(join(dir, 'dist/build/license-test.md'), 'utf8'), 'fixture license');
+			const initial = await timestamps();
+			a.test('reuse unchanged compiler, browser, and copied outputs', async a => {
+				await run('package');
+				a.equalValues(await timestamps(), initial);
+				a.test('track referenced sources and transitive browser imports', async a => {
+					await writeFile(join(dir, 'runtime/index.ts'), 'export const value: number = 2;');
+					await writeFile(join(dir, 'spec-browser/dependency.ts'), 'export const value = "changed";');
+					await writeFile(join(buildDir, 'license-test.md'), 'changed license');
+					await run('package');
+					a.ok((await readFile(join(dir, 'dist/runtime/index.js'), 'utf8')).includes('2'));
+					a.ok((await readFile(join(dir, 'dist/build/package/spec-browser.js'), 'utf8')).includes('changed'));
+					a.equal(await readFile(join(dir, 'dist/build/package/license-test.md'), 'utf8'), 'changed license');
+					a.test('recover missing outputs', async a => {
+						await rm(join(dir, 'dist/runtime/index.js'));
+						await rm(join(dir, 'dist/build/spec-browser.js'));
+						await rm(join(dir, 'dist/build/package/3doc.js'));
+						await run('package');
+						a.equal((await timestamps()).length, outputs.length);
+						a.test('retry failed compilation after restoring the previous source', async a => {
+							await writeFile(join(dir, 'runtime/index.ts'), 'export const value: number = "invalid";');
+							a.ok((await errorMessage(() => run('package'))).includes('Command failed'));
+							a.test('rebuild the restored source', async a => {
+								await writeFile(join(dir, 'runtime/index.ts'), 'export const value: number = 2;');
+								await run('package');
+								a.ok((await readFile(join(dir, 'dist/runtime/index.js'), 'utf8')).includes('2'));
+								a.test('track extended configs, added sources, and dependency lockfiles', async a => {
+									await writeFile(join(dir, 'base.json'), '{"compilerOptions":{"declarationMap":true}}');
+									await writeFile(join(dir, 'tsconfig.json'), JSON.stringify({ ...config, extends: './base.json' }));
+									await writeFile(join(buildDir, 'added.ts'), 'export const added = true;');
+									await run('package');
+									await stat(join(dir, 'dist/build/added.js'));
+									await stat(join(dir, 'dist/runtime/index.d.ts.map'));
+									a.test('remove deleted sources and disabled declaration maps', async a => {
+										await rm(join(buildDir, 'added.ts'));
+										await writeFile(join(dir, 'base.json'), '{"compilerOptions":{"declarationMap":false}}');
+										await run('package');
+										a.ok((await errorMessage(() => stat(join(dir, 'dist/build/added.js')))).includes('ENOENT'));
+										a.ok((await errorMessage(() => stat(join(dir, 'dist/runtime/index.d.ts.map')))).includes('ENOENT'));
+										a.test('invalidate dependency changes and reuse concurrent warm builds', async a => {
+											const before = await timestamps();
+											await writeFile(join(dir, 'package-lock.json'), '{"lockfileVersion":3}');
+											await run('package');
+											a.ok((await timestamps())[0] !== before[0]);
+											const warm = await timestamps();
+											await Promise.all([run('package'), run('package')]);
+											a.equalValues(await timestamps(), warm);
+											a.test('reject missing license inputs', async a => {
+												await rm(join(buildDir, 'license-test.md'));
+												a.ok((await errorMessage(() => run('package'))).includes('Command failed'));
+											});
+										});
+									});
+								});
+							});
+						});
+					});
+				});
+			});
+		});
+	});
+
+	cli.test('ordinary CLI lint startup', async a => {
 		const dir = await mkdtemp(join(tmpdir(), 'cxl-build-lint-startup-'));
 		try {
 			const hook = join(dir, 'imports.mjs');
@@ -214,6 +356,7 @@ export default spec('build', s => {
 registerHooks({
 	load(url, context, nextLoad) {
 		if (url.includes('/eslint-plugin-sonarjs/')) console.log('SONARJS_LOADED');
+		if (url.includes('/@cxl/3doc/')) console.log('3DOC_LOADED');
 		return nextLoad(url, context);
 	},
 });`,
@@ -224,13 +367,17 @@ registerHooks({
 				{ cwd: resolve(import.meta.dirname, '../../rx'), encoding: 'utf8' },
 			);
 			a.ok(!output.includes('SONARJS_LOADED'));
+			a.ok(!output.includes('3DOC_LOADED'));
 		} finally {
 			await rm(dir, { recursive: true, force: true });
 		}
 	});
 
-	s.test('batch CLI builds', async it => {
-		const { dir, packageDir } = await createAuditFixture();
+	suite.addTest(spec({ name: 'batch CLI builds', serial: true }, async it => {
+		const { dir, packageDir } = await createAuditFixture({
+			compilerOptions: { ...requiredRootCompilerOptions, types: [] },
+			files: [],
+		});
 		it.afterAll(() => rm(dir, { recursive: true, force: true }));
 		await writeFile(join(packageDir, 'types.ts'), 'export interface Value { id: number }');
 		await writeFile(
@@ -265,9 +412,9 @@ registerHooks({
 				homepage: 'https://example.com/docs/@test/second',
 			}),
 		);
-		const run = async () => (await execFileAsync(
+		const run = async (packages = 'pkg,second') => (await execFileAsync(
 			process.execPath,
-			[join(import.meta.dirname, 'cli.js'), 'package', '--packages', 'pkg,second'],
+			[join(import.meta.dirname, 'cli.js'), 'package', '--packages', packages],
 			{ cwd: dir, encoding: 'utf8' },
 		)).stdout;
 		it.should('build both packages', async it => {
@@ -278,13 +425,10 @@ registerHooks({
 			const secondSource = await readFile(secondOutput, 'utf8');
 			it.ok(firstSource.includes('id:1'));
 			it.ok(secondSource.includes('second'));
-			it.should('repeat builds with isolated package outputs', async a => {
-				await run();
-				a.equal(await readFile(firstOutput, 'utf8'), firstSource);
-				a.equal(await readFile(secondOutput, 'utf8'), secondSource);
-				a.test('changed project types and sources', async a => {
-					await writeFile(join(packageDir, 'types.ts'), 'export interface Value { id: string }');
-					a.ok((await errorMessage(run)).includes('Typescript compilation failed'));
+			it.test('changed project types and sources', async a => {
+				await writeFile(join(packageDir, 'types.ts'), 'export interface Value { id: string }');
+				a.ok((await errorMessage(run)).includes('Typescript compilation failed'));
+				a.test('build the corrected source', async a => {
 					await writeFile(
 						join(packageDir, 'index.ts'),
 						"import type { Value } from './types.js'; export const value: Value = { id: 'changed' };",
@@ -315,7 +459,7 @@ registerHooks({
 				});
 			});
 		});
-	});
+	}));
 
 	s.test('batch CLI rejects empty package directories', async a => {
 		a.ok((await errorMessage(() => execFileAsync(
@@ -325,7 +469,7 @@ registerHooks({
 		))).includes('Package directories must not be empty'));
 	});
 
-	s.test('eslint config', it => {
+	suite.addTest(spec({ name: 'eslint config', serial: true }, it => {
 		it.should(
 			'ban and resolve imports across package boundaries',
 			async (a: TestApi) => {
@@ -412,7 +556,7 @@ void import('@cxl/sibling');`,
 									'"@test/sibling":"/dist/sibling/index.js"',
 								),
 						);
-						execFileSync(
+						await execFileAsync(
 							process.execPath,
 							[
 								'--input-type=module',
@@ -537,6 +681,8 @@ void check;
 					module: 'nodenext',
 					moduleResolution: 'nodenext',
 					strict: true,
+					lib: ['es2025'],
+					types: [],
 				};
 				for (const target of ['worker', 'server', 'lint']) {
 					const tsconfig = join(dir, `tsconfig.${target}.json`);
@@ -613,7 +759,7 @@ Object.defineProperty(profile, dynamic, { value: true });
 function shadowed(Object: { assign(target: Profile, source: object): void }) { Object.assign(profile, { enabled: true }); }
 void [update, shadowed];`;
 			for (const config of [eslintConfig, specConfig]) {
-				const messages = (await lintFixture(source, config)).filter(
+				const messages = (await lintFixture(source, config, 'test.ts', {}, ['es2025', 'dom'])).filter(
 					message => message.ruleId === 'local/no-undeclared-properties',
 				);
 				a.equalValues(
@@ -873,7 +1019,7 @@ void [isComponent, isString, hasName, isArray, isNull, checked];`,
 		setInterval(() => undefined, 1);
 	});
 });
-`);
+`, specConfig, 'test.ts', {}, ['es2025', 'dom']);
 			a.equalValues(
 				messages.map(message => message.ruleId),
 				[
@@ -911,7 +1057,7 @@ export default spec('fixture', s => {
 	});
 });
 void unused;
-`);
+`, specConfig, 'test.ts', {}, ['es2025', 'dom']);
 			a.equalValues(
 				messages.map(message => message.ruleId),
 				[
@@ -920,7 +1066,7 @@ void unused;
 				],
 			);
 		});
-	});
+	}));
 
 	s.test('output', it => {
 		it.should('parse build options', a => {
@@ -1040,34 +1186,14 @@ void unused;
 				root.devDependencies = { external: '1.0.0' };
 				await writeFile(rootPath, JSON.stringify(root));
 				const entry = join(packageDir, 'entry.js');
-				const outputDir = join(dir, 'bundle');
-				const output = join(outputDir, 'out.js');
-				let metafile: Metafile | undefined;
 				await writeFile(entry, "import 'external';");
-				const run = () => cachedBuild({
-					manifest: join(dir, 'bundle-cache.json'),
-					inputs: [entry],
-					key: 'audit-bundle',
-					outputDir,
-					metadata: {
-						validate: (value: Metafile | undefined): value is Metafile =>
-							!!value?.outputs,
-						complete: value => { metafile = value; },
-					},
-				}, async () => {
-					const result = await esbuild({
-						bundle: true,
-						entryPoints: [entry],
-						external: ['external'],
-						metafile: true,
-						outfile: output,
-					});
-					return { inputs: [entry], outputs: [output], metadata: result.metafile };
+				const { metafile } = await esbuild({
+					bundle: true,
+					entryPoints: [entry],
+					external: ['external'],
+					metafile: true,
+					write: false,
 				});
-				a.ok(await run());
-				await auditDependencies(packageDir, () => {}, metafile);
-				metafile = undefined;
-				a.ok(!(await run()));
 				await auditDependencies(packageDir, () => {}, metafile);
 				await mkdir(join(dir, 'dist', 'pkg'), { recursive: true });
 				await writeFile(join(dir, 'dist', 'pkg', 'index.js'), "import 'external';");
@@ -1785,7 +1911,7 @@ void unused;
 		});
 	});
 
-	s.test('coverage files', async a => {
+	suite.addTest(spec({ name: 'coverage files', serial: true }, async a => {
 		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-coverage-'));
 		const packageDir = join(rootDir, 'package');
 		const outputDir = join(rootDir, 'dist', 'package');
@@ -1886,12 +2012,52 @@ void unused;
 			process.chdir(previousCwd);
 			await rm(rootDir, { recursive: true, force: true });
 		}
-	});
+	}));
 
-	s.test('declaration bundle', it => {
+	suite.addTest(spec({ name: 'declaration bundle', serial: true }, it => {
+		it.should('keep each entry point independent when sharing a program', async a => {
+			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-declarations-'));
+			a.afterAll(() => rm(dir, { recursive: true, force: true }));
+			const sources = join(dir, 'dist/pkg');
+			const outputs = join(dir, 'package');
+			await mkdir(join(sources, 'nested'), { recursive: true });
+			await mkdir(outputs);
+			await mkdir(join(dir, 'pkg'));
+			await mkdir(join(dir, 'common'));
+			await mkdir(join(dir, 'dist/common'));
+			await writeFile(join(dir, 'package.json'), '{"type":"module"}');
+			await writeFile(join(dir, 'common/package.json'), '{"name":"@test/common"}');
+			const config = join(dir, 'pkg/tsconfig.json');
+			await writeFile(config, '{"compilerOptions":{"outDir":"../dist/pkg","lib":["es2025"],"types":[]},"files":[]}');
+			await writeFile(join(dir, 'dist/common/index.d.ts'), 'export interface Common { id: number }');
+			const entries = [
+				{ name: 'first', path: join(sources, 'nested/first.d.ts') },
+				{ name: 'second', path: join(sources, 'second.d.ts') },
+			];
+			for (const { name, path } of entries)
+				await writeFile(path,
+					`import type { Common } from '@test/common'; export interface Value { ${name}: Common } export type { Common } from '@test/common';`);
+			const program = await declarationProgram(entries.map(entry => entry.path), config);
+			for (const { name, path } of entries)
+				await writeFile(join(outputs, `${name}.d.ts`),
+					await bundleDeclarations(path, [], config, program));
+			await rm(join(dir, 'dist'), { recursive: true });
+			const consumer = join(dir, 'consumer.ts');
+			await writeFile(consumer, `import type { Value as First, Common as FirstCommon } from './package/first.js';
+import type { Value as Second, Common as SecondCommon } from './package/second.js';
+const common: FirstCommon & SecondCommon = { id: 1 };
+const first: First = { first: common };
+const second: Second = { second: common };
+void first; void second;`);
+			a.equalValues(await checkTypes(consumer, {
+				strict: true, noEmit: true, types: [], lib: ['lib.es2025.d.ts'],
+				module: ts.ModuleKind.NodeNext, moduleResolution: ts.ModuleResolutionKind.NodeNext,
+			}), []);
+		});
 		it.should('expose generated files as the public Task type', async a => {
 			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-consumer-'));
-			try {
+			a.afterAll(() => rm(dir, { recursive: true, force: true }));
+			{
 				const consumer = join(dir, 'consumer.ts');
 				const packageDir = join(dir, 'package');
 				const entry = join(dir, 'index.d.ts');
@@ -1954,27 +2120,18 @@ void composed;
 					a.ok(!text.includes('Observable'));
 					a.ok(!text.includes('__subscribe'));
 				}
-				const program = ts.createProgram([consumer], {
-					lib: ['lib.es2023.d.ts'],
-					module: ts.ModuleKind.ESNext,
-					moduleResolution: ts.ModuleResolutionKind.Bundler,
-					noEmit: true,
-					paths: { '@cxl/build': [declarationPath] },
-					skipLibCheck: false,
-					strict: true,
-					types: ['node'],
+				a.test('typecheck the public consumer', async a => {
+					a.equalValues(await checkTypes(consumer, {
+						lib: ['lib.es2023.d.ts'],
+						module: ts.ModuleKind.ESNext,
+						moduleResolution: ts.ModuleResolutionKind.Bundler,
+						noEmit: true,
+						paths: { '@cxl/build': [declarationPath] },
+						skipLibCheck: false,
+						strict: true,
+						types: ['node'],
+					}), []);
 				});
-				a.equalValues(
-					ts.getPreEmitDiagnostics(program).map(diagnostic =>
-						ts.flattenDiagnosticMessageText(
-							diagnostic.messageText,
-							'\n',
-						),
-					),
-					[],
-				);
-			} finally {
-				await rm(dir, { recursive: true, force: true });
 			}
 		});
 
@@ -2139,7 +2296,7 @@ void cycle;
 void result;
 `,
 					);
-					const program = ts.createProgram([consumer], {
+					a.equalValues(await checkTypes(consumer, {
 						lib: ['lib.es2023.d.ts'],
 						module: ts.ModuleKind.ESNext,
 						moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -2147,16 +2304,7 @@ void result;
 						strict: true,
 						skipLibCheck: false,
 						types: ['node'],
-					});
-					a.equalValues(
-						ts.getPreEmitDiagnostics(program).map(diagnostic =>
-							ts.flattenDiagnosticMessageText(
-								diagnostic.messageText,
-								'\n',
-							),
-						),
-						[],
-					);
+					}), []);
 					a.test('handles empty declarations', async a => {
 						const emptyEntry = join(packageDir, 'empty.d.ts');
 						await writeFile(emptyEntry, '');
@@ -2169,7 +2317,7 @@ void result;
 			});
 			}
 		});
-	});
+	}));
 
 	s.test('package build options', it => {
 		const pkg = {
@@ -2395,8 +2543,8 @@ void result;
 							'treats branch names as git arguments',
 							async a => {
 								const branch = 'main;touch${IFS}injected';
-								execFileSync('git', ['branch', branch], { cwd: dir });
-								execFileSync('git', ['push', 'origin', branch], {
+								await execFileAsync('git', ['branch', branch], { cwd: dir });
+								await execFileAsync('git', ['push', 'origin', branch], {
 									cwd: dir,
 								});
 
@@ -2520,7 +2668,7 @@ void result;
 if (!output) throw new Error('Missing generated test file');
 process.stdout.write(output.source);`,
 				);
-				const source = execFileSync(
+				const { stdout: source } = await execFileAsync(
 					process.execPath,
 					['--input-type=module', '--eval', script],
 					{ cwd: packageDir, encoding: 'utf8' },
@@ -2549,7 +2697,7 @@ process.stdout.write(output.source);`,
 		});
 	});
 
-	s.test('benchmark target', async a => {
+	cli.test('benchmark target', async a => {
 		await runBenchmarks({
 			appId: 'missing-benchmark',
 			outputDir: '../dist/missing-benchmark',
@@ -2596,7 +2744,7 @@ export default spec('fixture', s => s.test('filesystem discovery', a =>
 		}
 	});
 
-	s.test('browser test alias module identity', async a => {
+	cli.test('browser test alias module identity', async a => {
 		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-browser-alias-'));
 		const packageDir = join(rootDir, 'package');
 		const outputDir = join(packageDir, 'dist');
@@ -2676,7 +2824,7 @@ export default spec('fixture', s => s.test('shares module identity', a => {
 		}
 	});
 
-	s.test('test target report', async a => {
+	cli.test('test target report', async a => {
 		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-test-'));
 		const packageDir = join(rootDir, 'package');
 		const outputDir = join(packageDir, 'dist');
@@ -2725,7 +2873,7 @@ export default spec('fixture', s => s.test('passes', a => a.ok(true)));
 		}
 	});
 
-	s.test('coverage target report', async a => {
+	cli.test('coverage target report', async a => {
 		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-coverage-target-'));
 		const packageDir = join(rootDir, 'package');
 		const outputDir = join(rootDir, 'dist', 'package');
@@ -2792,4 +2940,8 @@ export default spec('fixture', s => s.test('passes', a => {
 			await rm(rootDir, { recursive: true, force: true });
 		}
 	});
+	suite.addTest(integration);
+	suite.addTest(checks);
 });
+
+export default suite;

@@ -3,6 +3,7 @@
 	"compilerOptions": {
 		"outDir": "../dist/build",
 		"allowSyntheticDefaultImports": true,
+		"rewriteRelativeImportExtensions": true,
 		"types": ["node"]
 	},
 	"references": [
@@ -11,6 +12,6 @@
 		{ "path": "../spec-runner" },
 		{ "path": "../spec-browser" }
 	],
-	"include": ["*.ts"],
+	"include": ["*.ts", "*.mts"],
 	"exclude": ["test.ts"]
 }

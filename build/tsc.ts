@@ -220,9 +220,14 @@ export function getProjectOutputFiles(tsconfig = DefaultTsconfig) {
 	};
 }
 
-async function declarationProgram(entryFile: string, tsconfig: string) {
-	const workspace = await workspaceDeclarations(entryFile);
+export async function declarationProgram(entryFiles: readonly string[], tsconfig = DefaultTsconfig) {
 	const project = projectDeclarations(tsconfig);
+	const entryFile = project?.options?.outDir
+		? join(project.options.outDir, 'index.d.ts')
+		: entryFiles[0];
+	const workspace = entryFile
+		? await workspaceDeclarations(entryFile)
+		: new Map<string, string>();
 	const paths: Record<string, string[]> = {};
 	for (const [name, declarationDir] of workspace) {
 		paths[name] = [join(declarationDir, 'index.d.ts')];
@@ -232,6 +237,8 @@ async function declarationProgram(entryFile: string, tsconfig: string) {
 		allowSyntheticDefaultImports:
 			project?.options?.allowSyntheticDefaultImports,
 		esModuleInterop: project?.options?.esModuleInterop,
+		lib: project?.options?.lib,
+		types: project?.options?.types,
 		module: ts.ModuleKind.ESNext,
 		moduleResolution: ts.ModuleResolutionKind.Bundler,
 		paths,
@@ -297,7 +304,7 @@ async function declarationProgram(entryFile: string, tsconfig: string) {
 				},
 			};
 		});
-	return ts.createProgram([entryFile], options, host);
+	return ts.createProgram(entryFiles, options, host);
 }
 
 function moduleSpecifier(node: ts.Node) {
@@ -502,13 +509,14 @@ export async function bundleDeclarations(
 	entryFile: string,
 	externalPackages: readonly string[],
 	tsconfig = DefaultTsconfig,
+	program?: Program,
 ) {
 	const external = new Set(externalPackages);
 	const isExternal = (specifier: string) => {
 		const name = getPackageName(specifier);
 		return builtinPackages.has(specifier) || (!!name && external.has(name));
 	};
-	const program = await declarationProgram(entryFile, tsconfig);
+	program ??= await declarationProgram([entryFile], tsconfig);
 	const checker = program.getTypeChecker();
 	const entry = program.getSourceFile(entryFile);
 	if (!entry) throw new Error(`Declaration entry not found: ${entryFile}`);

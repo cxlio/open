@@ -1,7 +1,6 @@
 import { createHash, Hash } from 'crypto';
 import { dirname, isAbsolute, relative, resolve, sep } from 'path';
 import { promises as fs } from 'fs';
-import { getErrorCode, readJson } from '@cxl/program';
 
 interface CacheManifest<T> {
 	fingerprint: string;
@@ -44,7 +43,7 @@ async function fingerprint(inputs: readonly string[], key: string) {
 			try {
 				return await fs.readFile(input);
 			} catch (error) {
-				if (!(error instanceof Error) || getErrorCode(error) !== 'ENOENT')
+				if (!(error instanceof Error) || Object.getOwnPropertyDescriptor(error, 'code')?.value !== 'ENOENT')
 					throw error;
 			}
 		}));
@@ -60,7 +59,7 @@ async function fingerprint(inputs: readonly string[], key: string) {
 
 async function readManifest<T>(path: string) {
 	try {
-		const value = await readJson<CacheManifest<T> | null>(path, null);
+		const value: CacheManifest<T> | null = JSON.parse(await fs.readFile(path, 'utf8'));
 		if (
 			value !== null &&
 			typeof value.fingerprint === 'string' &&
@@ -70,8 +69,8 @@ async function readManifest<T>(path: string) {
 			value.outputs.every(output => typeof output === 'string')
 		)
 			return value;
-	} catch (error) {
-		if (!(error instanceof SyntaxError)) throw error;
+	} catch {
+		return;
 	}
 }
 
@@ -138,12 +137,12 @@ export async function cachedBuild<T = never>(
 	const outputDir = resolve(options.outputDir);
 	const previous = await readManifest<T>(options.manifest);
 	const cachedMetadata = previous?.metadata;
-	const currentFingerprint = await fingerprint(
-		[...options.inputs, ...(previous?.inputs ?? [])],
+	const currentFingerprint = previous && await fingerprint(
+		[...options.inputs, ...previous.inputs],
 		options.key,
 	);
 	if (
-		previous?.fingerprint === currentFingerprint &&
+		previous && previous.fingerprint === currentFingerprint &&
 		(!options.metadata || options.metadata.validate(cachedMetadata)) &&
 		(await outputsExist(outputDir, previous.outputs))
 	) {

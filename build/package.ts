@@ -10,9 +10,9 @@ import * as esbuildApi from 'esbuild-wasm';
 
 const SCRIPTDIR = process.cwd();
 
-export const BASEDIR = execSync(`npm prefix`, { cwd: SCRIPTDIR })
-	.toString()
-	.trim();
+export const BASEDIR = process.env.npm_config_local_prefix === SCRIPTDIR
+	? SCRIPTDIR
+	: execSync(`npm prefix`, { cwd: SCRIPTDIR }).toString().trim();
 const directory = { path: BASEDIR };
 
 export function getBuildDirectory() {

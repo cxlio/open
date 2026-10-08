@@ -4,7 +4,6 @@ import { mkdir, readdir, rm, writeFile } from "fs/promises";
 
 import { EMPTY, concat, fromAsync } from "@cxl/rx";
 
-import { buildDts, renderJson, findExamples } from "@cxl/3doc";
 import {
 	build,
 	buildOutputOptions,
@@ -27,12 +26,12 @@ import { file } from "./file.js";
 import { eslintTestTsconfig, eslintTsconfig } from "./lint.js";
 import {
 	bundleDeclarations,
+	declarationProgram,
 	getProjectOutputFiles,
 	tscVersion,
 	tsconfig,
 	type TsconfigJson,
 } from "./tsc.js";
-import { buildDocs } from "./docs.js";
 import { generateTestFile, runBenchmarks, runTests } from "./spec.js";
 import { audit, auditDependencies } from "./audit.js";
 import { readJson } from "@cxl/program";
@@ -152,13 +151,14 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 			},
 			async () => {
 				await removePackageFiles(pkgDir, /\.d\.(?:ts|mts|cts)$/);
+				const program = await declarationProgram(declarationEntryPoints.map(entry => entry.in));
 				return Promise.all(
 					declarationEntryPoints.map(async (entry) => {
 						const output = resolve(pkgDir, entry.out);
 						await mkdir(dirname(output), { recursive: true });
 						await writeFile(
 							output,
-							await bundleDeclarations(entry.in, external),
+							await bundleDeclarations(entry.in, external, undefined, program),
 						);
 						return output;
 					}),
@@ -288,6 +288,7 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 							}),
 							concat(
 								fromAsync(async () => {
+									const { buildDts, renderJson, findExamples } = await import("@cxl/3doc");
 									const summary = renderJson(
 										await buildDts(
 											{
@@ -335,9 +336,9 @@ export async function buildLibrary(...extra: BuildConfiguration[]) {
 			target: "docs",
 			outputDir: `../docs/${pkgJson.name}`,
 			tasks: [
-				buildDocs({
-					outputDir: `../docs/${pkgJson.name}`,
-				}),
+				fromAsync(() => import("./docs.js")).switchMap(({ buildDocs }) =>
+					buildDocs({ outputDir: `../docs/${pkgJson.name}` }),
+				),
 			],
 		},
 		{

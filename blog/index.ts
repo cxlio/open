@@ -1,7 +1,6 @@
 import type { Stats } from 'fs';
 import { readdir, readFile, writeFile, stat } from 'fs/promises';
-import { fromAsync } from '@cxl/rx';
-import type { Output, Task } from '@cxl/build';
+import type { Output } from '@cxl/build';
 import { basename } from 'path';
 
 import { compiler, program, type Node } from '@cxl/gbc.markdown';
@@ -246,7 +245,7 @@ async function buildPosts(config: BlogConfig, posts: Post[]) {
 	});
 }
 
-async function build(config: BlogConfig): Promise<Output[]> {
+export async function buildBlog(config: BlogConfig): Promise<Output[]> {
 	const uuids: string[] = [];
 	const hrefPrefix = config.hrefPrefix ?? '';
 	const postTemplate = config.postTemplate
@@ -410,8 +409,4 @@ function processIndex(files: string[], { posts, tags }: PostsJson) {
 			await writeFile(filePath, newSource);
 		}),
 	);
-}
-
-export function buildBlog(config: BlogConfig): Task {
-	return fromAsync(() => build(config)).mergeMap(outputs => outputs);
 }

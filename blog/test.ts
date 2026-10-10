@@ -3,19 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rejects } from 'node:assert/strict';
 import { spec } from '@cxl/spec';
-import type { Output } from '@cxl/build';
-import { buildBlog, dateShort, dateYMD, renderMarkdown, type BlogConfig, type PostsJson } from './index.js';
-
-function generate(config: BlogConfig) {
-	return new Promise<Output[]>((resolve, reject) => {
-		const files: Output[] = [];
-		buildBlog(config).subscribe({
-			next: file => files.push(file),
-			error: reject,
-			complete: () => resolve(files),
-		});
-	});
-}
+import { buildBlog, dateShort, dateYMD, renderMarkdown, type PostsJson } from './index.js';
 
 async function fixture(run: (dir: string) => Promise<void>) {
 	const dir = await mkdtemp(join(tmpdir(), 'cxl-blog-'));
@@ -31,6 +19,19 @@ function post(title: string, uuid: string, date = '2026-01-01') {
 }
 
 export default spec('blog', s => {
+	s.test('resolves outputs for an empty posts directory', async a => {
+		await fixture(async dir => {
+			const files = await buildBlog({ postsDir: dir });
+			a.equal(files.length, 1);
+			a.equal(files[0]?.path, 'posts.json');
+			a.equalValues(JSON.parse(files[0]?.source.toString() ?? ''), {
+				posts: [],
+				tags: {},
+				types: [],
+			});
+		});
+	});
+
 	s.test('renders title, heading anchors, nested headings, and raw HTML', a => {
 		const { content } = renderMarkdown('# Title\n\n## Hello *there* ##\n\n> ## Nested\n\n### Small\n\n<div>Raw</div>\n');
 		a.ok(content.includes('<blog-title>Title</blog-title>'));
@@ -92,7 +93,7 @@ export default spec('blog', s => {
 			await writeFile(postTemplate, '__BLOG_TITLE__|__BLOG_BASEURL__|__BLOG_INDEXURL__|__BLOG_CANONICAL__|__BLOG_DEBUG__|__BLOG_SUMMARY__|__BLOG_CONTENT__');
 			await writeFile(headerTemplate, '<!doctype html>');
 			await writeFile(index, '__BLOG_TITLE__|__BLOG_TAGS__|__BLOG_INDEX__');
-			const files = await generate({ postsDir, postTemplate, headerTemplate, processIndex: [index], hrefPrefix: '/posts/', baseUrl: '/', indexUrl: '/index.html', canonicalUrl: 'https://example.com', debug: 'debug' });
+			const files = await buildBlog({ postsDir, postTemplate, headerTemplate, processIndex: [index], hrefPrefix: '/posts/', baseUrl: '/', indexUrl: '/index.html', canonicalUrl: 'https://example.com', debug: 'debug' });
 			a.equal(files.length, 5);
 			const data: PostsJson = JSON.parse(files[0]?.source.toString() ?? '');
 			a.equalValues(data.posts.map(p => p.title), ['New', 'Old']);
@@ -114,7 +115,7 @@ export default spec('blog', s => {
 			await mkdir(second);
 			await writeFile(join(dir, 'draft.md'), 'Draft paragraph.');
 			await writeFile(join(second, 'page.html'), '<blog-meta author="Author" date="2026-01-01" type="page"><blog-title>Page</blog-title><blog-summary>Summary</blog-summary><blog-tags>html</blog-tags>');
-			const files = await generate({ postsDir: [dir, second], includeContent: true });
+			const files = await buildBlog({ postsDir: [dir, second], includeContent: true });
 			const data: PostsJson = JSON.parse(files[0]?.source.toString() ?? '');
 			a.equal(data.posts.length, 2);
 			a.ok(data.posts.every(p => p.content));
@@ -129,11 +130,11 @@ export default spec('blog', s => {
 	s.test('rejects missing UUIDs, duplicate UUIDs, and missing directories', async a => {
 		await fixture(async dir => {
 			await writeFile(join(dir, 'missing.md'), '# Missing\n\n```meta\ntype: post\n```');
-			await rejects(generate({ postsDir: dir }));
+			await rejects(buildBlog({ postsDir: dir }));
 			await writeFile(join(dir, 'missing.md'), post('One', 'same'));
 			await writeFile(join(dir, 'duplicate.md'), post('Two', 'same'));
-			await rejects(generate({ postsDir: dir }));
-			await rejects(generate({ postsDir: join(dir, 'absent') }));
+			await rejects(buildBlog({ postsDir: dir }));
+			await rejects(buildBlog({ postsDir: join(dir, 'absent') }));
 			a.ok(true);
 		});
 	});

@@ -12,7 +12,6 @@
 		".": "./index.js"
 	},
 	"dependencies": {
-		"@cxl/rx": "^1.0.0",
 		"@cxl/gbc.markdown": "^0.0.1-beta.1"
 	},
 	"peerDependencies": {

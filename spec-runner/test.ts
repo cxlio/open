@@ -162,7 +162,7 @@ function expectedCoverage(files: string[]) {
 	);
 }
 
-export default spec({ name: 'tester', serial: true }, s => {
+export default spec('tester', s => {
 	s.test('service worker module import', async a => {
 		const files = ['service-worker.js', 'service-worker-dependency.js'];
 		const expectedCoverageFiles = await expectedCoverage(files);

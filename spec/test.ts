@@ -81,9 +81,9 @@ export default spec('spec', s => {
 		a.equal(assertions.toJSON().tests[0]?.tests.length, 1);
 	});
 
-	s.test('serial specifications run tests in order', async a => {
+	s.test('specifications run sibling tests concurrently', async a => {
 		const order: string[] = [];
-		const assertions = spec({ name: 'serial', serial: true }, s => {
+		const assertions = spec({ name: 'concurrent' }, s => {
 			s.test('first', async a => {
 				order.push('first start');
 				await Promise.resolve();
@@ -98,7 +98,7 @@ export default spec('spec', s => {
 
 		await assertions.run();
 
-		a.equalValues(order, ['first start', 'first end', 'second']);
+		a.equalValues(order, ['first start', 'second', 'first end']);
 	});
 
 	s.test('proxy registrations are released by their owner', async a => {

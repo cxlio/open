@@ -142,7 +142,6 @@ export interface Result {
 
 interface TestConfig {
 	name: string;
-	serial?: boolean;
 }
 
 let lastTestId = 1;
@@ -1044,7 +1043,6 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 	skipped = false;
 
 	readonly id = lastTestId++;
-	private serial = false;
 
 	constructor(
 		nameOrConfig: string | TestConfig,
@@ -1054,10 +1052,7 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 		private readonly specification = false,
 	) {
 		if (typeof nameOrConfig === 'string') this.name = nameOrConfig;
-		else {
-			this.name = nameOrConfig.name;
-			this.serial = !!nameOrConfig.serial;
-		}
+		else this.name = nameOrConfig.name;
 	}
 
 	onEvent(id: EventType, fn: () => Promise<unknown> | void) {
@@ -1148,12 +1143,7 @@ export class Test<T extends TestApiBase<T> = TestApi> {
 			else await promise;
 			syncCompleteNeeded = false;
 			const children = this.only.length ? this.only : this.tests;
-			if (this.serial)
-				for (const test of children) await test.run(grep, targetPath);
-			else
-				await Promise.all(
-					children.map(test => test.run(grep, targetPath)),
-				);
+			await Promise.all(children.map(test => test.run(grep, targetPath)));
 			if (this.only.length) throw new Error('"only" was used');
 
 			if (

@@ -218,10 +218,10 @@ async function runAudit(
 	return output.join('\n');
 }
 
-const suite = spec({ name: 'build', serial: true }, () => {
+const suite = spec('build', () => {
 	const checks = spec('checks', () => undefined);
 	const s = new TestApi(checks);
-	const integration = spec({ name: 'CLI integration', serial: true }, () => undefined);
+	const integration = spec('CLI integration', () => undefined);
 	const cli = new TestApi(integration);
 	cli.test('startup build script', async a => {
 		const root = resolve(import.meta.dirname, '../..');
@@ -373,7 +373,7 @@ registerHooks({
 		}
 	});
 
-	suite.addTest(spec({ name: 'batch CLI builds', serial: true }, async it => {
+	suite.addTest(spec('batch CLI builds', async it => {
 		const { dir, packageDir } = await createAuditFixture({
 			compilerOptions: { ...requiredRootCompilerOptions, types: [] },
 			files: [],
@@ -469,7 +469,7 @@ registerHooks({
 		))).includes('Package directories must not be empty'));
 	});
 
-	suite.addTest(spec({ name: 'eslint config', serial: true }, it => {
+	suite.addTest(spec('eslint config', it => {
 		it.should(
 			'ban and resolve imports across package boundaries',
 			async (a: TestApi) => {
@@ -1911,7 +1911,7 @@ void unused;
 		});
 	});
 
-	suite.addTest(spec({ name: 'coverage files', serial: true }, async a => {
+	suite.addTest(spec('coverage files', async a => {
 		const rootDir = await mkdtemp(join(tmpdir(), 'cxl-build-coverage-'));
 		const packageDir = join(rootDir, 'package');
 		const outputDir = join(rootDir, 'dist', 'package');
@@ -2014,7 +2014,7 @@ void unused;
 		}
 	}));
 
-	suite.addTest(spec({ name: 'declaration bundle', serial: true }, it => {
+	suite.addTest(spec('declaration bundle', it => {
 		it.should('keep each entry point independent when sharing a program', async a => {
 			const dir = await mkdtemp(join(tmpdir(), 'cxl-build-declarations-'));
 			a.afterAll(() => rm(dir, { recursive: true, force: true }));

@@ -23,6 +23,7 @@
 		"typeRoots": ["./node_modules/@types"],
 		"types": [],
 		"paths": {
+			"@cxl/build": ["./build/index.ts"],
 			"@cxl/program": ["./program/index.ts"],
 			"@cxl/rx": ["./rx/index.ts"],
 			"@cxl/spec": ["./spec/index.ts"],

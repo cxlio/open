@@ -1,0 +1,17 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"types": [
+			"node"
+		],
+		"outDir": "../dist/blog"
+	},
+	"files": [
+		"index.ts"
+	],
+	"references": [
+		{
+			"path": "../build"
+		}
+	]
+}

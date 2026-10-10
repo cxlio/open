@@ -1,0 +1,31 @@
+{
+	"name": "@cxl/blog",
+	"version": "0.0.1",
+	"description": "Static blog generation with Markdown, metadata, templates, and browser code highlighting.",
+	"license": "GPL-3.0",
+	"type": "module",
+	"scripts": {
+		"build": "node ../dist/build/cli.js",
+		"test": "npm run build -- test"
+	},
+	"exports": {
+		".": "./index.js"
+	},
+	"dependencies": {
+		"@cxl/rx": "^1.0.0",
+		"@cxl/gbc.markdown": "^0.0.1-beta.1"
+	},
+	"peerDependencies": {
+		"@cxl/build": "^1.5.0"
+	},
+	"bugs": "https://github.com/cxlio/open/issues",
+	"homepage": "https://cxlio.github.io/docs/@cxl/blog",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/cxlio/open.git",
+		"directory": "blog"
+	},
+	"build": {
+		"platform": "node"
+	}
+}

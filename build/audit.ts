@@ -471,6 +471,8 @@ async function fixPackage({ projectPath, name, rootPkg }: LintData) {
 			directory: name,
 		};
 	}
+	if (typeof pkg.repository === 'object')
+		pkg.repository.url = pkg.repository.url.replace(/^https?:\/\//, 'git+$&');
 	pkg.type = 'module';
 
 	const newPackage = JSON.stringify(pkg, null, '\t');
@@ -545,6 +547,11 @@ function lintPackage({ pkg, name, rootPkg }: LintData) {
 		rule(
 			typeof pkg.repository !== 'string',
 			'"repository" must be an object',
+		),
+		rule(
+			typeof pkg.repository !== 'object' ||
+				!/^https?:\/\//.test(pkg.repository.url),
+			'"repository.url" must use a git+ prefix for HTTP(S) Git URLs.',
 		),
 		rule(pkg.type === 'module', 'Package "type" must be "module".'),
 		rule(

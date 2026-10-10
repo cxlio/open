@@ -181,7 +181,7 @@ async function createAuditFixture(
 			bugs: 'https://example.com/issues',
 			repository: {
 				type: 'git',
-				url: 'https://example.com/repo.git',
+				url: 'git+https://example.com/repo.git',
 			},
 			scripts: {
 				build: 'cxl-build',
@@ -1201,6 +1201,39 @@ void unused;
 				a.ok(true);
 			} finally {
 				await rm(dir, { recursive: true, force: true });
+			}
+		});
+
+		it.should('normalize Git repository URLs', async a => {
+			const cases = [
+				{ url: 'https://example.com/repo.git', expected: 'git+https://example.com/repo.git' },
+				{ url: 'http://example.com/repo.git', expected: 'git+http://example.com/repo.git' },
+				{ url: 'git+https://example.com/repo.git', expected: 'git+https://example.com/repo.git' },
+				{ url: 'git+ssh://git@example.com/repo.git', expected: 'git+ssh://git@example.com/repo.git' },
+			];
+			for (const { url, expected } of cases) {
+				for (const inherited of [false, true]) {
+					const { dir, packageDir } = await createAuditFixture();
+					try {
+						const packagePath = join(packageDir, 'package.json');
+						const pkg = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
+						const repository: Package['repository'] = { type: 'git', url, directory: 'pkg' };
+						if (inherited) {
+							const rootPath = join(dir, 'package.json');
+							const root = JSON.parse(await readFile(rootPath, 'utf8')) as Package;
+							root.repository = repository;
+							await writeFile(rootPath, JSON.stringify(root));
+						}
+						await writeFile(packagePath, JSON.stringify({ ...pkg, repository: inherited ? undefined : repository }));
+						const output = await runAudit(packageDir);
+						const fixed = JSON.parse(await readFile(packagePath, 'utf8')) as Package;
+						a.equalValues(fixed.repository, { ...repository, url: expected });
+						a.equal(output.includes('"repository.url" must use a git+ prefix for HTTP(S) Git URLs.'), !inherited && url !== expected);
+						a.equal(await runAudit(packageDir), '');
+					} finally {
+						await rm(dir, { recursive: true, force: true });
+					}
+				}
 			}
 		});
 

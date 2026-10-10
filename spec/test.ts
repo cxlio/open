@@ -5,7 +5,7 @@ declare global {
 	var __cxlRunner: ((command: RunnerCommand) => Promise<Result> | Result) | undefined;
 }
 
-export default spec('spec', s => {
+const suite = spec('spec', s => {
 	s.test('should load', a => {
 		a.ok(spec);
 	});
@@ -152,13 +152,22 @@ export default spec('spec', s => {
 	});
 
 	s.test('benchmark', it => {
+		it.afterAll(() => {
+			const results = suite.toJSON().tests
+				.find(test => test.name === 'benchmark')?.tests
+				.flatMap(test => test.results);
+			it.ok(results?.every(result => result.data?.type !== 'benchmark'));
+		});
 		it.should('measure the current test', async (a: TestApi) => {
-			await a.benchmark(() => 1, {
-				warmup: 0,
-				sampleTime: 1,
-				samples: 3,
+			const measurement = spec('measurement', async b => {
+				await b.benchmark(() => 1, {
+					warmup: 0,
+					sampleTime: 1,
+					samples: 3,
+				});
 			});
-			const result = a.$test.results[0];
+			await measurement.run();
+			const result = measurement.toJSON().results[0];
 			a.assert(result?.data?.type === 'benchmark');
 			a.equal(result.data.values.length, 3);
 			a.ok(result.data.iterations > 0);
@@ -166,14 +175,20 @@ export default spec('spec', s => {
 		});
 
 		it.should('reject multiple measurements', async a => {
-			await a.benchmark(() => 1, {
-				warmup: 0,
-				sampleTime: 1,
-				samples: 1,
+			const measurement = spec('measurement', async b => {
+				await b.benchmark(() => 1, {
+					warmup: 0,
+					sampleTime: 1,
+					samples: 1,
+				});
+				b.throws(() => void b.benchmark(() => 1), {
+					message: 'benchmark() called multiple times',
+				});
 			});
-			a.throws(() => void a.benchmark(() => 1), {
-				message: 'benchmark() called multiple times',
-			});
+			await measurement.run();
+			a.equal(measurement.toJSON().results[1]?.success, true);
 		});
 	});
 });
+
+export default suite;

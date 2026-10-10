@@ -12,7 +12,7 @@
 	"homepage": "https://cxlio.github.io/docs/@cxl/spec",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/cxlio/open.git",
+		"url": "git+https://github.com/cxlio/open.git",
 		"directory": "spec"
 	},
 	"build": {

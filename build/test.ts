@@ -774,6 +774,85 @@ void [update, shadowed];`;
 			}
 		});
 
+		it.should('suggest typed assignments for value-only property definitions', async a => {
+			const definitions = [
+				`Object.defineProperty(target, 'run', { value: () => 1 });`,
+				`Object.defineProperty(target, command, { configurable: true, value: () => 'ok' });`,
+				`define(target, 'run', { value: () => 'ok' });`,
+				`defineProperty(target, 'run', { value() { return 'ok'; } });`,
+				`Object.defineProperty(target, 1, descriptor);`,
+				`Object.defineProperty(union, 'run', { value: () => 'ok' });`,
+				`Object.defineProperty(intersection, 'run', { value: () => 'ok' });`,
+				`Object.defineProperty(target, writableKey, { value: () => 'ok' });`,
+			];
+			const exclusions = [
+				`Object.defineProperty(target, 'missing', { value: true });`,
+				`Object.defineProperty(target, 'fixed', { value: 2 });`,
+				`Object.defineProperty(target, 'run', { get: () => () => 'ok' });`,
+				`Object.defineProperty(target, 'run', { set: () => {} });`,
+				`Object.defineProperty(target, 'run', { value: () => 'ok', writable: false });`,
+				`Object.defineProperty(target, 'run', { value: () => 'ok', enumerable: false });`,
+				`Object.defineProperty(target, 'run', opaque);`,
+				`Object.defineProperty(target, dynamic, { value: true });`,
+				`Object.defineProperty(unknownTarget, 'run', { value: true });`,
+				`Object.defineProperty({}, 'run', { value: true });`,
+				`Object.defineProperty(accessor, 'run', { value: true });`,
+				`Object.defineProperty(readonlyUnion, 'run', { value: true });`,
+				`Object.defineProperty(record, 'run', { value: true });`,
+				`Object.defineProperty(target, mixedKey, { value: true });`,
+				`Object.defineProperty(target, 'run', { ...opaque, value: true });`,
+				`Object.defineProperty(target, 'run', optionalDescriptor);`,
+				`Object.defineProperty(mapped, 'run', { value: true });`,
+				`Object.defineProperty(readonlyIntersection, 'run', { value: true });`,
+				`Object.defineProperty(hidden, 'run', { value: true });`,
+				`Object.defineProperty(target, 'run', indexedDescriptor);`,
+				`Object.defineProperty(target, 'run', anyDescriptor);`,
+				`Object.defineProperty(target, symbolKey, { value: true });`,
+				`function shadowed(Object: { defineProperty(target: object, key: string, descriptor: object): void }) { Object.defineProperty(target, 'run', { value: true }); }`,
+			];
+			const preamble = `declare const target: { run?(): string; readonly fixed: number; 1: number };
+const command = 'run';
+const define = Object.defineProperty;
+const { defineProperty } = Object;
+const descriptor = { value: 2 };
+declare const union: { run(): string } | { run?(): string };
+declare const opaque: PropertyDescriptor;
+declare const dynamic: string;
+declare const unknownTarget: unknown;
+declare const accessor: { get run(): string; set run(value: string) };
+declare const readonlyUnion: { run(): string } | { readonly run: () => string };
+declare const record: Record<string, number>;
+declare const mixedKey: 'run' | 'fixed';
+declare const optionalDescriptor: { value?: number };
+declare const intersection: { run(): string } & { other: boolean };
+declare const writableKey: 'run' | 1;
+declare const mapped: Readonly<{ run(): string }>;
+declare const readonlyIntersection: Readonly<{ run(): string }> & { other: boolean };
+declare class Hidden { private run(): string }
+declare const hidden: Hidden;
+declare const indexedDescriptor: { value: number; [key: string]: unknown };
+declare const anyDescriptor: any;
+declare const symbolKey: unique symbol;`;
+			const source = [preamble, ...definitions, ...exclusions].join('\n');
+			for (const config of [eslintConfig, specConfig]) {
+				const messages = (await lintFixture(source, config)).filter(
+					message => message.ruleId === 'local/prefer-typed-property-assignment',
+				);
+				a.equalValues(
+					messages.map(message => message.line),
+					definitions.flatMap((_, index) => {
+						const line = preamble.split('\n').length + index + 2;
+						return index === definitions.length - 1 ? [line, line] : [line];
+					}),
+				);
+				a.ok(messages.every(message => message.severity === 1 && !message.fix));
+				a.equal(
+					messages[0]?.message,
+					'Prefer a typed assignment to "run" so TypeScript checks the value. Keep defineProperty when its descriptor behavior is required.',
+				);
+			}
+		});
+
 		it.should('require Error promise rejection reasons', async a => {
 			const messages = await lintFixture(
 				`export const invalid = new Promise<void>((_, reject) => reject('failure'));

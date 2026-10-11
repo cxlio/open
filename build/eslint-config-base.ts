@@ -688,6 +688,20 @@ const noTrivialTypeGuard: Rule.RuleModule = {
 	},
 };
 
+function objectConstructorMethod(call: typescript.CallExpression, program: typescript.Program) {
+	const declaration = program.getTypeChecker().getResolvedSignature(call)?.declaration;
+	if (
+		declaration &&
+		typescript.isMethodSignature(declaration) &&
+		program.isSourceFileDefaultLibrary(declaration.getSourceFile()) &&
+		typescript.isInterfaceDeclaration(declaration.parent) &&
+		declaration.parent.name.text === 'ObjectConstructor' &&
+		typescript.isIdentifier(declaration.name)
+	)
+		return declaration.name.text;
+	return undefined;
+}
+
 const noUndeclaredProperties: Rule.RuleModule = {
 	meta: {
 		type: 'problem',
@@ -729,18 +743,8 @@ const noUndeclaredProperties: Rule.RuleModule = {
 			CallExpression(node: Rule.Node) {
 				const call = services.esTreeNodeToTSNodeMap.get(node);
 				if (!call || !typescript.isCallExpression(call)) return;
-				const declaration = checker.getResolvedSignature(call)?.declaration;
-				if (
-					!declaration ||
-					!typescript.isMethodSignature(declaration) ||
-					!services.program.isSourceFileDefaultLibrary(declaration.getSourceFile()) ||
-					!typescript.isInterfaceDeclaration(declaration.parent) ||
-					declaration.parent.name.text !== 'ObjectConstructor' ||
-					!typescript.isIdentifier(declaration.name)
-				)
-					return;
-				const method = declaration.name.text;
-				if (!['assign', 'defineProperty', 'defineProperties'].includes(method)) return;
+				const method = objectConstructorMethod(call, services.program);
+				if (!method || !['assign', 'defineProperty', 'defineProperties'].includes(method)) return;
 				let target = call.arguments[0];
 				if (!target) return;
 				while (typescript.isParenthesizedExpression(target))
@@ -796,6 +800,77 @@ const noUndeclaredProperties: Rule.RuleModule = {
 	},
 };
 
+const preferTypedPropertyAssignment: Rule.RuleModule = {
+	meta: {
+		type: 'suggestion',
+		docs: {
+			description: 'Prefer typed assignments over value-only property definitions.',
+		},
+		schema: [],
+		messages: {
+			preferAssignment:
+				'Prefer a typed assignment to "{{name}}" so TypeScript checks the value. Keep defineProperty when its descriptor behavior is required.',
+		},
+	},
+	create(context) {
+		const services: ParserServices = context.sourceCode.parserServices;
+		const checker = services.program.getTypeChecker();
+		function isWritable(type: typescript.Type, name: string): boolean {
+			if (type.isUnion()) return type.types.every(branch => isWritable(branch, name));
+			if (type.isIntersection()) {
+				const branches = type.types.filter(branch => !!checker.getPropertyOfType(branch, name));
+				return !!branches.length && branches.every(branch => isWritable(branch, name));
+			}
+			if (
+				type.flags & (typescript.TypeFlags.Any | typescript.TypeFlags.Unknown | typescript.TypeFlags.TypeParameter) ||
+				type.getSymbol()?.declarations?.some(typescript.isMappedTypeNode)
+			)
+				return false;
+			const declarations = checker.getPropertyOfType(type, name)?.declarations;
+			return !!declarations?.length && declarations.every(declaration =>
+				!(typescript.getCombinedModifierFlags(declaration) &
+					(typescript.ModifierFlags.Readonly | typescript.ModifierFlags.Private | typescript.ModifierFlags.Protected)) &&
+				!typescript.isGetAccessorDeclaration(declaration) &&
+				!typescript.isSetAccessorDeclaration(declaration),
+			);
+		}
+		return {
+			CallExpression(node: Rule.Node) {
+				const call = services.esTreeNodeToTSNodeMap.get(node);
+				if (!call || !typescript.isCallExpression(call)) return;
+				if (objectConstructorMethod(call, services.program) !== 'defineProperty') return;
+				const [target, key, descriptor] = call.arguments;
+				if (!target || !key || !descriptor) return;
+				const descriptorType = checker.getTypeAtLocation(descriptor);
+				const value = descriptorType.getProperty('value');
+				if (
+					!value || value.flags & typescript.SymbolFlags.Optional ||
+					checker.getIndexInfosOfType(descriptorType).length ||
+					descriptorType.getProperties().some(property =>
+						!['value', 'configurable'].includes(property.getName()),
+					)
+				)
+					return;
+				const targetType = checker.getTypeAtLocation(target);
+				const keyType = checker.getTypeAtLocation(key);
+				const keys = keyType.isUnion() ? keyType.types : [keyType];
+				const names = keys.map(branch =>
+					branch.isStringLiteral() || branch.isNumberLiteral()
+						? String(branch.value)
+						: undefined,
+				);
+				if (!names.every(name => name !== undefined && isWritable(targetType, name))) return;
+				for (const name of names)
+					context.report({
+						node,
+						messageId: 'preferAssignment',
+						data: { name },
+					});
+			},
+		};
+	},
+};
+
 const localPlugin = {
 	rules: {
 		'no-relative-package-imports': noRelativePackageImports,
@@ -806,12 +881,14 @@ const localPlugin = {
 		'prefer-type-discrimination': preferTypeDiscrimination,
 		'no-trivial-type-guard': noTrivialTypeGuard,
 		'no-undeclared-properties': noUndeclaredProperties,
+		'prefer-typed-property-assignment': preferTypedPropertyAssignment,
 	},
 };
 
 const sharedRules = {
 	'local/no-relative-package-imports': 'error',
 	'local/no-undeclared-properties': 'error',
+	'local/prefer-typed-property-assignment': 'warn',
 	'@typescript-eslint/member-ordering': 'error',
 	'no-extend-native': 'error',
 	'no-dupe-class-members': 'error',

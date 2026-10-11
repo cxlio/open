@@ -647,6 +647,7 @@ async function interceptWorkers(
 	coverageCleanup: (() => Promise<void>)[],
 ) {
 	const pending = new Set<Promise<void>>();
+	const workerSessions = new Map<Target, CDPSession | undefined>();
 	function track(promise: Promise<void>) {
 		pending.add(promise);
 		void promise.then(
@@ -703,11 +704,21 @@ async function interceptWorkers(
 	}
 
 	async function attach(target: Target) {
-		const session = await target.createCDPSession();
-		await configure(session);
+		workerSessions.set(target, undefined);
+		try {
+			const session = await target.createCDPSession();
+			if (!workerSessions.has(target)) {
+				await session.detach();
+				return;
+			}
+			workerSessions.set(target, session);
+			await configure(session, target);
+		} catch (error) {
+			if (workerSessions.has(target)) throw error;
+		}
 	}
 
-	async function configure(session: CDPSession) {
+	async function configure(session: CDPSession, target?: Target) {
 		try {
 			session.on('Fetch.requestPaused', event => {
 				onRequest(session, event).catch(error => console.error(error));
@@ -716,7 +727,9 @@ async function interceptWorkers(
 				patterns: [{ urlPattern: 'https://cxl-tester/*' }],
 			});
 			if (coverageSessions) {
-				coverageSessions.push(await startCoverage(session));
+				await startCoverage(session);
+				if (!target || workerSessions.has(target))
+					coverageSessions.push(session);
 			}
 		} catch (error) {
 			void session
@@ -732,7 +745,21 @@ async function interceptWorkers(
 		track(attach(target));
 	}
 
+	function onTargetDestroyed(target: Target) {
+		const session = workerSessions.get(target);
+		workerSessions.delete(target);
+		if (!session) return;
+		const index = coverageSessions?.indexOf(session) ?? -1;
+		if (index !== -1) coverageSessions?.splice(index, 1);
+		void session.detach().catch(() => undefined);
+	}
+
 	browser.on('targetcreated', onTarget);
+	browser.on('targetdestroyed', onTargetDestroyed);
+	coverageCleanup.push(() => {
+		browser.off('targetdestroyed', onTargetDestroyed);
+		return Promise.resolve();
+	});
 	if (coverageSessions) {
 		const browserSession = await browser.target().createCDPSession();
 		function onAttached(session: CDPSession) {

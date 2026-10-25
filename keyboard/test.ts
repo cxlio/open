@@ -191,6 +191,60 @@ export default spec('keyboard', s => {
 	});
 
 	s.test('handleKeyboard', it => {
+		for (const consumed of [false, true]) {
+			it.should(`pass the original event when consumed=${consumed}`, a => {
+				const parent = a.element('div');
+				const element = document.createElement('div');
+				parent.append(element);
+				let propagated = 0;
+				parent.addEventListener('keydown', () => propagated++);
+				const event = new KeyboardEvent('keydown', {
+					key: 'x',
+					bubbles: true,
+					cancelable: true,
+				});
+				let called = 0;
+				a.afterAll(handleKeyboard({
+					element,
+					onKey: (key, sequence, received) => {
+						called++;
+						a.equal(key, 'x');
+						a.equal(sequence.join(' '), 'x');
+						a.equal(received, event);
+						return consumed;
+					},
+				}));
+				a.equal(element.dispatchEvent(event), !consumed);
+				a.equal(called, 1);
+				a.equal(event.defaultPrevented, consumed);
+				a.equal(propagated, consumed ? 0 : 1);
+			});
+		}
+
+		it.should('pass the current event to every sequence suffix attempt', a => {
+			const element = a.element('div');
+			const first = new KeyboardEvent('keydown', { key: 'a' });
+			const current = new KeyboardEvent('keydown', { key: 'b' });
+			const calls: { key: string; event: KeyboardEvent }[] = [];
+			a.afterAll(handleKeyboard({
+				element,
+				delay: Infinity,
+				onKey: (key, _sequence, event) => {
+					calls.push({ key, event });
+					return false;
+				},
+			}));
+			element.dispatchEvent(first);
+			element.dispatchEvent(current);
+			a.equal(calls.length, 3);
+			a.equal(calls[0]?.key, 'a');
+			a.equal(calls[0]?.event, first);
+			a.equal(calls[1]?.key, 'a b');
+			a.equal(calls[1]?.event, current);
+			a.equal(calls[2]?.key, 'b');
+			a.equal(calls[2]?.event, current);
+		});
+
 		it.should('allow browser text entry while consuming control shortcuts', async a => {
 			const input = a.element('input');
 			let inputEvents = 0;

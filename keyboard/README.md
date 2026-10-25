@@ -6,7 +6,7 @@ Lightweight module for handling keyboard input on HTML elements with customizabl
 
 ## Project Details
 
--   Branch Version: [1.1.0](https://npmjs.com/package/@cxl/keyboard/v/1.1.0)
+-   Branch Version: [1.2.0](https://npmjs.com/package/@cxl/keyboard/v/1.2.0)
 -   License: GPL-3.0
 -   Documentation: [Link](https://cxlio.github.io/docs/@cxl/keyboard)
 -   Report Issues: [Github](https://github.com/cxlio/open/issues)

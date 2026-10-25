@@ -23,7 +23,7 @@ export interface KeyboardOptions {
 	 * and the sequence of keys accumulated so far. It returns `true` or `false` to indicate whether
 	 * the sequence was consumed.
 	 */
-	onKey: (key: string, sequence: string[]) => boolean;
+	onKey: (key: string, sequence: string[], event: KeyboardEvent) => boolean;
 
 	/**
 	 * The time in milliseconds to wait between key presses before resetting the sequence.
@@ -245,7 +245,7 @@ export function handleKeyboard({
 		const seq = sequence.slice(0);
 
 		do {
-			if (onKey(seq.join(' '), sequence) !== false) {
+			if (onKey(seq.join(' '), sequence, ev) !== false) {
 				ev.stopPropagation();
 				ev.preventDefault();
 				t = 0;

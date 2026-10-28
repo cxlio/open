@@ -3,6 +3,8 @@ export * as rx from "@cxl/rx";
 export { pkg, readme, esbuild, readPackage } from "./package.js";
 export type { Package } from "./npm.js";
 export { buildLibrary } from "./library.js";
+export { cachedBuild } from "./cache.js";
+export type { BuildCacheOptions, BuildCacheResult } from "./cache.js";
 export { audit } from "./audit.js";
 export {
 	build,

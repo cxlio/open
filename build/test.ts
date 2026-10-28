@@ -61,8 +61,7 @@ import { file } from './file.js';
 import eslintConfig, { specConfig } from './eslint-config.js';
 import { eslintTsconfig } from './lint.js';
 import { getLintTsconfigs } from './library.js';
-import { rx } from './index.js';
-import { cachedBuild } from './cache.js';
+import { cachedBuild, rx } from './index.js';
 import { registerImportMap } from '@cxl/spec-runner/importmap.js';
 import * as ts from 'typescript';
 

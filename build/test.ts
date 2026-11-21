@@ -61,7 +61,7 @@ import { file } from './file.js';
 import eslintConfig, { specConfig } from './eslint-config.js';
 import { eslintTsconfig } from './lint.js';
 import { getLintTsconfigs } from './library.js';
-import { cachedBuild, rx } from './index.js';
+import { cachedBuild, esbuild as bundle, rx } from './index.js';
 import { registerImportMap } from '@cxl/spec-runner/importmap.js';
 import * as ts from 'typescript';
 
@@ -2429,6 +2429,20 @@ void result;
 			}
 		});
 	}));
+
+	s.test('bundles optional debug calls with debugging disabled by default', async a => {
+		const dir = await mkdtemp(join(tmpdir(), 'cxl-build-debug-'));
+		a.afterAll(() => rm(dir, { recursive: true, force: true }));
+		const outfile = join(dir, 'debug.mjs');
+		await rx.toPromise(bundle({
+			absWorkingDir: resolve(import.meta.dirname, '../../build'),
+			stdin: { contents: 'export default CXL_DEBUG?.("diagnostic");' },
+			outfile,
+			splitting: false,
+		}));
+		const output: { default: unknown } = await import(pathToFileURL(outfile).href);
+		a.equal(output.default, undefined);
+	});
 
 	s.test('package build options', it => {
 		const pkg = {

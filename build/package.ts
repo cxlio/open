@@ -199,7 +199,7 @@ export function buildEsbuild(options: esbuildApi.BuildOptions) {
 		tsconfig: 'tsconfig.json',
 		platform: 'browser',
 		define: {
-			CXL_DEBUG: 'false',
+			CXL_DEBUG: 'undefined',
 		},
 		...options,
 	});

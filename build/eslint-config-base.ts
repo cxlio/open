@@ -886,6 +886,23 @@ const localPlugin = {
 };
 
 const sharedRules = {
+	'no-restricted-syntax': [
+		'error',
+		{
+			selector:
+				':matches(TSTypeReference, TSInterfaceHeritage, TSClassImplements)' +
+				'[typeArguments.params.1.type="TSNeverKeyword"]' +
+				':matches([typeName.name="Record"], ' +
+				'[typeName.left.name="globalThis"][typeName.right.name="Record"], ' +
+				'[expression.name="Record"], ' +
+				'[expression.object.name="globalThis"][expression.property.name="Record"][expression.computed=false])',
+			message: 'Record types with `never` values are banned.',
+		},
+		{
+			selector: 'TSIndexSignature[typeAnnotation.typeAnnotation.type="TSNeverKeyword"]',
+			message: 'Index signatures with `never` values are banned.',
+		},
+	],
 	'local/no-relative-package-imports': 'error',
 	'local/no-undeclared-properties': 'error',
 	'local/prefer-typed-property-assignment': 'warn',
@@ -960,7 +977,7 @@ export const tsConfig: Linter.Config = {
 		],
 		'@typescript-eslint/unbound-method': 'off',
 		'no-restricted-syntax': [
-			'error',
+			...sharedRules['no-restricted-syntax'],
 			{
 				selector: [
 					'FunctionDeclaration > :matches(Identifier, RestElement)[typeAnnotation.typeAnnotation.type="TSUnknownKeyword"]',

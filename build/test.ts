@@ -585,6 +585,43 @@ void import('@cxl/sibling');`,
 			a.equal(emptyBlocks.length, 1);
 		});
 
+		it.should('reject Record types and index signatures with never values', async a => {
+			const source = `export type StringKeys = Record<string, never>;
+export type LiteralKeys = Record<
+	'one' | 'two',
+	never
+>;
+export type Qualified = globalThis.Record<string, never>;
+export interface Extended extends Record<string, never> {}
+export class Implemented implements globalThis.Record<string, never> {}
+export type NeverKeys = Record<never, string>;
+export type ArrayValues = Record<string, never[]>;
+declare namespace Other {
+	export type Record<K, V> = [K, V];
+}
+export type Custom = Other.Record<string, never>;
+export type StringIndex = { [key: string]: never };
+export interface SymbolIndex { readonly [key: symbol]: never }
+export type NumberValues = { [key: string]: number };
+export type ForbiddenProperty = { key?: never };
+`;
+			for (const baseConfig of [eslintConfig, specConfig]) {
+				const eslint = new ESLint({
+					baseConfig,
+					overrideConfig: {
+						languageOptions: { parserOptions: { projectService: false } },
+					},
+					overrideConfigFile: true,
+					ruleFilter: ({ ruleId }) => ruleId === 'no-restricted-syntax',
+				});
+				const [result] = await eslint.lintText(source, { filePath: 'fixture.ts' });
+				a.equalValues(
+					result?.messages.map(({ line, severity }) => [line, severity]),
+					[[1, 2], [2, 2], [6, 2], [7, 2], [8, 2], [15, 2], [16, 2]],
+				);
+			}
+		});
+
 		it.should('apply shared source rules to test files', async a => {
 			const messages = await lintFixture(`type State = 'ready' | 'done' | never;
 class Base {}
